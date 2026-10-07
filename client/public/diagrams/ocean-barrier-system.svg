@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#bae6fd"/>
+      <stop offset="100%" stop-color="#e0f2fe"/>
+    </linearGradient>
+    <linearGradient id="oceanGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="40%" stop-color="#0369a1"/>
+      <stop offset="100%" stop-color="#075985"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Sky Background -->
+  <rect x="0" y="0" width="900" height="200" fill="url(#skyGrad)"/>
+  
+  <!-- Ocean Background -->
+  <rect x="0" y="200" width="900" height="300" fill="url(#oceanGrad)"/>
+  
+  <!-- Ocean Waves -->
+  <path d="M0,200 Q75,192 150,200 T300,200 T450,200 T600,200 T750,200 T900,200 L900,210 L0,210 Z" fill="#38bdf8" opacity="0.6"/>
+
+  <!-- Sun -->
+  <circle cx="820" cy="60" r="35" fill="#fde047" opacity="0.8"/>
+
+  <!-- Floating Barrier Pipe (Label 9) -->
+  <path d="M 120,205 C 300,230 600,225 720,195" fill="none" stroke="#f97316" stroke-width="18" stroke-linecap="round" filter="url(#shadow)"/>
+  <path d="M 120,205 C 300,230 600,225 720,195" fill="none" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Retention Screen (Label 10) -->
+  <path d="M 140,214 L 140,330 C 320,350 580,345 700,204 L 700,204" fill="rgba(15, 23, 42, 0.45)" stroke="#1e293b" stroke-width="3"/>
+  <line x1="200" y1="220" x2="200" y2="335" stroke="#334155" stroke-dasharray="4,4"/>
+  <line x1="320" y1="225" x2="320" y2="345" stroke="#334155" stroke-dasharray="4,4"/>
+  <line x1="450" y1="225" x2="450" y2="345" stroke="#334155" stroke-dasharray="4,4"/>
+  <line x1="580" y1="220" x2="580" y2="330" stroke="#334155" stroke-dasharray="4,4"/>
+
+  <!-- Retention Zone indicator (Label 12) -->
+  <ellipse cx="620" cy="245" rx="60" ry="25" fill="#facc15" opacity="0.25" stroke="#eab308" stroke-width="2" stroke-dasharray="6,4"/>
+  <!-- Plastic Debris bits -->
+  <circle cx="610" cy="240" r="4" fill="#ef4444"/>
+  <rect x="625" y="242" width="6" height="5" fill="#3b82f6"/>
+  <circle cx="595" cy="248" r="5" fill="#10b981"/>
+  <rect x="635" y="238" width="7" height="4" fill="#a855f7"/>
+
+  <!-- Sea Anchor Cable & Anchor (Label 11) -->
+  <line x1="420" y1="225" x2="420" y2="440" stroke="#94a3b8" stroke-width="3" stroke-dasharray="8,4"/>
+  <!-- Sea Anchor Parachute Cone -->
+  <path d="M 370,440 Q 420,410 470,440 L 450,470 L 390,470 Z" fill="#64748b" stroke="#334155" stroke-width="2"/>
+
+  <!-- Extraction Conveyor Vessel (Label 13) -->
+  <!-- Hull -->
+  <polygon points="710,185 790,185 820,205 700,205" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+  <!-- Cabin -->
+  <rect x="750" y="155" width="40" height="30" fill="#94a3b8" stroke="#1e293b" stroke-width="2"/>
+  <rect x="755" y="162" width="12" height="10" fill="#38bdf8"/>
+  <rect x="772" y="162" width="12" height="10" fill="#38bdf8"/>
+  <!-- Conveyor Ramp into water -->
+  <polygon points="670,225 715,190 725,190 680,228" fill="#334155"/>
+
+  <!-- Solar Beacon Pod on Barrier -->
+  <rect x="250" y="190" width="14" height="20" fill="#0284c7" rx="2"/>
+  <circle cx="257" cy="186" r="4" fill="#ef4444"/>
+
+  <!-- LABELS & CALLOUT ARROWS -->
+
+  <!-- [9] Upper Buoyant Component -->
+  <g>
+    <circle cx="160" cy="120" r="18" fill="#1e293b" stroke="#ffffff" stroke-width="3"/>
+    <text x="160" y="126" text-anchor="middle" fill="#ffffff" font-weight="bold" font-family="sans-serif" font-size="16">9</text>
+    <path d="M 160,142 L 180,200" stroke="#1e293b" stroke-width="2" marker-end="url(#arrow)"/>
+  </g>
+
+  <!-- [10] Subsurface Screen -->
+  <g>
+    <circle cx="100" cy="290" r="18" fill="#1e293b" stroke="#ffffff" stroke-width="3"/>
+    <text x="100" y="296" text-anchor="middle" fill="#ffffff" font-weight="bold" font-family="sans-serif" font-size="16">10</text>
+    <path d="M 122,290 L 195,290" stroke="#1e293b" stroke-width="2"/>
+  </g>
+
+  <!-- [11] Deep Drag Device -->
+  <g>
+    <circle cx="310" cy="445" r="18" fill="#1e293b" stroke="#ffffff" stroke-width="3"/>
+    <text x="310" y="451" text-anchor="middle" fill="#ffffff" font-weight="bold" font-family="sans-serif" font-size="16">11</text>
+    <path d="M 332,445 L 375,445" stroke="#1e293b" stroke-width="2"/>
+  </g>
+
+  <!-- [12] Central Apex Retention Zone -->
+  <g>
+    <circle cx="620" cy="315" r="18" fill="#1e293b" stroke="#ffffff" stroke-width="3"/>
+    <text x="620" y="321" text-anchor="middle" fill="#ffffff" font-weight="bold" font-family="sans-serif" font-size="16">12</text>
+    <path d="M 620,293 L 620,265" stroke="#1e293b" stroke-width="2"/>
+  </g>
+
+  <!-- [13] Docked Processing Vessel -->
+  <g>
+    <circle cx="760" cy="110" r="18" fill="#1e293b" stroke="#ffffff" stroke-width="3"/>
+    <text x="760" y="116" text-anchor="middle" fill="#ffffff" font-weight="bold" font-family="sans-serif" font-size="16">13</text>
+    <path d="M 760,132 L 760,155" stroke="#1e293b" stroke-width="2"/>
+  </g>
+</svg>
