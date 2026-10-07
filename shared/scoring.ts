@@ -1,4 +1,8 @@
-import { ReadingQuestionType, ReadingTestType } from './types';
+import {
+  ReadingQuestionType,
+  ListeningQuestionType,
+  ReadingTestType,
+} from './types';
 
 /**
  * Verified Official IELTS Band Score Tables for Reading (out of 40 raw marks)
@@ -43,15 +47,37 @@ export const GENERAL_TRAINING_READING_BAND_TABLE: [number, number, number][] = [
 ];
 
 /**
- * Calculates the estimated band score for a full 40-question mock test.
- * Returns null if the test is not a full 40-question mock test.
+ * Official IELTS Band Score Table for Listening (out of 40 raw marks)
+ * NOTE: IELTS Listening scoring is IDENTICAL for both Academic and General Training.
+ * Source: official IELTS scoring documentation (ielts.org, British Council)
+ */
+export const IELTS_LISTENING_BAND_TABLE: [number, number, number][] = [
+  // [minRaw, maxRaw, bandScore]
+  [39, 40, 9.0],
+  [37, 38, 8.5],
+  [35, 36, 8.0],
+  [32, 34, 7.5],
+  [30, 31, 7.0],
+  [26, 29, 6.5],
+  [23, 25, 6.0],
+  [18, 22, 5.5],
+  [16, 17, 5.0],
+  [13, 15, 4.5],
+  [10, 12, 4.0],
+  [8, 9, 3.5],
+  [6, 7, 3.0],
+  [4, 5, 2.5],
+  [0, 3, 2.0],
+];
+
+/**
+ * Calculates the estimated band score for a full 40-question Reading mock test.
  */
 export function calculateEstimatedBandScore(
   rawScore: number,
   totalQuestions: number,
   testType: ReadingTestType
 ): number | null {
-  // Band conversion is officially calibrated on a standard 40-question paper
   if (totalQuestions !== 40) {
     return null;
   }
@@ -64,6 +90,29 @@ export function calculateEstimatedBandScore(
   const boundedRaw = Math.max(0, Math.min(40, Math.round(rawScore)));
 
   for (const [minRaw, maxRaw, band] of table) {
+    if (boundedRaw >= minRaw && boundedRaw <= maxRaw) {
+      return band;
+    }
+  }
+
+  return 2.0;
+}
+
+/**
+ * Calculates the estimated band score for a full 40-question Listening mock test.
+ * Returns null if the test is a short practice set (<40 questions).
+ */
+export function calculateEstimatedListeningBandScore(
+  rawScore: number,
+  totalQuestions: number
+): number | null {
+  if (totalQuestions !== 40) {
+    return null;
+  }
+
+  const boundedRaw = Math.max(0, Math.min(40, Math.round(rawScore)));
+
+  for (const [minRaw, maxRaw, band] of IELTS_LISTENING_BAND_TABLE) {
     if (boundedRaw >= minRaw && boundedRaw <= maxRaw) {
       return band;
     }
@@ -111,7 +160,7 @@ export function countNumbers(text: string): number {
 
 /**
  * Evaluates whether student's answer adheres to word and number constraints:
- * e.g. "NO MORE THAN TWO WORDS AND/OR A NUMBER"
+ * e.g. "ONE WORD AND/OR A NUMBER"
  */
 export function validateWordLimit(
   answer: string,
@@ -147,7 +196,7 @@ export function validateWordLimit(
  * NO broad fuzzy matching is used.
  */
 export function markStudentAnswer(params: {
-  questionType: ReadingQuestionType;
+  questionType: ReadingQuestionType | ListeningQuestionType;
   userAnswer: string | string[];
   answerKey: string | string[];
   acceptedAlternatives?: string[];
@@ -168,8 +217,11 @@ export function markStudentAnswer(params: {
     return { isCorrect: false, mark: 0 };
   }
 
-  // Handle multi-answer multiple choice:
-  if (questionType === 'multiple_choice_multi') {
+  // Handle multi-answer multiple choice (Reading or Listening):
+  if (
+    questionType === 'multiple_choice_multi' ||
+    questionType === 'listening_multiple_choice_multi'
+  ) {
     const studentChoices = Array.isArray(userAnswer)
       ? userAnswer.map((c) => normalizeAnswerText(c))
       : normalizeAnswerText(userAnswer)
@@ -214,7 +266,7 @@ export function markStudentAnswer(params: {
   if (Array.isArray(answerKey)) {
     acceptableKeys.push(...answerKey);
   } else if (typeof answerKey === 'string') {
-    // Also support pipe-delimited alternatives in the answer key: "solar energy|solar power"
+    // Pipe-delimited alternatives in key: "14th October|14 October"
     acceptableKeys.push(...answerKey.split('|'));
   }
 

@@ -58,15 +58,37 @@ export const api = {
   publishVersion: (testId: string, versionId: string) => request<{ message: string }>(`/reading/tests/${testId}/versions/${versionId}/publish`, { method: 'POST' }),
   archiveTest: (testId: string) => request<{ message: string }>(`/reading/tests/${testId}/archive`, { method: 'POST' }),
 
-  // Attempts
+  // Reading Attempts
   startAttempt: (testId: string, modeOverride?: string) => request<{ attempt: any; testVersion: any }>(`/reading/tests/${testId}/start`, { method: 'POST', body: JSON.stringify({ modeOverride }) }),
   getAttempt: (id: string) => request<{ attempt: any; testVersion: any }>(`/attempts/${id}`),
   saveAnswer: (attemptId: string, body: any) => request<{ saved: boolean; isExpired?: boolean }>(`/attempts/${attemptId}/save`, { method: 'POST', body: JSON.stringify(body) }),
   submitAttempt: (attemptId: string) => request<{ attempt: any }>(`/attempts/${attemptId}/submit`, { method: 'POST' }),
   getAttempts: () => request<{ attempts: any[] }>('/attempts'),
 
+  // Listening Tests
+  getListeningTests: (params?: { category?: string }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return request<{ tests: any[] }>(`/listening/tests${q ? `?${q}` : ''}`);
+  },
+  getListeningTest: (id: string) => request<{ test: any; version: any }>(`/listening/tests/${id}`),
+  createListeningTest: (body: any) => request<{ test: any; version: any }>('/listening/tests', { method: 'POST', body: JSON.stringify(body) }),
+  updateListeningDraft: (testId: string, versionId: string, body: any) => request<{ version: any; errors: string[] }>(`/listening/tests/${testId}/versions/${versionId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  forkListeningDraft: (testId: string) => request<{ message: string; version: any }>(`/listening/tests/${testId}/fork`, { method: 'POST' }),
+  publishListeningVersion: (testId: string, versionId: string) => request<{ message: string }>(`/listening/tests/${testId}/versions/${versionId}/publish`, { method: 'POST' }),
+  archiveListeningTest: (testId: string) => request<{ message: string }>(`/listening/tests/${testId}/archive`, { method: 'POST' }),
+
+  // Listening Attempts
+  startListeningAttempt: (testId: string, modeOverride?: string) => request<{ attempt: any; testVersion: any }>(`/listening/tests/${testId}/start`, { method: 'POST', body: JSON.stringify({ modeOverride }) }),
+  getListeningAttempt: (id: string) => request<{ attempt: any; testVersion: any }>(`/listening/attempts/${id}`),
+  saveListeningAnswer: (attemptId: string, body: any) => request<{ saved: boolean; isExpired?: boolean }>(`/listening/attempts/${attemptId}/save`, { method: 'POST', body: JSON.stringify(body) }),
+  recordListeningInterruption: (attemptId: string, body: any) => request<{ success: boolean }>(`/listening/attempts/${attemptId}/interruption`, { method: 'POST', body: JSON.stringify(body) }),
+  submitListeningAttempt: (attemptId: string) => request<{ attempt: any }>(`/listening/attempts/${attemptId}/submit`, { method: 'POST' }),
+  getListeningAttempts: () => request<{ attempts: any[] }>('/listening/attempts'),
+
   // Admin & Teacher
   getAdminUsers: () => request<{ users: any[] }>('/admin/users'),
   updateUserRole: (userId: string, role: string) => request<{ message: string }>(`/admin/users/${userId}/role`, { method: 'POST', body: JSON.stringify({ role }) }),
   getTeacherAttempts: () => request<{ attempts: any[] }>('/teacher/attempts'),
+  getTeacherListeningAttempts: () => request<{ attempts: any[] }>('/teacher/listening-attempts'),
 };
+

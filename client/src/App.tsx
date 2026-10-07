@@ -3,10 +3,13 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { CatalogueView } from './views/CatalogueView';
 import { TestRunnerView } from './views/TestRunnerView';
+import { ListeningTestRunnerView } from './views/ListeningTestRunnerView';
 import { ResultsView } from './views/ResultsView';
+import { ListeningResultsView } from './views/ListeningResultsView';
 import { HistoryView } from './views/HistoryView';
 import { TeacherDashboardView } from './views/TeacherDashboardView';
 import { TestEditorView } from './views/TestEditorView';
+import { ListeningEditorView } from './views/ListeningEditorView';
 import { AdminUsersView } from './views/AdminUsersView';
 import { LoginModal } from './views/LoginModal';
 import { ElevateModal } from './views/ElevateModal';
@@ -28,7 +31,7 @@ const AppContent: React.FC = () => {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [elevateModalOpen, setElevateModalOpen] = useState(false);
 
-  // Handlers
+  // Handlers for Reading
   const handleStartTest = (testId: string, modeOverride?: 'practice' | 'mock') => {
     setActiveTestId(testId);
     setActiveModeOverride(modeOverride);
@@ -45,28 +48,60 @@ const AppContent: React.FC = () => {
     setCurrentView('results');
   };
 
-  const handleEditTest = (testId: string, versionId: string) => {
+  // Handlers for Listening
+  const handleStartListeningTest = (testId: string, modeOverride?: 'practice' | 'mock') => {
+    setActiveTestId(testId);
+    setActiveModeOverride(modeOverride);
+    setCurrentView('listening_test_runner');
+  };
+
+  const handleFinishListeningTest = (attemptId: string) => {
+    setActiveAttemptId(attemptId);
+    setCurrentView('listening_results');
+  };
+
+  const handleViewListeningResults = (attemptId: string) => {
+    setActiveAttemptId(attemptId);
+    setCurrentView('listening_results');
+  };
+
+  // Teacher handlers
+  const handleEditTest = (testId: string, versionId: string, skill: 'reading' | 'listening') => {
     setEditingTestId(testId);
     setEditingVersionId(versionId);
-    setCurrentView('teacher_edit_form');
+    if (skill === 'reading') {
+      setCurrentView('teacher_edit_form');
+    } else {
+      setCurrentView('teacher_listening_edit_form');
+    }
   };
 
-  const handleCreateNewTest = () => {
+  const handleCreateNewTest = (skill: 'reading' | 'listening') => {
     setEditingTestId(undefined);
     setEditingVersionId(undefined);
-    setCurrentView('teacher_edit_form');
+    if (skill === 'reading') {
+      setCurrentView('teacher_edit_form');
+    } else {
+      setCurrentView('teacher_listening_edit_form');
+    }
   };
 
-  const handlePreviewTest = (testId: string) => {
+  const handlePreviewTest = (testId: string, skill: 'reading' | 'listening') => {
     setActiveTestId(testId);
     setActiveModeOverride('practice');
-    setCurrentView('test_runner');
+    if (skill === 'reading') {
+      setCurrentView('test_runner');
+    } else {
+      setCurrentView('listening_test_runner');
+    }
   };
+
+  const isExamView = currentView === 'test_runner' || currentView === 'listening_test_runner';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Conditionally render header: TestRunnerView uses its own distraction-free exam header */}
-      {currentView !== 'test_runner' && (
+      {/* Conditionally render header: TestRunner and ListeningTestRunner use their own distraction-free exam header */}
+      {!isExamView && (
         <Navbar
           currentView={currentView}
           onNavigate={(view) => setCurrentView(view)}
@@ -80,12 +115,15 @@ const AppContent: React.FC = () => {
         {currentView === 'catalogue' && (
           <CatalogueView
             onStartTest={handleStartTest}
+            onStartListeningTest={handleStartListeningTest}
             onViewResults={handleViewResults}
+            onViewListeningResults={handleViewListeningResults}
             onOpenLogin={() => setLoginModalOpen(true)}
             isLoggedIn={!!user}
           />
         )}
 
+        {/* Reading Runner */}
         {currentView === 'test_runner' && activeTestId && (
           <TestRunnerView
             testId={activeTestId}
@@ -95,6 +133,17 @@ const AppContent: React.FC = () => {
           />
         )}
 
+        {/* Listening Runner */}
+        {currentView === 'listening_test_runner' && activeTestId && (
+          <ListeningTestRunnerView
+            testId={activeTestId}
+            modeOverride={activeModeOverride}
+            onExit={() => setCurrentView('catalogue')}
+            onFinish={handleFinishListeningTest}
+          />
+        )}
+
+        {/* Reading Results */}
         {currentView === 'results' && activeAttemptId && (
           <ResultsView
             attemptId={activeAttemptId}
@@ -103,59 +152,78 @@ const AppContent: React.FC = () => {
           />
         )}
 
+        {/* Listening Results */}
+        {currentView === 'listening_results' && activeAttemptId && (
+          <ListeningResultsView
+            attemptId={activeAttemptId}
+            onBackToCatalogue={() => setCurrentView('catalogue')}
+            onRetryTest={(tId) => handleStartListeningTest(tId, 'practice')}
+          />
+        )}
+
+        {/* History */}
         {currentView === 'history' && (
           <HistoryView
             onBackToCatalogue={() => setCurrentView('catalogue')}
             onViewResults={handleViewResults}
+            onViewListeningResults={handleViewListeningResults}
             onRetryTest={(tId) => handleStartTest(tId, 'practice')}
+            onRetryListeningTest={(tId) => handleStartListeningTest(tId, 'practice')}
           />
         )}
 
-        {currentView === 'teacher_editor' && (
+        {/* Teacher Dashboard */}
+        {(currentView === 'teacher_editor' || currentView === 'teacher_attempts') && (
           <TeacherDashboardView
             onEditTest={handleEditTest}
             onCreateNewTest={handleCreateNewTest}
             onPreviewTest={handlePreviewTest}
-            onViewStudentResult={handleViewResults}
+            onViewStudentResult={(attId, skill) => {
+              if (skill === 'reading') handleViewResults(attId);
+              else handleViewListeningResults(attId);
+            }}
           />
         )}
 
-        {currentView === 'teacher_attempts' && (
-          <TeacherDashboardView
-            onEditTest={handleEditTest}
-            onCreateNewTest={handleCreateNewTest}
-            onPreviewTest={handlePreviewTest}
-            onViewStudentResult={handleViewResults}
-          />
-        )}
-
+        {/* Reading Editor Form */}
         {currentView === 'teacher_edit_form' && (
           <TestEditorView
             testId={editingTestId}
             versionId={editingVersionId}
             onBack={() => setCurrentView('teacher_editor')}
-            onPreview={handlePreviewTest}
+            onPreview={(tId) => handlePreviewTest(tId, 'reading')}
           />
         )}
 
+        {/* Listening Editor Form */}
+        {currentView === 'teacher_listening_edit_form' && (
+          <ListeningEditorView
+            testId={editingTestId}
+            versionId={editingVersionId}
+            onBack={() => setCurrentView('teacher_editor')}
+            onPreview={(tId) => handlePreviewTest(tId, 'listening')}
+          />
+        )}
+
+        {/* Admin Management */}
         {currentView === 'admin_users' && (
           <AdminUsersView onBack={() => setCurrentView('catalogue')} />
         )}
       </div>
 
       {/* Footer for non-exam views */}
-      {currentView !== 'test_runner' && (
+      {!isExamView && (
         <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div>
               &copy; {new Date().getFullYear()} IELTS Preparation Platform — Learn English With Arik. All rights reserved.
             </div>
             <div className="flex items-center gap-4 text-slate-400">
-              <span>Reading Milestone 1</span>
+              <span>Reading (Milestone 1)</span>
               <span>•</span>
-              <span>Strict Non-Fuzzy Marking</span>
+              <span>Listening (Milestone 2)</span>
               <span>•</span>
-              <span>Verified Band Scales</span>
+              <span>Non-Fuzzy Marking & Band Tables</span>
             </div>
           </div>
         </footer>

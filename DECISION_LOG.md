@@ -89,4 +89,53 @@ This log tracks architectural and product decisions, reversible implementation c
       - 40: 9.0 | 39: 8.5 | 37–38: 8.0 | 36: 7.5 | 34–35: 7.0
       - 32–33: 6.5 | 30–31: 6.0 | 27–29: 5.5 | 23–26: 5.0 | 19–22: 4.5
       - 15–18: 4.0 | 12–14: 3.5 | 9–11: 3.0 | 6–8: 2.5 | 0–5: 0–2.0
-  - In the UI, the band is explicitly labelled: "Estimated Band (Based on official IELTS conversion standards)". Practice sets with fewer than 40 questions display raw percentage / accuracy only, without pretending to be a complete IELTS band score.
+---
+
+## Decision 7: Listening Architecture and Academic / General Training Sharing
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 1 & 4 specify that IELTS Listening is identical in content and scoring for both Academic and General Training candidates. Full mocks require 4 parts with 40 questions total. Targeted practice sets can isolate specific parts or question types.
+- **Decision**:
+  - Listening tests are marked as `shared` across both Academic and General Training curricula.
+  - Test structures support both complete 4-part mocks (40 items) and modular practice sets.
+  - Audio can be managed either as a single continuous master recording with segment offsets, or as discrete part recordings.
+  - A boolean flag `containsIntroPauses` specifies whether recording already contains official spoken instructions and candidate pauses, avoiding duplicate silence or spoken prompts.
+
+---
+
+## Decision 8: Controlled Audio Playback and Browser Limitation Disclosure
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 5 mandates controlled playback for exam mocks without ordinary seeking, pause, or replay, while allowing practice mode seeking/replay.
+- **Decision**:
+  - In **Mock Mode**: Audio element seeking is blocked in the UI (`pointer-events-none` on progress bar, keyboard shortcut suppression for arrow keys, hidden native seek controls). Audio plays sequentially through official phases: Intro/Read time -> Playback -> Part Check time -> Final 2-minute review.
+  - In **Practice Mode**: Full interactive player is provided with seeking, pause, 10s skip backward/forward, and replay.
+  - **Browser Limitation Disclosure**: Modern browsers cannot prevent local OS-level audio interception, external hardware recording, or devtools DOM manipulation. To ensure platform integrity, the server never sends answer keys, transcripts, or review timestamps until the student submits, and the server authoritatively enforces mock session deadlines.
+
+---
+
+## Decision 9: Audio Recovery and Interruption Policy
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 5 & Acceptance Table (Section 11): "A connection failure must not masquerade as a normal uninterrupted attempt; track any permitted replay or recovery."
+- **Decision**:
+  - When an attempt is started, the server establishes a non-extendable mock deadline.
+  - If a learner disconnects, reloads, or experiences audio failure:
+    - Saved responses are automatically retrieved and restored.
+    - An interruption event is logged (`was_interrupted = 1`, `interruption_count += 1`, timestamped in `interruption_events_json`).
+    - The mock deadline is NOT extended, preventing tactical disconnections to buy thinking time.
+    - Any permitted audio recovery or replay is explicitly incremented in `replay_count`.
+    - The final results report and teacher submission dashboard display an explicit badge: "Interrupted Attempt (Not an uninterrupted exam rehearsal)".
+
+---
+
+## Decision 10: Official Computer-Delivered Listening Band Conversion
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 5 & 14: Only show verified band conversions for complete mocks, identical for Academic and General Training.
+- **Decision**:
+  - Full 40-question Listening mocks convert raw score (0–40) into official IELTS band scores (2.0–9.0):
+    - 39–40: 9.0 | 37–38: 8.5 | 35–36: 8.0 | 32–34: 7.5 | 30–31: 7.0
+    - 26–29: 6.5 | 23–25: 6.0 | 18–22: 5.5 | 16–17: 5.0 | 13–15: 4.5
+    - 10–12: 4.0 | 8–9: 3.5 | 6–7: 3.0 | 4–5: 2.5 | 0–3: 2.0
+  - In computer-delivered IELTS Listening, there are 2 minutes allocated at the end to review answers (unlike paper-based testing which had 10 minutes transfer time).

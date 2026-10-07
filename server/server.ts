@@ -33,7 +33,27 @@ import {
   getAttemptById,
   listUserAttempts,
 } from './attemptService';
+import {
+  createListeningTest,
+  updateListeningDraftVersion,
+  forkNewListeningDraftVersion,
+  publishListeningTestVersion,
+  archiveListeningTest,
+  getListeningTestById,
+  listListeningTests,
+  getListeningVersionById,
+  sanitizeListeningForStudent,
+} from './listeningService';
+import {
+  startOrResumeListeningAttempt,
+  saveListeningAnswer,
+  recordListeningInterruption,
+  submitListeningAttempt,
+  getListeningAttemptById,
+  listUserListeningAttempts,
+} from './listeningAttemptService';
 import { seedDatabase } from './seed';
+import { seedListeningDatabase } from './listeningSeed';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -47,8 +67,13 @@ if (!fs.existsSync(diagramsDir)) {
   fs.mkdirSync(diagramsDir, { recursive: true });
 }
 
-// Serve static assets (diagrams, etc.)
+// Serve static assets (diagrams, audio, etc.)
 app.use(express.static(path.resolve(__dirname, '../public')));
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', milestones: ['reading', 'listening'] });
+});
 
 // -------------------------------------------------------------
 // AUTHENTICATION & ACCOUNTS ENDPOINTS
@@ -461,7 +486,7 @@ app.post('/api/admin/users/:id/role', authMiddleware, requireRole('admin'), (req
   res.json({ message: `Role updated to ${role} successfully` });
 });
 
-// List student submitted attempts for teacher review (Teacher/Admin only)
+// List student submitted reading attempts for teacher review (Teacher/Admin only)
 app.get('/api/teacher/attempts', authMiddleware, requireRole('teacher', 'admin'), (_req, res) => {
   const rows = db
     .prepare(`
@@ -474,6 +499,211 @@ app.get('/api/teacher/attempts', authMiddleware, requireRole('teacher', 'admin')
     `)
     .all() as any[];
 
+  res.json({ attempts: rows });
+});
+
+// -------------------------------------------------------------
+// LISTENING TESTS & CONTENT MANAGEMENT
+// -------------------------------------------------------------
+app.get('/api/listening/tests', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const isTeacherOrAdmin = req.user!.role === 'teacher' || req.user!.role === 'admin';
+  const category = req.query.category as any;
+  const tests = listListeningTests({ isTeacherOrAdmin, category });
+  res.json({ tests });
+});
+
+app.get('/api/listening/tests/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const test = getListeningTestById(req.params.id);
+  if (!test) {
+    res.status(404).json({ error: 'Listening test not found' });
+    return;
+  }
+  const isTeacherOrAdmin = req.user!.role === 'teacher' || req.user!.role === 'admin';
+  if (!isTeacherOrAdmin && test.status !== 'published') {
+    res.status(403).json({ error: 'Access forbidden: test is not published' });
+    return;
+  }
+  const version = getListeningVersionById(test.latestVersionId);
+  if (!version) {
+    res.status(404).json({ error: 'Test version not found' });
+    return;
+  }
+  let returnedVersion = version;
+  if (!isTeacherOrAdmin) {
+    const sanitized = sanitizeListeningForStudent(version.questionGroups, version.parts);
+    returnedVersion = {
+      ...version,
+      questionGroups: sanitized.questionGroups,
+      parts: sanitized.parts,
+    };
+  }
+  res.json({ test, version: returnedVersion });
+});
+
+app.post('/api/listening/tests', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  const { title, category, audioMode, timeLimitMinutes, parts, questionGroups, audioConfig } = req.body;
+  if (!title || !category) {
+    res.status(400).json({ error: 'Title and category are required' });
+    return;
+  }
+  const result = createListeningTest({
+    title,
+    category,
+    audioMode,
+    timeLimitMinutes,
+    createdById: req.user!.id,
+    parts: parts || [],
+    questionGroups: questionGroups || [],
+    audioConfig,
+  });
+  res.status(201).json(result);
+});
+
+app.put('/api/listening/tests/:id/versions/:versionId', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const { title, parts, questionGroups, audioConfig, timeLimitMinutes } = req.body;
+    const result = updateListeningDraftVersion({
+      testId: req.params.id,
+      versionId: req.params.versionId,
+      title,
+      parts,
+      questionGroups,
+      audioConfig,
+      timeLimitMinutes,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/listening/tests/:id/fork', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const newVersion = forkNewListeningDraftVersion(req.params.id);
+    res.json({ message: 'New draft version created', version: newVersion });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/listening/tests/:id/versions/:versionId/publish', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    publishListeningTestVersion(req.params.id, req.params.versionId);
+    res.json({ message: 'Listening test version published successfully' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/listening/tests/:id/archive', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  archiveListeningTest(req.params.id);
+  res.json({ message: 'Listening test archived successfully' });
+});
+
+// -------------------------------------------------------------
+// STUDENT LISTENING TEST ATTEMPTS & TEST RUNNER
+// -------------------------------------------------------------
+app.post('/api/listening/tests/:id/start', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const modeOverride = req.body.modeOverride;
+    const result = startOrResumeListeningAttempt({
+      userId: req.user!.id,
+      testId: req.params.id,
+      modeOverride,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/listening/attempts/:id/save', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const { questionNumber, questionId, userAnswer, isFlagged } = req.body;
+    if (questionNumber === undefined || !questionId) {
+      res.status(400).json({ error: 'questionNumber and questionId are required' });
+      return;
+    }
+    const result = saveListeningAnswer({
+      attemptId: req.params.id,
+      userId: req.user!.id,
+      questionNumber: Number(questionNumber),
+      questionId,
+      userAnswer,
+      isFlagged,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/listening/attempts/:id/interruption', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const { type, detail, didReplay } = req.body;
+  const result = recordListeningInterruption({
+    attemptId: req.params.id,
+    userId: req.user!.id,
+    type: type || 'audio_error',
+    detail,
+    didReplay,
+  });
+  res.json(result);
+});
+
+app.post('/api/listening/attempts/:id/submit', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const result = submitListeningAttempt({
+      attemptId: req.params.id,
+      userId: req.user!.id,
+    });
+    res.json({ attempt: result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/listening/attempts/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const isTeacherOrAdmin = req.user!.role === 'teacher' || req.user!.role === 'admin';
+  let attempt = getListeningAttemptById(req.params.id, req.user!.id);
+  if (!attempt && isTeacherOrAdmin) {
+    const row = db.prepare('SELECT user_id FROM listening_attempts WHERE id = ?').get(req.params.id) as any;
+    if (row) {
+      attempt = getListeningAttemptById(req.params.id, row.user_id);
+    }
+  }
+  if (!attempt) {
+    res.status(404).json({ error: 'Attempt not found or access forbidden' });
+    return;
+  }
+  const version = getListeningVersionById(attempt.versionId);
+  let renderedVersion = version;
+  if (attempt.status === 'in_progress' && version) {
+    const sanitized = sanitizeListeningForStudent(version.questionGroups, version.parts);
+    renderedVersion = {
+      ...version,
+      questionGroups: sanitized.questionGroups,
+      parts: sanitized.parts,
+    };
+  }
+  res.json({ attempt, testVersion: renderedVersion });
+});
+
+app.get('/api/listening/attempts', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const attempts = listUserListeningAttempts(req.user!.id);
+  res.json({ attempts });
+});
+
+app.get('/api/teacher/listening-attempts', authMiddleware, requireRole('teacher', 'admin'), (_req, res) => {
+  const rows = db
+    .prepare(`
+      SELECT a.*, u.full_name as student_name, u.email as student_email
+      FROM listening_attempts a
+      JOIN users u ON a.user_id = u.id
+      WHERE a.status IN ('submitted', 'expired')
+      ORDER BY a.submitted_at DESC
+      LIMIT 100
+    `)
+    .all() as any[];
   res.json({ attempts: rows });
 });
 
@@ -490,6 +720,7 @@ if (fs.existsSync(clientDistPath)) {
 // Initialize database and start listening
 initDatabase();
 seedDatabase();
+seedListeningDatabase();
 
 app.listen(PORT, () => {
   console.log(`IELTS Platform API server listening on http://localhost:${PORT}`);

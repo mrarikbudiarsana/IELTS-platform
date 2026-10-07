@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 550" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f0fdf4"/>
+      <stop offset="100%" stop-color="#dcfce7"/>
+    </linearGradient>
+    <filter id="mapShadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Park Landscape Background -->
+  <rect x="0" y="0" width="800" height="550" fill="url(#bgGrad)" stroke="#166534" stroke-width="4"/>
+
+  <!-- Compass Rose -->
+  <g transform="translate(730, 70)">
+    <circle cx="0" cy="0" r="28" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+    <polygon points="0,-24 6,-4 0,0" fill="#dc2626"/>
+    <polygon points="0,-24 -6,-4 0,0" fill="#991b1b"/>
+    <polygon points="0,24 6,4 0,0" fill="#64748b"/>
+    <polygon points="0,24 -6,4 0,0" fill="#475569"/>
+    <polygon points="24,0 4,-6 0,0" fill="#64748b"/>
+    <polygon points="-24,0 -4,-6 0,0" fill="#64748b"/>
+    <text x="0" y="-28" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="12" fill="#dc2626">N</text>
+    <text x="0" y="38" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="11" fill="#475569">S</text>
+    <text x="36" y="4" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="11" fill="#475569">E</text>
+    <text x="-36" y="4" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="11" fill="#475569">W</text>
+  </g>
+
+  <!-- River flowing through western side -->
+  <path d="M 120,0 C 140,150 70,300 130,550" fill="none" stroke="#0284c7" stroke-width="38" opacity="0.75"/>
+  <path d="M 120,0 C 140,150 70,300 130,550" fill="none" stroke="#38bdf8" stroke-width="12" opacity="0.9"/>
+  <text x="80" y="80" fill="#0369a1" font-weight="bold" font-size="12" font-style="italic" transform="rotate(75 80 80)">RIVER DALE</text>
+
+  <!-- Central Sanctuary Lake -->
+  <ellipse cx="380" cy="240" rx="130" ry="85" fill="#38bdf8" stroke="#0284c7" stroke-width="4" filter="url(#mapShadow)"/>
+  <text x="380" y="245" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="14" fill="#075985">Sanctuary Lake</text>
+
+  <!-- Main Paths -->
+  <!-- Entrance Path from South -->
+  <path d="M 400,550 L 400,430 C 400,380 340,360 300,340 L 260,340" fill="none" stroke="#d97706" stroke-width="14" stroke-linecap="round"/>
+  <!-- Path around eastern side of lake -->
+  <path d="M 400,430 C 460,410 540,350 540,260 C 540,170 480,120 400,120" fill="none" stroke="#d97706" stroke-width="14"/>
+  <!-- Western trail across footbridge -->
+  <path d="M 230,340 L 100,340" fill="none" stroke="#d97706" stroke-width="10"/>
+
+  <!-- Footbridge over river -->
+  <rect x="95" y="328" width="50" height="24" fill="#78350f" stroke="#451a03" stroke-width="2" rx="3"/>
+  <text x="120" y="322" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="bold" fill="#78350f">Footbridge (D)</text>
+
+  <!-- Main Entrance Gate (Bottom) -->
+  <rect x="340" y="520" width="120" height="28" fill="#1e293b" rx="4"/>
+  <text x="400" y="539" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="12" fill="#ffffff">MAIN ENTRANCE</text>
+
+  <!-- Ticket Kiosk -->
+  <rect x="330" y="470" width="45" height="35" fill="#e2e8f0" stroke="#475569" stroke-width="2"/>
+  <text x="352" y="492" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#1e293b">Ticket</text>
+
+  <!-- LETTERED LOCATION PINS (A, B, C, D, E, F, G) -->
+
+  <!-- [A] Wildlife Information Centre (East of entrance) -->
+  <g>
+    <rect x="460" y="460" width="70" height="50" fill="#fef08a" stroke="#ca8a04" stroke-width="3" rx="6" filter="url(#mapShadow)"/>
+    <circle cx="495" cy="485" r="16" fill="#1e293b"/>
+    <text x="495" y="491" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="16" fill="#ffffff">A</text>
+  </g>
+
+  <!-- [B] Café Terrace (Southeast lake shore) -->
+  <g>
+    <rect x="560" y="370" width="65" height="45" fill="#fed7aa" stroke="#ea580c" stroke-width="3" rx="6" filter="url(#mapShadow)"/>
+    <circle cx="592" cy="392" r="16" fill="#1e293b"/>
+    <text x="592" y="398" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="16" fill="#ffffff">B</text>
+  </g>
+
+  <!-- [C] Bird Hide (Western shore of lake) -->
+  <g>
+    <rect x="210" y="220" width="60" height="50" fill="#bbf7d0" stroke="#16a34a" stroke-width="3" rx="6" filter="url(#mapShadow)"/>
+    <circle cx="240" cy="245" r="16" fill="#1e293b"/>
+    <text x="240" y="251" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="16" fill="#ffffff">C</text>
+  </g>
+
+  <!-- [E] Woodland Picnic Meadow (Eastern boundary) -->
+  <g>
+    <rect x="620" y="210" width="70" height="55" fill="#fbcfe8" stroke="#db2777" stroke-width="3" rx="6" filter="url(#mapShadow)"/>
+    <circle cx="655" cy="237" r="16" fill="#1e293b"/>
+    <text x="655" y="243" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="16" fill="#ffffff">E</text>
+  </g>
+
+  <!-- [F] Historic Watermill (Northeast area) -->
+  <g>
+    <rect x="520" y="90" width="65" height="45" fill="#e2e8f0" stroke="#475569" stroke-width="3" rx="6" filter="url(#mapShadow)"/>
+    <circle cx="552" cy="112" r="16" fill="#1e293b"/>
+    <text x="552" y="118" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="16" fill="#ffffff">F</text>
+  </g>
+
+  <!-- [G] Children's Nature Playground (Behind watermill, North) -->
+  <g>
+    <rect x="610" y="70" width="75" height="55" fill="#c7d2fe" stroke="#4f46e5" stroke-width="3" rx="6" filter="url(#mapShadow)"/>
+    <circle cx="647" cy="97" r="16" fill="#1e293b"/>
+    <text x="647" y="103" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="16" fill="#ffffff">G</text>
+  </g>
+
+  <!-- Trees & Natural flora decor -->
+  <circle cx="280" cy="120" r="18" fill="#15803d" opacity="0.6"/>
+  <circle cx="260" cy="135" r="14" fill="#166534" opacity="0.6"/>
+  <circle cx="480" cy="50" r="22" fill="#15803d" opacity="0.6"/>
+  <circle cx="700" cy="340" r="20" fill="#15803d" opacity="0.6"/>
+  <circle cx="180" cy="460" r="22" fill="#15803d" opacity="0.6"/>
+
+  <text x="25" y="530" font-family="sans-serif" font-size="11" font-weight="bold" fill="#334155">Riverside Wildlife Sanctuary Map</text>
+</svg>

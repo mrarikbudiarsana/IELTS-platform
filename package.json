@@ -7,7 +7,7 @@
     "server": "tsx server/server.ts",
     "client": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
-    "test": "tsx test/runTests.ts"
+    "test": "tsx test/runAll.ts"
   },
   "keywords": [
     "ielts",

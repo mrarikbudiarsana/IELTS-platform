@@ -33,7 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="font-bold text-lg tracking-tight leading-tight flex items-center gap-2">
                 IELTS Mastery
                 <span className="text-xs bg-indigo-500/30 text-indigo-300 font-semibold px-2 py-0.5 rounded border border-indigo-400/30">
-                  Reading Pilot
+                  Reading & Listening
                 </span>
               </div>
               <div className="text-xs text-slate-400 font-medium">Learn English With Arik</div>
