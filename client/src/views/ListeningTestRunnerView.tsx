@@ -21,6 +21,8 @@ import {
 interface ListeningTestRunnerViewProps {
   testId: string;
   modeOverride?: 'practice' | 'mock';
+  assignmentId?: string;
+  packageAttemptId?: string;
   onExit: () => void;
   onFinish: (attemptId: string) => void;
 }
@@ -28,6 +30,8 @@ interface ListeningTestRunnerViewProps {
 export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = ({
   testId,
   modeOverride,
+  assignmentId,
+  packageAttemptId,
   onExit,
   onFinish,
 }) => {
@@ -74,7 +78,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
       setLoading(true);
       setError(null);
       try {
-        const res = await api.startListeningAttempt(testId, modeOverride);
+        const res = await api.startListeningAttempt(testId, { modeOverride, assignmentId, packageAttemptId });
         if (!isMounted) return;
 
         setAttempt(res.attempt);

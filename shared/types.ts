@@ -343,4 +343,147 @@ export interface ListeningAttempt {
   answers: Record<number, StudentAnswer>;
   results?: AttemptItemResult[];
   performanceByType?: Record<string, { correct: number; total: number }>;
+  assignmentId?: string;
+}
+
+// -------------------------------------------------------------
+// MILESTONE 3: CLASSES, ENROLMENTS, ASSIGNMENTS & PACKAGES
+// -------------------------------------------------------------
+
+export type ClassTestType = 'academic' | 'general';
+export type EnrolmentStatus = 'active' | 'removed';
+export type AssignmentPurpose = 'pre_test' | 'practice' | 'post_test';
+export type PackageType = 'pre_test' | 'post_test' | 'full_mock';
+export type PackageMode = 'exam_rehearsal' | 'flexible_preparation';
+export type SkillSlot = 'reading' | 'listening' | 'writing' | 'speaking';
+
+export interface ClassItem {
+  id: string;
+  title: string;
+  description?: string;
+  teacherId: string;
+  teacherName?: string;
+  testType: ClassTestType;
+  invitationCode: string;
+  isArchived: boolean;
+  studentCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClassEnrolment {
+  id: string;
+  classId: string;
+  studentId: string;
+  studentName?: string;
+  studentEmail?: string;
+  status: EnrolmentStatus;
+  enrolledAt: string;
+  removedAt?: string;
+}
+
+export interface TestPackage {
+  id: string;
+  title: string;
+  packageType: PackageType;
+  testType: ClassTestType;
+  listeningTestId?: string;
+  listeningVersionId?: string;
+  listeningTestTitle?: string;
+  readingTestId?: string;
+  readingVersionId?: string;
+  readingTestTitle?: string;
+  writingStatus: 'not_implemented';
+  speakingStatus: 'not_implemented';
+  createdById: string;
+  createdAt: string;
+}
+
+export interface Assignment {
+  id: string;
+  classId: string;
+  classTitle?: string;
+  title: string;
+  instructions?: string;
+  purpose: AssignmentPurpose;
+  packageId?: string;
+  packageTitle?: string;
+  skill?: 'reading' | 'listening' | 'all';
+  testId?: string;
+  testTitle?: string;
+  versionId?: string;
+  mode: TestMode;
+  releaseAt: string; // ISO 8601 UTC
+  deadlineAt?: string; // ISO 8601 UTC
+  attemptLimit: number;
+  isReleased: boolean;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  // Student specific contextual fields
+  studentAttemptCount?: number;
+  studentStatus?: 'not_started' | 'in_progress' | 'submitted' | 'overdue';
+  activeAttemptId?: string;
+  lastAttemptScore?: number;
+  lastAttemptTotal?: number;
+  lastAttemptBand?: number;
+}
+
+export interface PackageAttempt {
+  id: string;
+  packageId: string;
+  packageTitle?: string;
+  assignmentId?: string;
+  userId: string;
+  userName?: string;
+  status: 'in_progress' | 'completed';
+  mode: PackageMode;
+  readingAttemptId?: string;
+  readingAttempt?: ReadingAttempt;
+  listeningAttemptId?: string;
+  listeningAttempt?: ListeningAttempt;
+  startedAt: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface SkillComparisonItem {
+  skill: 'reading' | 'listening' | 'writing' | 'speaking';
+  status: 'completed' | 'in_progress' | 'not_started' | 'not_implemented';
+  testTitle?: string;
+  versionNumber?: number;
+  rawScore?: number;
+  totalQuestions?: number;
+  bandScore?: number;
+  completedAt?: string; // Asia/Makassar formatted
+  mode?: TestMode;
+  wasInterrupted?: boolean;
+  isFirstAttempt?: boolean;
+}
+
+export interface PrePostComparisonReport {
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  classId: string;
+  classTitle: string;
+  testType: ClassTestType;
+  preTest: {
+    packageId?: string;
+    packageTitle?: string;
+    skills: Record<SkillSlot, SkillComparisonItem>;
+  };
+  postTest: {
+    packageId?: string;
+    packageTitle?: string;
+    isReleased: boolean;
+    skills: Record<SkillSlot, SkillComparisonItem>;
+  };
+  deltas: {
+    readingRawDelta?: number;
+    readingBandDelta?: number;
+    listeningRawDelta?: number;
+    listeningBandDelta?: number;
+  };
+  pedagogicalNote: string;
 }

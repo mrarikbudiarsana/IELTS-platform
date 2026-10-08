@@ -13,6 +13,11 @@ if (res2.status !== 0) {
   process.exit(res2.status || 1);
 }
 
-console.log('\n=============================================================');
-console.log('  ALL PLATFORM MODULE TESTS (READING & LISTENING) PASSED!     ');
-console.log('=============================================================\n');
+const res3 = spawnSync('npx', ['tsx', 'test/runClassTests.ts'], { stdio: 'inherit', shell: true });
+if (res3.status !== 0) {
+  process.exit(res3.status || 1);
+}
+
+console.log('\n========================================================================');
+console.log('  ALL PLATFORM MODULE TESTS (READING, LISTENING & CLASSES/M3) PASSED!     ');
+console.log('========================================================================\n');

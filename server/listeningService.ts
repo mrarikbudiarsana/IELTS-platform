@@ -460,7 +460,21 @@ export function listListeningTests(params: {
 
   const rows = db.prepare(query).all(...args) as any[];
 
-  return rows.map((row) => {
+  return rows
+    .filter((row) => {
+      if (params.isTeacherOrAdmin) return true;
+      // Protected post-test check: hide if reserved in an unreleased post-test
+      const isReserved = db.prepare(`
+        SELECT 1 FROM assignments a
+        LEFT JOIN test_packages tp ON a.package_id = tp.id
+        WHERE a.purpose = 'post_test'
+          AND (a.is_released = 0 OR a.release_at > datetime('now'))
+          AND (a.test_id = ? OR tp.listening_test_id = ?)
+        LIMIT 1
+      `).get(row.id, row.id);
+      return !isReserved;
+    })
+    .map((row) => {
     const latestVersion = db
       .prepare('SELECT * FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
       .get(row.id) as any;

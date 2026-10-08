@@ -21,7 +21,25 @@ export function startOrResumeAttempt(params: {
   userId: string;
   testId: string;
   modeOverride?: 'practice' | 'mock';
+  assignmentId?: string;
+  packageAttemptId?: string;
 }): { attempt: ReadingAttempt; testVersion: any } {
+  // If attempting independently without assignment, ensure test is not reserved in an unreleased post-test
+  if (!params.assignmentId) {
+    const isReserved = db.prepare(`
+      SELECT 1 FROM assignments a
+      LEFT JOIN test_packages tp ON a.package_id = tp.id
+      WHERE a.purpose = 'post_test'
+        AND (a.is_released = 0 OR a.release_at > datetime('now'))
+        AND (a.test_id = ? OR tp.reading_test_id = ?)
+      LIMIT 1
+    `).get(params.testId, params.testId);
+
+    if (isReserved) {
+      throw new Error('This test material is reserved for a protected post-test and has not been released by your teacher.');
+    }
+  }
+
   const test = getTestById(params.testId);
   if (!test) throw new Error('Test not found');
   if (test.status !== 'published') {
@@ -45,7 +63,7 @@ export function startOrResumeAttempt(params: {
     // Check server deadline
     if (existingAttemptRow.deadline_at && new Date(existingAttemptRow.deadline_at) < now) {
       // Auto-submit expired attempt
-      const finalized = submitAttempt({
+      submitAttempt({
         attemptId: existingAttemptRow.id,
         userId: params.userId,
         forceExpired: true,
@@ -70,7 +88,17 @@ export function startOrResumeAttempt(params: {
   return startNewAttempt(params, test, latestVersion);
 }
 
-function startNewAttempt(params: { userId: string; testId: string; modeOverride?: 'practice' | 'mock' }, test: any, version: any) {
+function startNewAttempt(
+  params: {
+    userId: string;
+    testId: string;
+    modeOverride?: 'practice' | 'mock';
+    assignmentId?: string;
+    packageAttemptId?: string;
+  },
+  test: any,
+  version: any
+) {
   const attemptId = uuidv4();
   const now = new Date();
   const mode = params.modeOverride || test.category;
@@ -96,8 +124,8 @@ function startNewAttempt(params: { userId: string; testId: string; modeOverride?
     INSERT INTO reading_attempts (
       id, user_id, test_id, version_id, test_title, test_type,
       mode, status, started_at, deadline_at, duration_seconds,
-      total_questions, is_first_attempt, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, 0, ?, ?, ?)
+      total_questions, is_first_attempt, assignment_id, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, 0, ?, ?, ?, ?)
   `).run(
     attemptId,
     params.userId,
@@ -110,8 +138,18 @@ function startNewAttempt(params: { userId: string; testId: string; modeOverride?
     deadlineAt,
     version.totalQuestions,
     isFirstAttempt,
+    params.assignmentId || null,
     now.toISOString()
   );
+
+  // If package attempt is provided, link it
+  if (params.packageAttemptId) {
+    db.prepare(`
+      UPDATE package_attempts
+      SET reading_attempt_id = ?
+      WHERE id = ?
+    `).run(attemptId, params.packageAttemptId);
+  }
 
   const attempt = getAttemptById(attemptId, params.userId)!;
   const sanitizedGroups = sanitizeQuestionsForStudent(version.questionGroups);

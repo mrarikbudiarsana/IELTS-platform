@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { BookOpen, Shield, LogOut, Award, UserCheck, Layers, Users } from 'lucide-react';
+import { BookOpen, Shield, LogOut, Award, UserCheck, Layers, Users, GraduationCap } from 'lucide-react';
 
 interface NavbarProps {
   currentView: string;
@@ -54,6 +54,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               Practice & Mocks
             </button>
 
+            {user && !isTeacherOrAdmin && (
+              <button
+                onClick={() => onNavigate('student_classes')}
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  currentView === 'student_classes'
+                    ? 'bg-slate-800 text-white border-b-2 border-indigo-500'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <GraduationCap className="w-4 h-4" />
+                My Classes
+              </button>
+            )}
+
             {user && (
               <button
                 onClick={() => onNavigate('history')}
@@ -70,6 +84,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {isTeacherOrAdmin && (
               <>
+                <button
+                  onClick={() => onNavigate('teacher_classes')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    currentView === 'teacher_classes'
+                      ? 'bg-amber-950 text-amber-200 border-b-2 border-amber-500'
+                      : 'text-amber-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  Class Management
+                </button>
                 <button
                   onClick={() => onNavigate('teacher_editor')}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${

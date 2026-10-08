@@ -139,3 +139,50 @@ This log tracks architectural and product decisions, reversible implementation c
     - 26–29: 6.5 | 23–25: 6.0 | 18–22: 5.5 | 16–17: 5.0 | 13–15: 4.5
     - 10–12: 4.0 | 8–9: 3.5 | 6–7: 3.0 | 4–5: 2.5 | 0–3: 2.0
   - In computer-delivered IELTS Listening, there are 2 minutes allocated at the end to review answers (unlike paper-based testing which had 10 minutes transfer time).
+
+---
+
+## Decision 11: Class Isolation, Enrolment, and Non-Destructive Removal
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 2 & 6: Classes represent structured cohorts (Academic or General Training). Students must only access classes they belong to, and teachers only manage their assigned classes. Removal of class access must never delete historical work or student accounts.
+- **Decision**:
+  - Classes support Academic or General Training test versions.
+  - Learners enrol via secure teacher invitation codes (`CLASS-XXXXXX`) or direct teacher email invitations.
+  - Strict server-side role and membership enforcement: students cannot see or query class assignments unless active members; non-class independent work remains private.
+  - **Non-destructive removal**: When a teacher removes a student from a class, the enrolment status is transitioned to `removed`. The student user account, past assignment attempts, saved answers, and independent practice history remain completely intact in the database.
+
+---
+
+## Decision 12: Protected Post-Test Content Isolation
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 6: Prevent learners from accessing reserved post-test material before release across all routes: practice catalogue, direct links or API requests, and other assignments.
+- **Decision**:
+  - A server-side checker `isTestReservedInUnreleasedPostTest(testId)` monitors active post-test reservations across all classes.
+  - Unreleased post-test materials are automatically scrubbed and excluded from `/api/reading/tests` and `/api/listening/tests` for learners.
+  - Any direct API attempt (`/api/reading/tests/:id/start` or `/api/listening/tests/:id/start`) targeting reserved unreleased material without an active, released assignment grant immediately rejects with 403 Forbidden.
+  - Post-test assignments require explicit teacher action (`POST /api/assignments/:id/release`) to become accessible to class learners.
+
+---
+
+## Decision 13: Pre-Test vs Post-Test Content Separation & Difficulty Variance
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 6: Use different pre-test and post-test content. Warn teachers when selecting overlapping materials; do not claim difficulty equivalence without standardization review.
+- **Decision**:
+  - Pre-test and post-test configurations require distinct content packages to provide meaningful diagnostic progression.
+  - The assignment creation service checks for overlapping material IDs between pre-test and post-test packages. If identical materials are selected, an explicit pedagogical warning is returned.
+  - The platform explicitly states that test forms may have slight difficulty variation and does not assume mathematical equivalence between non-standardized forms without formal psychometric calibration.
+
+---
+
+## Decision 14: Diagnostic Pre/Post Progression Report & 4-Skill Integrity
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 6, 8, & 14: Deliver diagnostic pre/post comparison reports for Reading and Listening. Clearly label Writing and Speaking as not yet implemented. Do not fabricate scores or overall 4-skill bands. Display scheduling in Asia/Makassar.
+- **Decision**:
+  - Comparison reports (`getPrePostComparison`) evaluate Reading and Listening side-by-side, displaying raw scores, calibrated band scores, test dates in WITA, and score deltas.
+  - Writing and Speaking are explicitly tagged with status `'not_implemented'`. No simulated scores, estimates, or overall 4-skill bands are fabricated.
+  - Mandatory pedagogical disclaimer is attached to every report: explains that score deltas reflect performance on specific test versions under respective test conditions, warns against uncritically attributing changes solely to learning progress without accounting for test variation, and states why overall bands cannot be computed.
+  - Timezone convention: Timestamps stored in UTC ISO 8601 in SQLite; all deadlines and completed timestamps are formatted in `Asia/Makassar` (WITA, UTC+8) via shared date utilities.

@@ -186,6 +186,113 @@ export function initDatabase() {
       UNIQUE(attempt_id, question_number)
     );
 
+    -- -------------------------------------------------------------
+    -- MILESTONE 3: CLASSES, ENROLMENTS, PACKAGES, ASSIGNMENTS
+    -- -------------------------------------------------------------
+
+    -- Classes table
+    CREATE TABLE IF NOT EXISTS classes (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      teacher_id TEXT NOT NULL,
+      test_type TEXT NOT NULL CHECK(test_type IN ('academic', 'general')),
+      invitation_code TEXT UNIQUE NOT NULL,
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (teacher_id) REFERENCES users(id)
+    );
+
+    -- Class enrolments (removing access preserves historical work)
+    CREATE TABLE IF NOT EXISTS class_enrolments (
+      id TEXT PRIMARY KEY,
+      class_id TEXT NOT NULL,
+      student_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'removed')),
+      enrolled_at TEXT NOT NULL DEFAULT (datetime('now')),
+      removed_at TEXT,
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+      FOREIGN KEY (student_id) REFERENCES users(id),
+      UNIQUE(class_id, student_id)
+    );
+
+    -- Test packages (connects four skill components; fixed versions)
+    CREATE TABLE IF NOT EXISTS test_packages (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      package_type TEXT NOT NULL CHECK(package_type IN ('pre_test', 'post_test', 'full_mock')),
+      test_type TEXT NOT NULL CHECK(test_type IN ('academic', 'general')),
+      listening_test_id TEXT,
+      listening_version_id TEXT,
+      reading_test_id TEXT,
+      reading_version_id TEXT,
+      writing_status TEXT NOT NULL DEFAULT 'not_implemented',
+      speaking_status TEXT NOT NULL DEFAULT 'not_implemented',
+      created_by_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (created_by_id) REFERENCES users(id),
+      FOREIGN KEY (listening_test_id) REFERENCES listening_tests(id),
+      FOREIGN KEY (listening_version_id) REFERENCES listening_test_versions(id),
+      FOREIGN KEY (reading_test_id) REFERENCES reading_tests(id),
+      FOREIGN KEY (reading_version_id) REFERENCES reading_test_versions(id)
+    );
+
+    -- Assignments table
+    CREATE TABLE IF NOT EXISTS assignments (
+      id TEXT PRIMARY KEY,
+      class_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      instructions TEXT,
+      purpose TEXT NOT NULL CHECK(purpose IN ('pre_test', 'practice', 'post_test')),
+      package_id TEXT,
+      skill TEXT CHECK(skill IN ('reading', 'listening', 'all')),
+      test_id TEXT,
+      version_id TEXT,
+      mode TEXT NOT NULL DEFAULT 'mock' CHECK(mode IN ('mock', 'practice')),
+      release_at TEXT NOT NULL,
+      deadline_at TEXT,
+      attempt_limit INTEGER NOT NULL DEFAULT 1,
+      is_released INTEGER NOT NULL DEFAULT 1,
+      created_by_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+      FOREIGN KEY (package_id) REFERENCES test_packages(id),
+      FOREIGN KEY (created_by_id) REFERENCES users(id)
+    );
+
+    -- Assignment access grants (whole class if empty or specific learners)
+    CREATE TABLE IF NOT EXISTS assignment_access_grants (
+      id TEXT PRIMARY KEY,
+      assignment_id TEXT NOT NULL,
+      student_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (assignment_id) REFERENCES assignments(id) ON DELETE CASCADE,
+      FOREIGN KEY (student_id) REFERENCES users(id),
+      UNIQUE(assignment_id, student_id)
+    );
+
+    -- Multi-skill package attempts
+    CREATE TABLE IF NOT EXISTS package_attempts (
+      id TEXT PRIMARY KEY,
+      package_id TEXT NOT NULL,
+      assignment_id TEXT,
+      user_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress', 'completed')),
+      mode TEXT NOT NULL CHECK(mode IN ('exam_rehearsal', 'flexible_preparation')),
+      reading_attempt_id TEXT,
+      listening_attempt_id TEXT,
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (package_id) REFERENCES test_packages(id),
+      FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (reading_attempt_id) REFERENCES reading_attempts(id),
+      FOREIGN KEY (listening_attempt_id) REFERENCES listening_attempts(id)
+    );
+
     -- Indices for high performance
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_reading_tests_status ON reading_tests(status, test_type);
@@ -197,5 +304,29 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_listening_versions_test ON listening_test_versions(test_id, version_number);
     CREATE INDEX IF NOT EXISTS idx_listening_attempts_user ON listening_attempts(user_id, test_id);
     CREATE INDEX IF NOT EXISTS idx_listening_answers_attempt ON listening_answers(attempt_id);
+
+    CREATE INDEX IF NOT EXISTS idx_classes_teacher ON classes(teacher_id);
+    CREATE INDEX IF NOT EXISTS idx_class_enrolments_student ON class_enrolments(student_id, class_id);
+    CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id, purpose);
+    CREATE INDEX IF NOT EXISTS idx_package_attempts_user ON package_attempts(user_id, package_id);
   `);
+
+  // Safe column migrations for assignment_id
+  try {
+    const readingColumns = db.prepare("PRAGMA table_info(reading_attempts)").all() as any[];
+    if (!readingColumns.some((col) => col.name === 'assignment_id')) {
+      db.exec('ALTER TABLE reading_attempts ADD COLUMN assignment_id TEXT REFERENCES assignments(id);');
+    }
+  } catch (err) {
+    console.warn('Note: reading_attempts.assignment_id column check/alter', err);
+  }
+
+  try {
+    const listeningColumns = db.prepare("PRAGMA table_info(listening_attempts)").all() as any[];
+    if (!listeningColumns.some((col) => col.name === 'assignment_id')) {
+      db.exec('ALTER TABLE listening_attempts ADD COLUMN assignment_id TEXT REFERENCES assignments(id);');
+    }
+  } catch (err) {
+    console.warn('Note: listening_attempts.assignment_id column check/alter', err);
+  }
 }

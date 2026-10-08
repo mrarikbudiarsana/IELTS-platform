@@ -11,6 +11,8 @@ import { TeacherDashboardView } from './views/TeacherDashboardView';
 import { TestEditorView } from './views/TestEditorView';
 import { ListeningEditorView } from './views/ListeningEditorView';
 import { AdminUsersView } from './views/AdminUsersView';
+import { StudentClassDashboardView } from './views/StudentClassDashboardView';
+import { TeacherClassManagementView } from './views/TeacherClassManagementView';
 import { LoginModal } from './views/LoginModal';
 import { ElevateModal } from './views/ElevateModal';
 
@@ -22,6 +24,8 @@ const AppContent: React.FC = () => {
   const [activeTestId, setActiveTestId] = useState<string | null>(null);
   const [activeModeOverride, setActiveModeOverride] = useState<'practice' | 'mock' | undefined>(undefined);
   const [activeAttemptId, setActiveAttemptId] = useState<string | null>(null);
+  const [activeAssignmentId, setActiveAssignmentId] = useState<string | undefined>(undefined);
+  const [activePackageAttemptId, setActivePackageAttemptId] = useState<string | undefined>(undefined);
 
   // Editor states
   const [editingTestId, setEditingTestId] = useState<string | undefined>(undefined);
@@ -32,9 +36,11 @@ const AppContent: React.FC = () => {
   const [elevateModalOpen, setElevateModalOpen] = useState(false);
 
   // Handlers for Reading
-  const handleStartTest = (testId: string, modeOverride?: 'practice' | 'mock') => {
+  const handleStartTest = (testId: string, modeOverride?: 'practice' | 'mock', assignmentId?: string, packageAttemptId?: string) => {
     setActiveTestId(testId);
     setActiveModeOverride(modeOverride);
+    setActiveAssignmentId(assignmentId);
+    setActivePackageAttemptId(packageAttemptId);
     setCurrentView('test_runner');
   };
 
@@ -49,9 +55,11 @@ const AppContent: React.FC = () => {
   };
 
   // Handlers for Listening
-  const handleStartListeningTest = (testId: string, modeOverride?: 'practice' | 'mock') => {
+  const handleStartListeningTest = (testId: string, modeOverride?: 'practice' | 'mock', assignmentId?: string, packageAttemptId?: string) => {
     setActiveTestId(testId);
     setActiveModeOverride(modeOverride);
+    setActiveAssignmentId(assignmentId);
+    setActivePackageAttemptId(packageAttemptId);
     setCurrentView('listening_test_runner');
   };
 
@@ -128,6 +136,8 @@ const AppContent: React.FC = () => {
           <TestRunnerView
             testId={activeTestId}
             modeOverride={activeModeOverride}
+            assignmentId={activeAssignmentId}
+            packageAttemptId={activePackageAttemptId}
             onExit={() => setCurrentView('catalogue')}
             onFinish={handleFinishTest}
           />
@@ -138,6 +148,8 @@ const AppContent: React.FC = () => {
           <ListeningTestRunnerView
             testId={activeTestId}
             modeOverride={activeModeOverride}
+            assignmentId={activeAssignmentId}
+            packageAttemptId={activePackageAttemptId}
             onExit={() => setCurrentView('catalogue')}
             onFinish={handleFinishListeningTest}
           />
@@ -170,6 +182,21 @@ const AppContent: React.FC = () => {
             onRetryTest={(tId) => handleStartTest(tId, 'practice')}
             onRetryListeningTest={(tId) => handleStartListeningTest(tId, 'practice')}
           />
+        )}
+
+        {/* Student Class Dashboard */}
+        {currentView === 'student_classes' && (
+          <StudentClassDashboardView
+            onStartReading={handleStartTest}
+            onStartListening={handleStartListeningTest}
+            onViewReadingResults={handleViewResults}
+            onViewListeningResults={handleViewListeningResults}
+          />
+        )}
+
+        {/* Teacher Class Management */}
+        {currentView === 'teacher_classes' && (
+          <TeacherClassManagementView />
         )}
 
         {/* Teacher Dashboard */}
@@ -219,9 +246,11 @@ const AppContent: React.FC = () => {
               &copy; {new Date().getFullYear()} IELTS Preparation Platform — Learn English With Arik. All rights reserved.
             </div>
             <div className="flex items-center gap-4 text-slate-400">
-              <span>Reading (Milestone 1)</span>
+              <span>Reading (M1)</span>
               <span>•</span>
-              <span>Listening (Milestone 2)</span>
+              <span>Listening (M2)</span>
+              <span>•</span>
+              <span>Classes & Journey (M3)</span>
               <span>•</span>
               <span>Non-Fuzzy Marking & Band Tables</span>
             </div>

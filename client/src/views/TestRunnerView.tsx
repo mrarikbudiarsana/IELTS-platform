@@ -9,6 +9,8 @@ import { Clock, Check, AlertCircle, AlertTriangle, ArrowLeft, RefreshCw, Send, H
 interface TestRunnerViewProps {
   testId: string;
   modeOverride?: 'practice' | 'mock';
+  assignmentId?: string;
+  packageAttemptId?: string;
   onExit: () => void;
   onFinish: (attemptId: string) => void;
 }
@@ -16,6 +18,8 @@ interface TestRunnerViewProps {
 export const TestRunnerView: React.FC<TestRunnerViewProps> = ({
   testId,
   modeOverride,
+  assignmentId,
+  packageAttemptId,
   onExit,
   onFinish,
 }) => {
@@ -50,7 +54,7 @@ export const TestRunnerView: React.FC<TestRunnerViewProps> = ({
       setLoading(true);
       setError(null);
       try {
-        const res = await api.startAttempt(testId, modeOverride);
+        const res = await api.startAttempt(testId, { modeOverride, assignmentId, packageAttemptId });
         if (!isMounted) return;
 
         setAttempt(res.attempt);

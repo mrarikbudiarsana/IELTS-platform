@@ -54,6 +54,33 @@ import {
 } from './listeningAttemptService';
 import { seedDatabase } from './seed';
 import { seedListeningDatabase } from './listeningSeed';
+import { seedClassDatabase } from './classSeed';
+import {
+  createClass,
+  updateClass,
+  getClassById,
+  listTeacherClasses,
+  listStudentClasses,
+  enrolStudentByCode,
+  enrolStudentByEmail,
+  removeStudentFromClass,
+  listClassEnrolments,
+  isStudentInClass,
+} from './classService';
+import {
+  createTestPackage,
+  getTestPackageById,
+  listTestPackages,
+  createAssignment,
+  releasePostTestAssignment,
+  getAssignmentById,
+  listClassAssignments,
+  startOrResumePackageAttempt,
+  getPackageAttemptById,
+  getPrePostComparison,
+  getClassOverview,
+} from './assignmentService';
+import { ClassTestType } from '../shared/types';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -72,7 +99,7 @@ app.use(express.static(path.resolve(__dirname, '../public')));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', milestones: ['reading', 'listening'] });
+  res.json({ status: 'ok', milestones: ['reading', 'listening', 'classes'] });
 });
 
 // -------------------------------------------------------------
@@ -707,6 +734,229 @@ app.get('/api/teacher/listening-attempts', authMiddleware, requireRole('teacher'
   res.json({ attempts: rows });
 });
 
+// -------------------------------------------------------------
+// MILESTONE 3: CLASSES, PACKAGES, ASSIGNMENTS & COMPARISON
+// -------------------------------------------------------------
+
+// --- Classes ---
+// GET /api/classes - lists teacher's classes if teacher/admin, or enrolled classes if student
+app.get('/api/classes', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    if (req.user!.role === 'teacher' || req.user!.role === 'admin') {
+      const classes = listTeacherClasses(req.user!.id, req.user!.role === 'admin');
+      res.json({ classes });
+    } else {
+      const classes = listStudentClasses(req.user!.id);
+      res.json({ classes });
+    }
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/classes - create a new class (teachers/admins)
+app.post('/api/classes', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const newClass = createClass(req.user!.id, req.body);
+    res.status(201).json({ class: newClass });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/classes/:id - get class details
+app.get('/api/classes/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const classItem = getClassById(req.params.id);
+    // Student can only access if enrolled
+    if (req.user!.role === 'student' && !isStudentInClass(req.params.id, req.user!.id)) {
+      res.status(403).json({ error: 'You are not enrolled in this class.' });
+      return;
+    }
+    // Teacher can only view if owns class or is admin
+    if (req.user!.role === 'teacher' && classItem.teacherId !== req.user!.id) {
+      res.status(403).json({ error: 'You do not have access to this class.' });
+      return;
+    }
+    res.json({ class: classItem });
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// PUT /api/classes/:id - update class
+app.put('/api/classes/:id', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const updated = updateClass(req.params.id, req.user!.id, req.body, req.user!.role === 'admin');
+    res.json({ class: updated });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/classes/join - student joins via invitation code
+app.post('/api/classes/join', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const { invitationCode } = req.body;
+    if (!invitationCode) {
+      res.status(400).json({ error: 'Invitation code is required.' });
+      return;
+    }
+    const joinedClass = enrolStudentByCode(req.user!.id, invitationCode);
+    res.json({ class: joinedClass, message: `Successfully enrolled in ${joinedClass.title}` });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/classes/:id/enrol - teacher enrols student by email
+app.post('/api/classes/:id/enrol', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'Student email is required.' });
+      return;
+    }
+    const enrolment = enrolStudentByEmail(req.user!.id, req.params.id, email, req.user!.role === 'admin');
+    res.status(201).json({ enrolment, message: 'Student successfully enrolled.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/classes/:id/enrolments/:studentId - teacher removes student
+app.delete('/api/classes/:id/enrolments/:studentId', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    removeStudentFromClass(req.user!.id, req.params.id, req.params.studentId, req.user!.role === 'admin');
+    res.json({ message: 'Student removed from class. Historical attempts preserved.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/classes/:id/enrolments - list roster
+app.get('/api/classes/:id/enrolments', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const enrolments = listClassEnrolments(req.user!.id, req.params.id, req.user!.role === 'admin');
+    res.json({ enrolments });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/classes/:id/overview - class analytics & overview
+app.get('/api/classes/:id/overview', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const overview = getClassOverview(req.params.id, req.user!.id, req.user!.role === 'admin');
+    res.json(overview);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// --- Test Packages ---
+// POST /api/test-packages - create test package
+app.post('/api/test-packages', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const pkg = createTestPackage(req.user!.id, req.body);
+    res.status(201).json({ testPackage: pkg });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/test-packages - list test packages
+app.get('/api/test-packages', authMiddleware, (req, res) => {
+  try {
+    const packages = listTestPackages(req.query.testType as any);
+    res.json({ testPackages: packages });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/test-packages/:id - get package by id
+app.get('/api/test-packages/:id', authMiddleware, (req, res) => {
+  try {
+    const pkg = getTestPackageById(req.params.id);
+    res.json({ testPackage: pkg });
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// --- Assignments ---
+// POST /api/classes/:id/assignments - create assignment
+app.post('/api/classes/:id/assignments', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const { assignment, warning } = createAssignment(req.user!.id, req.params.id, req.body, req.user!.role === 'admin');
+    res.status(201).json({ assignment, warning });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/classes/:id/assignments - list assignments for class
+app.get('/api/classes/:id/assignments', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const assignments = listClassAssignments(req.params.id, req.user!.id, req.user!.role);
+    res.json({ assignments });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/assignments/:id - get single assignment
+app.get('/api/assignments/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const assignment = getAssignmentById(req.params.id, req.user!.id);
+    res.json({ assignment });
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// POST /api/assignments/:id/release - explicit teacher release of post-test
+app.post('/api/assignments/:id/release', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const assignment = releasePostTestAssignment(req.user!.id, req.params.id, req.user!.role === 'admin');
+    res.json({ assignment, message: 'Post-test successfully released to class students.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/assignments/:id/start-package - start or resume package attempt
+app.post('/api/assignments/:id/start-package', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const { mode } = req.body;
+    const result = startOrResumePackageAttempt(req.params.id, req.user!.id, mode);
+    res.status(201).json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/package-attempts/:id - get package attempt
+app.get('/api/package-attempts/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const attempt = getPackageAttemptById(req.params.id, req.user!.id, req.user!.role === 'teacher' || req.user!.role === 'admin');
+    res.json({ packageAttempt: attempt });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/classes/:classId/students/:studentId/comparison - pre/post diagnostic comparison report
+app.get('/api/classes/:classId/students/:studentId/comparison', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const report = getPrePostComparison(req.params.classId, req.params.studentId, req.user!.id, req.user!.role);
+    res.json({ report });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Serve compiled React frontend if present
 const clientDistPath = path.resolve(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
@@ -721,6 +971,7 @@ if (fs.existsSync(clientDistPath)) {
 initDatabase();
 seedDatabase();
 seedListeningDatabase();
+seedClassDatabase();
 
 app.listen(PORT, () => {
   console.log(`IELTS Platform API server listening on http://localhost:${PORT}`);

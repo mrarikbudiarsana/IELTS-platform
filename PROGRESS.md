@@ -61,8 +61,57 @@ This document tracks implementation status across the stages outlined in the Pro
 
 ---
 
+## Milestone 3: Classes, Assignments, and the Pre-Test → Practice → Post-Test Journey (COMPLETED & VERIFIED)
+
+### Phase 1: Class Management & Protected Enrolment
+- [x] Multi-tenant class models with Academic / General Training test types (`classes`, `class_enrolments`)
+- [x] Role authorization: teacher class creation and update isolation
+- [x] Protected student enrolment via invitation codes (`CLASS-XXXXXX`) or teacher email invitations
+- [x] Non-destructive removal: soft removal preserves learner accounts and past attempt history
+
+### Phase 2: Multi-Skill Test Packages & 4-Skill Slot Integrity
+- [x] Test packages (`test_packages`) referencing fixed published versions of Reading and Listening
+- [x] Explicit 4-skill slots: Reading, Listening, Writing, Speaking
+- [x] Writing and Speaking strictly labelled as `not_implemented` (no simulated or fabricated scores)
+- [x] Package attempt execution & skill linking (`package_attempts`)
+
+### Phase 3: Assignment Engine & Scheduling
+- [x] Assignment purposes: Diagnostic Pre-Test, Course Practice, and Protected Post-Test (`assignments`)
+- [x] Server-enforced attempt limits and mode settings (mock vs practice)
+- [x] Asia/Makassar (WITA, UTC+8) display scheduling with UTC ISO 8601 storage
+- [x] Material overlap detection: warns teachers when selecting overlapping materials between pre-test and post-test
+
+### Phase 4: Protected Post-Test Content Isolation
+- [x] Reserved unreleased post-test materials strictly isolated from learners
+- [x] Automatic catalogue hiding via `isTestReservedInUnreleasedPostTest`
+- [x] Direct URL and API access blocking (403 Forbidden) for unreleased reserved content
+- [x] Explicit teacher post-test release action (`POST /api/assignments/:id/release`)
+
+### Phase 5: Student Class Dashboard & Teacher Management Views
+- [x] Student Class Dashboard (`StudentClassDashboardView.tsx`):
+  - Enrolment via invitation code
+  - 3-stage journey: Pre-Test card, Course Practice list, locked/released Post-Test card
+  - Asia/Makassar deadlines and overdue tracking without deleting work
+- [x] Teacher Class Management (`TeacherClassManagementView.tsx`):
+  - Cohort switcher & invitation code sharing
+  - Assignment scheduler with overlap warnings
+  - Explicit "Release Post-Test Now" button
+  - Non-destructive student removal
+  - Class diagnostic overview & question type difficulty accuracy metrics
+- [x] Pre vs Post Progression Report Modal (`PrePostComparisonModal.tsx`):
+  - Side-by-side Reading and Listening raw and calibrated band scores
+  - Score deltas calculation
+  - Missing skill badges for Writing and Speaking
+  - Mandatory pedagogical disclaimer: warns that score changes reflect specific test versions and must not be uncritically attributed purely to learning progress
+
+### Phase 6: Automated Verification Suite
+- [x] Milestone 3 automated verification suite (`test/runClassTests.ts`) passing 9/9 checks (100%)
+- [x] Full platform regression suite (`npm test`) passing all 26 checks (Reading 9, Listening 8, Classes & Journey 9)
+- [x] Production frontend build (`npm run build`) compiles cleanly with 0 TypeScript errors
+
+---
+
 ## Future Milestones (Deferred per Blueprint)
-- **Milestone 3**: Writing Assessment Engine & Speaking (dual route: interactive AI conversation + teacher-led scoring queue).
-- **Milestone 4**: Class journey (pre-test → assigned practice → protected post-test, comparison reports).
+- **Milestone 4**: Writing Assessment Engine & Speaking (dual route: interactive AI conversation + teacher-led scoring queue).
 - **Milestone 5**: Commercial access, plans, ledger, teacher codes, payment webhooks.
 - **Milestone 6**: Production load testing, pilot onboarding (10–50 learners).

@@ -59,7 +59,10 @@ export const api = {
   archiveTest: (testId: string) => request<{ message: string }>(`/reading/tests/${testId}/archive`, { method: 'POST' }),
 
   // Reading Attempts
-  startAttempt: (testId: string, modeOverride?: string) => request<{ attempt: any; testVersion: any }>(`/reading/tests/${testId}/start`, { method: 'POST', body: JSON.stringify({ modeOverride }) }),
+  startAttempt: (testId: string, options?: { modeOverride?: string; assignmentId?: string; packageAttemptId?: string } | string) => {
+    const body = typeof options === 'string' ? { modeOverride: options } : options || {};
+    return request<{ attempt: any; testVersion: any }>(`/reading/tests/${testId}/start`, { method: 'POST', body: JSON.stringify(body) });
+  },
   getAttempt: (id: string) => request<{ attempt: any; testVersion: any }>(`/attempts/${id}`),
   saveAnswer: (attemptId: string, body: any) => request<{ saved: boolean; isExpired?: boolean }>(`/attempts/${attemptId}/save`, { method: 'POST', body: JSON.stringify(body) }),
   submitAttempt: (attemptId: string) => request<{ attempt: any }>(`/attempts/${attemptId}/submit`, { method: 'POST' }),
@@ -78,12 +81,43 @@ export const api = {
   archiveListeningTest: (testId: string) => request<{ message: string }>(`/listening/tests/${testId}/archive`, { method: 'POST' }),
 
   // Listening Attempts
-  startListeningAttempt: (testId: string, modeOverride?: string) => request<{ attempt: any; testVersion: any }>(`/listening/tests/${testId}/start`, { method: 'POST', body: JSON.stringify({ modeOverride }) }),
+  startListeningAttempt: (testId: string, options?: { modeOverride?: string; assignmentId?: string; packageAttemptId?: string } | string) => {
+    const body = typeof options === 'string' ? { modeOverride: options } : options || {};
+    return request<{ attempt: any; testVersion: any }>(`/listening/tests/${testId}/start`, { method: 'POST', body: JSON.stringify(body) });
+  },
   getListeningAttempt: (id: string) => request<{ attempt: any; testVersion: any }>(`/listening/attempts/${id}`),
   saveListeningAnswer: (attemptId: string, body: any) => request<{ saved: boolean; isExpired?: boolean }>(`/listening/attempts/${attemptId}/save`, { method: 'POST', body: JSON.stringify(body) }),
   recordListeningInterruption: (attemptId: string, body: any) => request<{ success: boolean }>(`/listening/attempts/${attemptId}/interruption`, { method: 'POST', body: JSON.stringify(body) }),
   submitListeningAttempt: (attemptId: string) => request<{ attempt: any }>(`/listening/attempts/${attemptId}/submit`, { method: 'POST' }),
   getListeningAttempts: () => request<{ attempts: any[] }>('/listening/attempts'),
+
+  // Classes & Enrolment
+  getClasses: () => request<{ classes: any[] }>('/classes'),
+  getClass: (id: string) => request<{ class: any }>(`/classes/${id}`),
+  createClass: (body: { title: string; description?: string; testType: string }) => request<{ class: any }>('/classes', { method: 'POST', body: JSON.stringify(body) }),
+  updateClass: (id: string, body: any) => request<{ class: any }>(`/classes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  joinClass: (invitationCode: string) => request<{ class: any; message: string }>('/classes/join', { method: 'POST', body: JSON.stringify({ invitationCode }) }),
+  enrolStudent: (classId: string, email: string) => request<{ enrolment: any; message: string }>(`/classes/${classId}/enrol`, { method: 'POST', body: JSON.stringify({ email }) }),
+  removeStudent: (classId: string, studentId: string) => request<{ message: string }>(`/classes/${classId}/enrolments/${studentId}`, { method: 'DELETE' }),
+  getClassEnrolments: (classId: string) => request<{ enrolments: any[] }>(`/classes/${classId}/enrolments`),
+  getClassOverview: (classId: string) => request<any>(`/classes/${classId}/overview`),
+
+  // Test Packages
+  getTestPackages: (testType?: string) => {
+    const q = testType ? `?testType=${encodeURIComponent(testType)}` : '';
+    return request<{ testPackages: any[] }>(`/test-packages${q}`);
+  },
+  getTestPackage: (id: string) => request<{ testPackage: any }>(`/test-packages/${id}`),
+  createTestPackage: (body: any) => request<{ testPackage: any }>('/test-packages', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Assignments
+  getClassAssignments: (classId: string) => request<{ assignments: any[] }>(`/classes/${classId}/assignments`),
+  getAssignment: (id: string) => request<{ assignment: any }>(`/assignments/${id}`),
+  createAssignment: (classId: string, body: any) => request<{ assignment: any; warning?: string }>(`/classes/${classId}/assignments`, { method: 'POST', body: JSON.stringify(body) }),
+  releaseAssignment: (assignmentId: string) => request<{ assignment: any; message: string }>(`/assignments/${assignmentId}/release`, { method: 'POST' }),
+  startPackageAttempt: (assignmentId: string, mode?: string) => request<{ packageAttempt: any; testPackage: any }>(`/assignments/${assignmentId}/start-package`, { method: 'POST', body: JSON.stringify({ mode }) }),
+  getPackageAttempt: (attemptId: string) => request<{ packageAttempt: any }>(`/package-attempts/${attemptId}`),
+  getComparisonReport: (classId: string, studentId: string) => request<{ report: any }>(`/classes/${classId}/students/${studentId}/comparison`),
 
   // Admin & Teacher
   getAdminUsers: () => request<{ users: any[] }>('/admin/users'),

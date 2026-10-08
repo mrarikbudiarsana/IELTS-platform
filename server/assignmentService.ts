@@ -1,0 +1,1059 @@
+import { v4 as uuidv4 } from 'uuid';
+import { db } from './db';
+import {
+  Assignment,
+  AssignmentPurpose,
+  TestPackage,
+  PackageAttempt,
+  PackageType,
+  PackageMode,
+  ClassTestType,
+  TestMode,
+  PrePostComparisonReport,
+  SkillComparisonItem,
+} from '../shared/types';
+import { isStudentInClass } from './classService';
+import { formatMakassarDateTime, isOverdue } from '../shared/dateUtils';
+import { startOrResumeAttempt } from './attemptService';
+import { startOrResumeListeningAttempt } from './listeningAttemptService';
+
+// -------------------------------------------------------------
+// TEST PACKAGES (4-SKILL SLOTS / FIXED VERSIONS)
+// -------------------------------------------------------------
+
+export function createTestPackage(
+  teacherId: string,
+  data: {
+    title: string;
+    packageType: PackageType;
+    testType: ClassTestType;
+    listeningTestId?: string;
+    listeningVersionId?: string;
+    readingTestId?: string;
+    readingVersionId?: string;
+  }
+): TestPackage {
+  if (!data.title || !data.title.trim()) {
+    throw new Error('Test package title is required.');
+  }
+
+  // Validate reading version if provided
+  if (data.readingTestId && !data.readingVersionId) {
+    const readingVersion = db.prepare('SELECT id FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1').get(data.readingTestId) as any;
+    if (readingVersion) {
+      data.readingVersionId = readingVersion.id;
+    }
+  }
+
+  // Validate listening version if provided
+  if (data.listeningTestId && !data.listeningVersionId) {
+    const listeningVersion = db.prepare('SELECT id FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1').get(data.listeningTestId) as any;
+    if (listeningVersion) {
+      data.listeningVersionId = listeningVersion.id;
+    }
+  }
+
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO test_packages (
+      id, title, package_type, test_type,
+      listening_test_id, listening_version_id,
+      reading_test_id, reading_version_id,
+      writing_status, speaking_status,
+      created_by_id, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'not_implemented', 'not_implemented', ?, datetime('now'))
+  `).run(
+    id,
+    data.title.trim(),
+    data.packageType,
+    data.testType,
+    data.listeningTestId || null,
+    data.listeningVersionId || null,
+    data.readingTestId || null,
+    data.readingVersionId || null,
+    teacherId
+  );
+
+  return getTestPackageById(id);
+}
+
+export function getTestPackageById(packageId: string): TestPackage {
+  const row = db.prepare(`
+    SELECT tp.*,
+      rt.title as reading_test_title,
+      lt.title as listening_test_title
+    FROM test_packages tp
+    LEFT JOIN reading_tests rt ON tp.reading_test_id = rt.id
+    LEFT JOIN listening_tests lt ON tp.listening_test_id = lt.id
+    WHERE tp.id = ?
+  `).get(packageId) as any;
+
+  if (!row) {
+    throw new Error('Test package not found.');
+  }
+
+  return {
+    id: row.id,
+    title: row.title,
+    packageType: row.package_type as PackageType,
+    testType: row.test_type as ClassTestType,
+    listeningTestId: row.listening_test_id || undefined,
+    listeningVersionId: row.listening_version_id || undefined,
+    listeningTestTitle: row.listening_test_title || undefined,
+    readingTestId: row.reading_test_id || undefined,
+    readingVersionId: row.reading_version_id || undefined,
+    readingTestTitle: row.reading_test_title || undefined,
+    writingStatus: 'not_implemented',
+    speakingStatus: 'not_implemented',
+    createdById: row.created_by_id,
+    createdAt: row.created_at,
+  };
+}
+
+export function listTestPackages(testType?: ClassTestType): TestPackage[] {
+  let query = `
+    SELECT tp.*,
+      rt.title as reading_test_title,
+      lt.title as listening_test_title
+    FROM test_packages tp
+    LEFT JOIN reading_tests rt ON tp.reading_test_id = rt.id
+    LEFT JOIN listening_tests lt ON tp.listening_test_id = lt.id
+  `;
+  const params: any[] = [];
+  if (testType) {
+    query += ' WHERE tp.test_type = ?';
+    params.push(testType);
+  }
+  query += ' ORDER BY tp.created_at DESC';
+
+  const rows = db.prepare(query).all(...params) as any[];
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    packageType: row.package_type as PackageType,
+    testType: row.test_type as ClassTestType,
+    listeningTestId: row.listening_test_id || undefined,
+    listeningVersionId: row.listening_version_id || undefined,
+    listeningTestTitle: row.listening_test_title || undefined,
+    readingTestId: row.reading_test_id || undefined,
+    readingVersionId: row.reading_version_id || undefined,
+    readingTestTitle: row.reading_test_title || undefined,
+    writingStatus: 'not_implemented',
+    speakingStatus: 'not_implemented',
+    createdById: row.created_by_id,
+    createdAt: row.created_at,
+  }));
+}
+
+// -------------------------------------------------------------
+// ASSIGNMENTS & PROTECTED POST-TEST CONTENT
+// -------------------------------------------------------------
+
+export function createAssignment(
+  teacherId: string,
+  classId: string,
+  data: {
+    title: string;
+    instructions?: string;
+    purpose: AssignmentPurpose;
+    packageId?: string;
+    skill?: 'reading' | 'listening' | 'all';
+    testId?: string;
+    versionId?: string;
+    mode?: TestMode;
+    releaseAt?: string;
+    deadlineAt?: string;
+    attemptLimit?: number;
+    isReleased?: boolean;
+    studentIds?: string[];
+  },
+  isAdmin = false
+): { assignment: Assignment; warning?: string } {
+  const classRow = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId) as any;
+  if (!classRow) {
+    throw new Error('Class not found.');
+  }
+
+  if (!isAdmin && classRow.teacher_id !== teacherId) {
+    throw new Error('You do not have permission to assign work in this class.');
+  }
+
+  if (!data.title || !data.title.trim()) {
+    throw new Error('Assignment title is required.');
+  }
+
+  // Material overlap check between pre-test and post-test
+  let warning: string | undefined;
+  if (data.purpose === 'post_test') {
+    const existingPreTest = db.prepare(`
+      SELECT a.*, tp.reading_test_id, tp.listening_test_id
+      FROM assignments a
+      LEFT JOIN test_packages tp ON a.package_id = tp.id
+      WHERE a.class_id = ? AND a.purpose = 'pre_test'
+      LIMIT 1
+    `).get(classId) as any;
+
+    if (existingPreTest && data.packageId) {
+      const postPkg = getTestPackageById(data.packageId);
+      if (
+        (postPkg.readingTestId && postPkg.readingTestId === existingPreTest.reading_test_id) ||
+        (postPkg.listeningTestId && postPkg.listeningTestId === existingPreTest.listening_test_id)
+      ) {
+        warning =
+          'Overlapping material detected: The selected post-test package contains the same test material as the class pre-test. Pre-test and post-test must use different comparable content to assess learning accurately. Difficulty equivalence is not assumed without verified standardization.';
+      }
+    }
+  }
+
+  // Release policy: post-test requires explicit teacher release
+  const isReleased = data.purpose === 'post_test' ? Boolean(data.isReleased) : data.isReleased !== undefined ? Boolean(data.isReleased) : true;
+  const releaseAt = data.releaseAt || new Date().toISOString();
+  const attemptLimit = data.attemptLimit && data.attemptLimit > 0 ? data.attemptLimit : (data.purpose === 'practice' ? 3 : 1);
+  const mode = data.mode || (data.purpose === 'practice' ? 'practice' : 'mock');
+
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO assignments (
+      id, class_id, title, instructions, purpose,
+      package_id, skill, test_id, version_id,
+      mode, release_at, deadline_at, attempt_limit, is_released,
+      created_by_id, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).run(
+    id,
+    classId,
+    data.title.trim(),
+    data.instructions ? data.instructions.trim() : null,
+    data.purpose,
+    data.packageId || null,
+    data.skill || (data.packageId ? 'all' : 'reading'),
+    data.testId || null,
+    data.versionId || null,
+    mode,
+    releaseAt,
+    data.deadlineAt || null,
+    attemptLimit,
+    isReleased ? 1 : 0,
+    teacherId
+  );
+
+  // If specific students targeted, insert access grants
+  if (data.studentIds && data.studentIds.length > 0) {
+    const insertGrant = db.prepare('INSERT OR IGNORE INTO assignment_access_grants (id, assignment_id, student_id) VALUES (?, ?, ?)');
+    for (const sId of data.studentIds) {
+      insertGrant.run(uuidv4(), id, sId);
+    }
+  }
+
+  return { assignment: getAssignmentById(id), warning };
+}
+
+export function releasePostTestAssignment(teacherId: string, assignmentId: string, isAdmin = false): Assignment {
+  const row = db.prepare(`
+    SELECT a.*, c.teacher_id
+    FROM assignments a
+    JOIN classes c ON a.class_id = c.id
+    WHERE a.id = ?
+  `).get(assignmentId) as any;
+
+  if (!row) {
+    throw new Error('Assignment not found.');
+  }
+
+  if (!isAdmin && row.teacher_id !== teacherId) {
+    throw new Error('You do not have permission to release this post-test.');
+  }
+
+  db.prepare(`
+    UPDATE assignments
+    SET is_released = 1, release_at = datetime('now'), updated_at = datetime('now')
+    WHERE id = ?
+  `).run(assignmentId);
+
+  return getAssignmentById(assignmentId);
+}
+
+export function getAssignmentById(assignmentId: string, studentId?: string): Assignment {
+  const row = db.prepare(`
+    SELECT a.*,
+      c.title as class_title,
+      tp.title as package_title,
+      rt.title as reading_title,
+      lt.title as listening_title
+    FROM assignments a
+    JOIN classes c ON a.class_id = c.id
+    LEFT JOIN test_packages tp ON a.package_id = tp.id
+    LEFT JOIN reading_tests rt ON a.test_id = rt.id
+    LEFT JOIN listening_tests lt ON a.test_id = lt.id
+    WHERE a.id = ?
+  `).get(assignmentId) as any;
+
+  if (!row) {
+    throw new Error('Assignment not found.');
+  }
+
+  const assignment: Assignment = {
+    id: row.id,
+    classId: row.class_id,
+    classTitle: row.class_title,
+    title: row.title,
+    instructions: row.instructions || undefined,
+    purpose: row.purpose as AssignmentPurpose,
+    packageId: row.package_id || undefined,
+    packageTitle: row.package_title || undefined,
+    skill: row.skill || undefined,
+    testId: row.test_id || undefined,
+    testTitle: row.reading_title || row.listening_title || undefined,
+    versionId: row.version_id || undefined,
+    mode: row.mode as TestMode,
+    releaseAt: row.release_at,
+    deadlineAt: row.deadline_at || undefined,
+    attemptLimit: row.attempt_limit,
+    isReleased: Boolean(row.is_released),
+    createdById: row.created_by_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+
+  if (studentId) {
+    populateStudentAssignmentStatus(assignment, studentId);
+  }
+
+  return assignment;
+}
+
+/**
+ * Checks if a test is reserved in an unreleased post-test assignment.
+ * When true, student access through practice catalogue or direct URL is strictly BLOCKED.
+ */
+export function isTestReservedInUnreleasedPostTest(testId: string): boolean {
+  const row = db.prepare(`
+    SELECT 1 FROM assignments a
+    LEFT JOIN test_packages tp ON a.package_id = tp.id
+    WHERE a.purpose = 'post_test'
+      AND (a.is_released = 0 OR a.release_at > datetime('now'))
+      AND (
+        a.test_id = ?
+        OR tp.reading_test_id = ?
+        OR tp.listening_test_id = ?
+      )
+    LIMIT 1
+  `).get(testId, testId, testId);
+
+  return Boolean(row);
+}
+
+/**
+ * Lists all assignments for a class with student completion or teacher submission stats.
+ */
+export function listClassAssignments(
+  classId: string,
+  userId: string,
+  userRole: string
+): Assignment[] {
+  const isTeacherOrAdmin = userRole === 'teacher' || userRole === 'admin';
+
+  if (!isTeacherOrAdmin) {
+    // Verify student is active member
+    if (!isStudentInClass(classId, userId)) {
+      throw new Error('You are not enrolled in this class.');
+    }
+  }
+
+  const rows = db.prepare(`
+    SELECT a.*,
+      c.title as class_title,
+      tp.title as package_title,
+      rt.title as reading_title,
+      lt.title as listening_title
+    FROM assignments a
+    JOIN classes c ON a.class_id = c.id
+    LEFT JOIN test_packages tp ON a.package_id = tp.id
+    LEFT JOIN reading_tests rt ON a.test_id = rt.id
+    LEFT JOIN listening_tests lt ON a.test_id = lt.id
+    WHERE a.class_id = ?
+    ORDER BY
+      CASE a.purpose
+        WHEN 'pre_test' THEN 1
+        WHEN 'practice' THEN 2
+        WHEN 'post_test' THEN 3
+        ELSE 4
+      END,
+      a.created_at ASC
+  `).all(classId) as any[];
+
+  return rows.map((row) => {
+    const a: Assignment = {
+      id: row.id,
+      classId: row.class_id,
+      classTitle: row.class_title,
+      title: row.title,
+      instructions: row.instructions || undefined,
+      purpose: row.purpose as AssignmentPurpose,
+      packageId: row.package_id || undefined,
+      packageTitle: row.package_title || undefined,
+      skill: row.skill || undefined,
+      testId: row.test_id || undefined,
+      testTitle: row.reading_title || row.listening_title || undefined,
+      versionId: row.version_id || undefined,
+      mode: row.mode as TestMode,
+      releaseAt: row.release_at,
+      deadlineAt: row.deadline_at || undefined,
+      attemptLimit: row.attempt_limit,
+      isReleased: Boolean(row.is_released),
+      createdById: row.created_by_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+
+    if (!isTeacherOrAdmin) {
+      populateStudentAssignmentStatus(a, userId);
+    }
+    return a;
+  });
+}
+
+function populateStudentAssignmentStatus(a: Assignment, studentId: string): void {
+  // If package assignment
+  if (a.packageId) {
+    const pkgAttempts = db.prepare(`
+      SELECT * FROM package_attempts
+      WHERE assignment_id = ? AND user_id = ?
+      ORDER BY started_at DESC
+    `).all(a.id, studentId) as any[];
+
+    a.studentAttemptCount = pkgAttempts.length;
+
+    if (!a.isReleased || new Date(a.releaseAt).getTime() > Date.now()) {
+      a.studentStatus = 'not_started';
+      return;
+    }
+
+    if (pkgAttempts.length === 0) {
+      a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'not_started';
+      return;
+    }
+
+    const latest = pkgAttempts[0];
+    a.activeAttemptId = latest.id;
+    if (latest.status === 'completed') {
+      a.studentStatus = 'submitted';
+    } else {
+      a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'in_progress';
+    }
+  } else {
+    // Single skill assignment
+    let attempts: any[] = [];
+    if (a.skill === 'listening') {
+      attempts = db.prepare(`
+        SELECT * FROM listening_attempts
+        WHERE assignment_id = ? AND user_id = ?
+        ORDER BY started_at DESC
+      `).all(a.id, studentId) as any[];
+    } else {
+      attempts = db.prepare(`
+        SELECT * FROM reading_attempts
+        WHERE assignment_id = ? AND user_id = ?
+        ORDER BY started_at DESC
+      `).all(a.id, studentId) as any[];
+    }
+
+    a.studentAttemptCount = attempts.length;
+
+    if (!a.isReleased || new Date(a.releaseAt).getTime() > Date.now()) {
+      a.studentStatus = 'not_started';
+      return;
+    }
+
+    if (attempts.length === 0) {
+      a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'not_started';
+      return;
+    }
+
+    const latest = attempts[0];
+    a.activeAttemptId = latest.id;
+    if (latest.status === 'submitted' || latest.status === 'expired') {
+      a.studentStatus = 'submitted';
+      a.lastAttemptScore = latest.raw_score;
+      a.lastAttemptTotal = latest.total_questions;
+      a.lastAttemptBand = latest.band_score;
+    } else {
+      a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'in_progress';
+    }
+  }
+}
+
+// -------------------------------------------------------------
+// PACKAGE ATTEMPTS & SKILL TRANSITIONS
+// -------------------------------------------------------------
+
+export function startOrResumePackageAttempt(
+  assignmentId: string,
+  userId: string,
+  mode: PackageMode = 'exam_rehearsal'
+): { packageAttempt: PackageAttempt; testPackage: TestPackage } {
+  const assignment = getAssignmentById(assignmentId, userId);
+
+  // Check student enrolment in class
+  if (!isStudentInClass(assignment.classId, userId)) {
+    throw new Error('You are not actively enrolled in this class.');
+  }
+
+  // Check release status: if post-test and unreleased, strictly reject
+  if (!assignment.isReleased || new Date(assignment.releaseAt).getTime() > Date.now()) {
+    throw new Error('This post-test assignment has not been released yet.');
+  }
+
+  if (!assignment.packageId) {
+    throw new Error('This assignment is not configured with a multi-skill test package.');
+  }
+
+  const testPackage = getTestPackageById(assignment.packageId);
+
+  // Check existing attempts
+  const existingAttempts = db.prepare(`
+    SELECT * FROM package_attempts
+    WHERE assignment_id = ? AND user_id = ?
+    ORDER BY started_at DESC
+  `).all(assignmentId, userId) as any[];
+
+  // If in progress, resume it
+  const activeAttempt = existingAttempts.find((att) => att.status === 'in_progress');
+  if (activeAttempt) {
+    return {
+      packageAttempt: mapPackageAttemptRow(activeAttempt),
+      testPackage,
+    };
+  }
+
+  // Attempt limit check
+  if (existingAttempts.length >= assignment.attemptLimit) {
+    throw new Error(`Attempt limit reached (${assignment.attemptLimit} allowed).`);
+  }
+
+  // Create new package attempt
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO package_attempts (
+      id, package_id, assignment_id, user_id, status, mode, started_at, created_at
+    )
+    VALUES (?, ?, ?, ?, 'in_progress', ?, datetime('now'), datetime('now'))
+  `).run(id, testPackage.id, assignmentId, userId, mode);
+
+  const created = db.prepare('SELECT * FROM package_attempts WHERE id = ?').get(id) as any;
+  return {
+    packageAttempt: mapPackageAttemptRow(created),
+    testPackage,
+  };
+}
+
+export function getPackageAttemptById(attemptId: string, userId: string, isAdminOrTeacher = false): PackageAttempt {
+  const row = db.prepare(`
+    SELECT pa.*, tp.title as package_title, u.full_name as user_name
+    FROM package_attempts pa
+    JOIN test_packages tp ON pa.package_id = tp.id
+    JOIN users u ON pa.user_id = u.id
+    WHERE pa.id = ?
+  `).get(attemptId) as any;
+
+  if (!row) {
+    throw new Error('Package attempt not found.');
+  }
+
+  if (!isAdminOrTeacher && row.user_id !== userId) {
+    throw new Error('Access forbidden to this attempt.');
+  }
+
+  return mapPackageAttemptRow(row);
+}
+
+function mapPackageAttemptRow(row: any): PackageAttempt {
+  let readingAttempt: any;
+  let listeningAttempt: any;
+
+  if (row.reading_attempt_id) {
+    readingAttempt = db.prepare('SELECT * FROM reading_attempts WHERE id = ?').get(row.reading_attempt_id);
+  }
+  if (row.listening_attempt_id) {
+    listeningAttempt = db.prepare('SELECT * FROM listening_attempts WHERE id = ?').get(row.listening_attempt_id);
+  }
+
+  return {
+    id: row.id,
+    packageId: row.package_id,
+    packageTitle: row.package_title || undefined,
+    assignmentId: row.assignment_id || undefined,
+    userId: row.user_id,
+    userName: row.user_name || undefined,
+    status: row.status,
+    mode: row.mode as PackageMode,
+    readingAttemptId: row.reading_attempt_id || undefined,
+    readingAttempt: readingAttempt ? {
+      id: readingAttempt.id,
+      userId: readingAttempt.user_id,
+      testId: readingAttempt.test_id,
+      versionId: readingAttempt.version_id,
+      testTitle: readingAttempt.test_title,
+      testType: readingAttempt.test_type,
+      mode: readingAttempt.mode,
+      status: readingAttempt.status,
+      startedAt: readingAttempt.started_at,
+      deadlineAt: readingAttempt.deadline_at,
+      submittedAt: readingAttempt.submitted_at,
+      durationSeconds: readingAttempt.duration_seconds,
+      rawScore: readingAttempt.raw_score,
+      totalQuestions: readingAttempt.total_questions,
+      bandScore: readingAttempt.band_score,
+      isFirstAttempt: Boolean(readingAttempt.is_first_attempt),
+      answers: {},
+    } : undefined,
+    listeningAttemptId: row.listening_attempt_id || undefined,
+    listeningAttempt: listeningAttempt ? {
+      id: listeningAttempt.id,
+      userId: listeningAttempt.user_id,
+      testId: listeningAttempt.test_id,
+      versionId: listeningAttempt.version_id,
+      testTitle: listeningAttempt.test_title,
+      mode: listeningAttempt.mode,
+      status: listeningAttempt.status,
+      startedAt: listeningAttempt.started_at,
+      deadlineAt: listeningAttempt.deadline_at,
+      submittedAt: listeningAttempt.submitted_at,
+      durationSeconds: listeningAttempt.duration_seconds,
+      rawScore: listeningAttempt.raw_score,
+      totalQuestions: listeningAttempt.total_questions,
+      bandScore: listeningAttempt.band_score,
+      isFirstAttempt: Boolean(listeningAttempt.is_first_attempt),
+      wasInterrupted: Boolean(listeningAttempt.was_interrupted),
+      interruptionCount: listeningAttempt.interruption_count,
+      replayCount: listeningAttempt.replay_count,
+      interruptionEvents: [],
+      answers: {},
+    } : undefined,
+    startedAt: row.started_at,
+    completedAt: row.completed_at || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * Links a specific skill attempt (reading or listening) to the package attempt.
+ */
+export function linkSkillToPackageAttempt(
+  packageAttemptId: string,
+  skill: 'reading' | 'listening',
+  skillAttemptId: string
+): void {
+  const col = skill === 'reading' ? 'reading_attempt_id' : 'listening_attempt_id';
+  db.prepare(`
+    UPDATE package_attempts
+    SET ${col} = ?
+    WHERE id = ?
+  `).run(skillAttemptId, packageAttemptId);
+
+  // Check if all available skills are now completed
+  const current = db.prepare('SELECT * FROM package_attempts WHERE id = ?').get(packageAttemptId) as any;
+  if (current) {
+    const pkg = getTestPackageById(current.package_id);
+    let allDone = true;
+    if (pkg.readingTestId) {
+      const r = current.reading_attempt_id ? db.prepare('SELECT status FROM reading_attempts WHERE id = ?').get(current.reading_attempt_id) as any : null;
+      if (!r || (r.status !== 'submitted' && r.status !== 'expired')) allDone = false;
+    }
+    if (pkg.listeningTestId) {
+      const l = current.listening_attempt_id ? db.prepare('SELECT status FROM listening_attempts WHERE id = ?').get(current.listening_attempt_id) as any : null;
+      if (!l || (l.status !== 'submitted' && l.status !== 'expired')) allDone = false;
+    }
+
+    if (allDone) {
+      db.prepare(`
+        UPDATE package_attempts
+        SET status = 'completed', completed_at = datetime('now')
+        WHERE id = ?
+      `).run(packageAttemptId);
+    }
+  }
+}
+
+// -------------------------------------------------------------
+// PRE-TEST / POST-TEST COMPARISON REPORT
+// -------------------------------------------------------------
+
+export function getPrePostComparison(
+  classId: string,
+  studentId: string,
+  requestingUserId: string,
+  requestingUserRole: string
+): PrePostComparisonReport {
+  const isTeacherOrAdmin = requestingUserRole === 'teacher' || requestingUserRole === 'admin';
+  if (!isTeacherOrAdmin && requestingUserId !== studentId) {
+    throw new Error('Access forbidden to comparison report.');
+  }
+
+  const classRow = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId) as any;
+  if (!classRow) {
+    throw new Error('Class not found.');
+  }
+
+  const studentRow = db.prepare('SELECT * FROM users WHERE id = ?').get(studentId) as any;
+  if (!studentRow) {
+    throw new Error('Student not found.');
+  }
+
+  // Find Pre-test assignment and Post-test assignment for this class
+  const preAssignment = db.prepare("SELECT * FROM assignments WHERE class_id = ? AND purpose = 'pre_test' LIMIT 1").get(classId) as any;
+  const postAssignment = db.prepare("SELECT * FROM assignments WHERE class_id = ? AND purpose = 'post_test' LIMIT 1").get(classId) as any;
+
+  const preSkills: Record<'reading' | 'listening' | 'writing' | 'speaking', SkillComparisonItem> = {
+    reading: { skill: 'reading', status: 'not_started' },
+    listening: { skill: 'listening', status: 'not_started' },
+    writing: { skill: 'writing', status: 'not_implemented' },
+    speaking: { skill: 'speaking', status: 'not_implemented' },
+  };
+
+  const postSkills: Record<'reading' | 'listening' | 'writing' | 'speaking', SkillComparisonItem> = {
+    reading: { skill: 'reading', status: 'not_started' },
+    listening: { skill: 'listening', status: 'not_started' },
+    writing: { skill: 'writing', status: 'not_implemented' },
+    speaking: { skill: 'speaking', status: 'not_implemented' },
+  };
+
+  // Populate pre-test skills
+  if (preAssignment) {
+    populateAssignmentSkillResults(preAssignment.id, studentId, preSkills);
+  }
+
+  // Populate post-test skills
+  if (postAssignment) {
+    populateAssignmentSkillResults(postAssignment.id, studentId, postSkills);
+  }
+
+  // Calculate Deltas for completed skills
+  const deltas: {
+    readingRawDelta?: number;
+    readingBandDelta?: number;
+    listeningRawDelta?: number;
+    listeningBandDelta?: number;
+  } = {};
+
+  if (
+    preSkills.reading.status === 'completed' &&
+    postSkills.reading.status === 'completed' &&
+    preSkills.reading.rawScore !== undefined &&
+    postSkills.reading.rawScore !== undefined
+  ) {
+    deltas.readingRawDelta = Number((postSkills.reading.rawScore - preSkills.reading.rawScore).toFixed(1));
+    if (preSkills.reading.bandScore !== undefined && postSkills.reading.bandScore !== undefined) {
+      deltas.readingBandDelta = Number((postSkills.reading.bandScore - preSkills.reading.bandScore).toFixed(1));
+    }
+  }
+
+  if (
+    preSkills.listening.status === 'completed' &&
+    postSkills.listening.status === 'completed' &&
+    preSkills.listening.rawScore !== undefined &&
+    postSkills.listening.rawScore !== undefined
+  ) {
+    deltas.listeningRawDelta = Number((postSkills.listening.rawScore - preSkills.listening.rawScore).toFixed(1));
+    if (preSkills.listening.bandScore !== undefined && postSkills.listening.bandScore !== undefined) {
+      deltas.listeningBandDelta = Number((postSkills.listening.bandScore - preSkills.listening.bandScore).toFixed(1));
+    }
+  }
+
+  const pedagogicalNote =
+    'Note: Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions. No overall 4-skill band is calculated because Writing and Speaking remain to be implemented.';
+
+  return {
+    studentId,
+    studentName: studentRow.full_name,
+    studentEmail: studentRow.email,
+    classId,
+    classTitle: classRow.title,
+    testType: classRow.test_type as ClassTestType,
+    preTest: {
+      packageId: preAssignment?.package_id,
+      packageTitle: preAssignment?.title || 'Pre-Test',
+      skills: preSkills,
+    },
+    postTest: {
+      packageId: postAssignment?.package_id,
+      packageTitle: postAssignment?.title || 'Post-Test',
+      isReleased: Boolean(postAssignment?.is_released),
+      skills: postSkills,
+    },
+    deltas,
+    pedagogicalNote,
+  };
+}
+
+function populateAssignmentSkillResults(
+  assignmentId: string,
+  studentId: string,
+  skills: Record<'reading' | 'listening' | 'writing' | 'speaking', SkillComparisonItem>
+): void {
+  // Check reading attempts for this assignment
+  const readingAtt = db.prepare(`
+    SELECT ra.*, rtv.version_number
+    FROM reading_attempts ra
+    LEFT JOIN reading_test_versions rtv ON ra.version_id = rtv.id
+    WHERE ra.assignment_id = ? AND ra.user_id = ?
+    ORDER BY ra.started_at DESC LIMIT 1
+  `).get(assignmentId, studentId) as any;
+
+  if (readingAtt) {
+    skills.reading = {
+      skill: 'reading',
+      status: readingAtt.status === 'submitted' || readingAtt.status === 'expired' ? 'completed' : 'in_progress',
+      testTitle: readingAtt.test_title,
+      versionNumber: readingAtt.version_number,
+      rawScore: readingAtt.raw_score,
+      totalQuestions: readingAtt.total_questions,
+      bandScore: readingAtt.band_score,
+      completedAt: formatMakassarDateTime(readingAtt.submitted_at || readingAtt.started_at),
+      mode: readingAtt.mode as TestMode,
+      isFirstAttempt: Boolean(readingAtt.is_first_attempt),
+    };
+  }
+
+  // Check listening attempts for this assignment
+  const listeningAtt = db.prepare(`
+    SELECT la.*, ltv.version_number
+    FROM listening_attempts la
+    LEFT JOIN listening_test_versions ltv ON la.version_id = ltv.id
+    WHERE la.assignment_id = ? AND la.user_id = ?
+    ORDER BY la.started_at DESC LIMIT 1
+  `).get(assignmentId, studentId) as any;
+
+  if (listeningAtt) {
+    skills.listening = {
+      skill: 'listening',
+      status: listeningAtt.status === 'submitted' || listeningAtt.status === 'expired' ? 'completed' : 'in_progress',
+      testTitle: listeningAtt.test_title,
+      versionNumber: listeningAtt.version_number,
+      rawScore: listeningAtt.raw_score,
+      totalQuestions: listeningAtt.total_questions,
+      bandScore: listeningAtt.band_score,
+      completedAt: formatMakassarDateTime(listeningAtt.submitted_at || listeningAtt.started_at),
+      mode: listeningAtt.mode as TestMode,
+      wasInterrupted: Boolean(listeningAtt.was_interrupted),
+      isFirstAttempt: Boolean(listeningAtt.is_first_attempt),
+    };
+  }
+}
+
+// -------------------------------------------------------------
+// TEACHER CLASS ANALYTICS & OVERVIEW
+// -------------------------------------------------------------
+
+export function getClassOverview(classId: string, teacherId: string, isAdmin = false) {
+  const classRow = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId) as any;
+  if (!classRow) {
+    throw new Error('Class not found.');
+  }
+
+  if (!isAdmin && classRow.teacher_id !== teacherId) {
+    throw new Error('You do not have permission to view overview for this class.');
+  }
+
+  // Get enrolled active students
+  const students = db.prepare(`
+    SELECT u.id, u.full_name, u.email, ce.enrolled_at
+    FROM class_enrolments ce
+    JOIN users u ON ce.student_id = u.id
+    WHERE ce.class_id = ? AND ce.status = 'active'
+    ORDER BY u.full_name ASC
+  `).all(classId) as any[];
+
+  // Get assignments
+  const assignments = listClassAssignments(classId, teacherId, 'teacher');
+
+  const preTestAssign = assignments.find((a) => a.purpose === 'pre_test');
+  const postTestAssign = assignments.find((a) => a.purpose === 'post_test');
+
+  // Compute assignment breakdown stats
+  const assignmentStats = assignments.map((a) => {
+    let submitted = 0;
+    let inProgress = 0;
+    let notStarted = 0;
+    let overdue = 0;
+    let totalScore = 0;
+    let totalBands = 0;
+    let scoredCount = 0;
+
+    for (const student of students) {
+      const copy = { ...a };
+      populateStudentAssignmentStatus(copy, student.id);
+      if (copy.studentStatus === 'submitted') {
+        submitted++;
+        if (copy.lastAttemptScore !== undefined) {
+          totalScore += copy.lastAttemptScore;
+          scoredCount++;
+        }
+        if (copy.lastAttemptBand !== undefined) {
+          totalBands += copy.lastAttemptBand;
+        }
+      } else if (copy.studentStatus === 'in_progress') {
+        inProgress++;
+      } else if (copy.studentStatus === 'overdue') {
+        overdue++;
+      } else {
+        notStarted++;
+      }
+    }
+
+    return {
+      id: a.id,
+      title: a.title,
+      purpose: a.purpose,
+      mode: a.mode,
+      releaseAt: a.releaseAt,
+      deadlineAt: a.deadlineAt,
+      isReleased: a.isReleased,
+      stats: {
+        submitted,
+        inProgress,
+        notStarted,
+        overdue,
+        averageRawScore: scoredCount > 0 ? Number((totalScore / scoredCount).toFixed(1)) : undefined,
+        averageBandScore: scoredCount > 0 && totalBands > 0 ? Number((totalBands / scoredCount).toFixed(1)) : undefined,
+      },
+    };
+  });
+
+  // Compute student progress rows
+  let preTestCompletedCount = 0;
+  let postTestCompletedCount = 0;
+
+  const studentsProgress = students.map((s) => {
+    let preStatus: 'completed' | 'in_progress' | 'not_started' = 'not_started';
+    let postStatus: 'completed' | 'in_progress' | 'not_started' | 'awaiting_release' = 'not_started';
+    let completedCount = 0;
+    let overdueCount = 0;
+
+    if (preTestAssign) {
+      const p = { ...preTestAssign };
+      populateStudentAssignmentStatus(p, s.id);
+      if (p.studentStatus === 'submitted') {
+        preStatus = 'completed';
+        preTestCompletedCount++;
+      } else if (p.studentStatus === 'in_progress') {
+        preStatus = 'in_progress';
+      }
+    }
+
+    if (postTestAssign) {
+      if (!postTestAssign.isReleased || new Date(postTestAssign.releaseAt).getTime() > Date.now()) {
+        postStatus = 'awaiting_release';
+      } else {
+        const p = { ...postTestAssign };
+        populateStudentAssignmentStatus(p, s.id);
+        if (p.studentStatus === 'submitted') {
+          postStatus = 'completed';
+          postTestCompletedCount++;
+        } else if (p.studentStatus === 'in_progress') {
+          postStatus = 'in_progress';
+        }
+      }
+    }
+
+    for (const a of assignments) {
+      const copy = { ...a };
+      populateStudentAssignmentStatus(copy, s.id);
+      if (copy.studentStatus === 'submitted') completedCount++;
+      if (copy.studentStatus === 'overdue') overdueCount++;
+    }
+
+    return {
+      studentId: s.id,
+      studentName: s.full_name,
+      studentEmail: s.email,
+      enrolledAt: formatMakassarDateTime(s.enrolled_at),
+      preTestStatus: preStatus,
+      postTestStatus: postStatus,
+      completedAssignmentsCount: completedCount,
+      overdueAssignmentsCount: overdueCount,
+    };
+  });
+
+  // Calculate question type difficulty from answers submitted in this class
+  const classAssignmentIds = assignments.map((a) => a.id);
+  const typeMap: Record<string, { total: number; correct: number }> = {};
+
+  if (classAssignmentIds.length > 0) {
+    const placeholders = classAssignmentIds.map(() => '?').join(',');
+    // Reading answers in this class
+    const readingAnsRows = db.prepare(`
+      SELECT ans.is_correct, ans.question_number, rtv.question_groups_json
+      FROM reading_answers ans
+      JOIN reading_attempts att ON ans.attempt_id = att.id
+      JOIN reading_test_versions rtv ON att.version_id = rtv.id
+      WHERE att.assignment_id IN (${placeholders})
+    `).all(...classAssignmentIds) as any[];
+
+    for (const row of readingAnsRows) {
+      try {
+        const groups = JSON.parse(row.question_groups_json || '[]');
+        const g = groups.find((grp: any) =>
+          grp.questions?.some((q: any) => q.questionNumber === row.question_number)
+        );
+        const qType = g ? g.questionType : 'reading_other';
+        if (!typeMap[qType]) typeMap[qType] = { total: 0, correct: 0 };
+        typeMap[qType].total++;
+        if (row.is_correct) typeMap[qType].correct++;
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+
+    // Listening answers in this class
+    const listeningAnsRows = db.prepare(`
+      SELECT ans.is_correct, ans.question_number, ltv.question_groups_json
+      FROM listening_answers ans
+      JOIN listening_attempts att ON ans.attempt_id = att.id
+      JOIN listening_test_versions ltv ON att.version_id = ltv.id
+      WHERE att.assignment_id IN (${placeholders})
+    `).all(...classAssignmentIds) as any[];
+
+    for (const row of listeningAnsRows) {
+      try {
+        const groups = JSON.parse(row.question_groups_json || '[]');
+        const g = groups.find((grp: any) =>
+          grp.questions?.some((q: any) => q.questionNumber === row.question_number)
+        );
+        const qType = g ? g.questionType : 'listening_other';
+        if (!typeMap[qType]) typeMap[qType] = { total: 0, correct: 0 };
+        typeMap[qType].total++;
+        if (row.is_correct) typeMap[qType].correct++;
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+  }
+
+  const difficultQuestionTypes = Object.entries(typeMap)
+    .map(([qType, stats]) => ({
+      questionType: qType.replace(/_/g, ' '),
+      totalAnswered: stats.total,
+      correctCount: stats.correct,
+      accuracyPct: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+    }))
+    .sort((a, b) => a.accuracyPct - b.accuracyPct);
+
+  return {
+    classId,
+    classTitle: classRow.title,
+    testType: classRow.test_type as ClassTestType,
+    totalStudents: students.length,
+    preTestCompletedCount,
+    postTestCompletedCount,
+    assignments: assignmentStats,
+    studentsProgress,
+    difficultQuestionTypes,
+    missingSkillAssessments: {
+      writing: 'not_implemented',
+      speaking: 'not_implemented',
+    },
+  };
+}

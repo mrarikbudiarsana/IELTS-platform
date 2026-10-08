@@ -23,7 +23,25 @@ export function startOrResumeListeningAttempt(params: {
   testId: string;
   modeOverride?: 'practice' | 'mock';
   isReconnection?: boolean;
+  assignmentId?: string;
+  packageAttemptId?: string;
 }): { attempt: ListeningAttempt; testVersion: any } {
+  // If attempting independently without assignment, ensure test is not reserved in an unreleased post-test
+  if (!params.assignmentId) {
+    const isReserved = db.prepare(`
+      SELECT 1 FROM assignments a
+      LEFT JOIN test_packages tp ON a.package_id = tp.id
+      WHERE a.purpose = 'post_test'
+        AND (a.is_released = 0 OR a.release_at > datetime('now'))
+        AND (a.test_id = ? OR tp.listening_test_id = ?)
+      LIMIT 1
+    `).get(params.testId, params.testId);
+
+    if (isReserved) {
+      throw new Error('This test material is reserved for a protected post-test and has not been released by your teacher.');
+    }
+  }
+
   const test = getListeningTestById(params.testId);
   if (!test) throw new Error('Listening test not found');
   if (test.status !== 'published') {
@@ -90,7 +108,13 @@ export function startOrResumeListeningAttempt(params: {
 }
 
 function startNewListeningAttempt(
-  params: { userId: string; testId: string; modeOverride?: 'practice' | 'mock' },
+  params: {
+    userId: string;
+    testId: string;
+    modeOverride?: 'practice' | 'mock';
+    assignmentId?: string;
+    packageAttemptId?: string;
+  },
   test: any,
   version: any
 ) {
@@ -122,8 +146,8 @@ function startNewListeningAttempt(
       id, user_id, test_id, version_id, test_title,
       mode, status, started_at, deadline_at, duration_seconds,
       total_questions, is_first_attempt, was_interrupted,
-      interruption_count, replay_count, interruption_events_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, 0, ?, ?, 0, 0, 0, '[]', ?)
+      interruption_count, replay_count, interruption_events_json, assignment_id, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, 0, ?, ?, 0, 0, 0, '[]', ?, ?)
   `).run(
     attemptId,
     params.userId,
@@ -135,8 +159,18 @@ function startNewListeningAttempt(
     deadlineAt,
     version.totalQuestions,
     isFirstAttempt,
+    params.assignmentId || null,
     now.toISOString()
   );
+
+  // If package attempt provided, link it
+  if (params.packageAttemptId) {
+    db.prepare(`
+      UPDATE package_attempts
+      SET listening_attempt_id = ?
+      WHERE id = ?
+    `).run(attemptId, params.packageAttemptId);
+  }
 
   const attempt = getListeningAttemptById(attemptId, params.userId)!;
   const sanitized = sanitizeListeningForStudent(
