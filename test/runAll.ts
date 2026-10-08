@@ -23,6 +23,11 @@ if (res4.status !== 0) {
   process.exit(res4.status || 1);
 }
 
+const res5 = spawnSync('npx', ['tsx', 'test/runWritingTests.ts'], { stdio: 'inherit', shell: true });
+if (res5.status !== 0) {
+  process.exit(res5.status || 1);
+}
+
 console.log('\n========================================================================');
-console.log('  ALL PLATFORM MODULE TESTS (READING, LISTENING, CLASSES & SPEAKING) PASSED! ');
+console.log('  ALL PLATFORM MODULE TESTS (READING, LISTENING, CLASSES, SPEAKING & WRITING) PASSED! ');
 console.log('========================================================================\n');

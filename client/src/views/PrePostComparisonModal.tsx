@@ -42,6 +42,11 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
               Teacher Led
             </span>
           )}
+          {skillName === 'Writing' && (
+            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">
+              AI Assisted
+            </span>
+          )}
         </td>
 
         {/* Pre-Test Column */}
@@ -67,6 +72,11 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                   {Boolean(pre.correctionCount) && pre.correctionCount! > 0 && (
                     <span className="text-amber-600 ml-1 font-sans">({pre.correctionCount} score audit)</span>
                   )}
+                </div>
+              )}
+              {(pre.writingTask1Band !== undefined || pre.writingTask2Band !== undefined) && (
+                <div className="text-[11px] text-slate-600 mt-0.5 font-mono">
+                  Task 1: Band {pre.writingTask1Band ?? '—'} | Task 2: Band {pre.writingTask2Band ?? '—'} (2x wt)
                 </div>
               )}
               <div className="text-xs text-slate-500 mt-0.5">{pre.testTitle}</div>
@@ -102,6 +112,11 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                   {Boolean(post.correctionCount) && post.correctionCount! > 0 && (
                     <span className="text-amber-600 ml-1 font-sans">({post.correctionCount} score audit)</span>
                   )}
+                </div>
+              )}
+              {(post.writingTask1Band !== undefined || post.writingTask2Band !== undefined) && (
+                <div className="text-[11px] text-slate-600 mt-0.5 font-mono">
+                  Task 1: Band {post.writingTask1Band ?? '—'} | Task 2: Band {post.writingTask2Band ?? '—'} (2x wt)
                 </div>
               )}
               <div className="text-xs text-slate-500 mt-0.5">{post.testTitle}</div>
@@ -213,7 +228,9 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                 {renderSkillRow(
                   'Writing',
                   report.preTest.skills.writing,
-                  report.postTest.skills.writing
+                  report.postTest.skills.writing,
+                  undefined,
+                  report.deltas.writingBandDelta
                 )}
                 {renderSkillRow(
                   'Speaking',
@@ -223,6 +240,56 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                   report.deltas.speakingBandDelta
                 )}
               </tbody>
+              {(report.overallBandPre !== undefined || report.overallBandPost !== undefined) && (
+                <tfoot className="bg-indigo-50 border-t-2 border-indigo-200">
+                  <tr className="font-bold text-indigo-950">
+                    <td className="px-4 py-3.5 flex items-center space-x-2">
+                      <span>4-Skill Overall Band</span>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-indigo-200 text-indigo-800 rounded">
+                        Official IELTS
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-sm">
+                      {report.overallBandPre !== undefined ? (
+                        <div className="text-base text-indigo-900 font-bold">
+                          Band {report.overallBandPre.toFixed(1)}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">Incomplete</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-sm">
+                      {report.overallBandPost !== undefined ? (
+                        <div className="text-base text-indigo-900 font-bold">
+                          Band {report.overallBandPost.toFixed(1)}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">Incomplete</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-sm text-center">
+                      {report.deltas.overallBandDelta !== undefined ? (
+                        <span
+                          className={`text-sm font-bold px-2.5 py-1 rounded-full ${
+                            report.deltas.overallBandDelta > 0
+                              ? 'bg-emerald-200 text-emerald-900'
+                              : report.deltas.overallBandDelta < 0
+                              ? 'bg-rose-200 text-rose-900'
+                              : 'bg-indigo-200 text-indigo-800'
+                          }`}
+                        >
+                          {report.deltas.overallBandDelta > 0
+                            ? `+${report.deltas.overallBandDelta.toFixed(1)}`
+                            : report.deltas.overallBandDelta.toFixed(1)}{' '}
+                          Band
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">—</span>
+                      )}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
 

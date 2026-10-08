@@ -8,15 +8,19 @@ import { SpeakingFeedbackModal } from './SpeakingFeedbackModal';
 interface StudentClassDashboardViewProps {
   onStartReading: (testId: string, mode: 'practice' | 'mock', assignmentId?: string, packageAttemptId?: string) => void;
   onStartListening: (testId: string, mode: 'practice' | 'mock', assignmentId?: string, packageAttemptId?: string) => void;
+  onStartWriting?: (attemptId: string) => void;
   onViewReadingResults: (attemptId: string) => void;
   onViewListeningResults: (attemptId: string) => void;
+  onViewWritingFeedback?: (attemptId: string) => void;
 }
 
 export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps> = ({
   onStartReading,
   onStartListening,
+  onStartWriting,
   onViewReadingResults,
   onViewListeningResults,
+  onViewWritingFeedback,
 }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -296,6 +300,33 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                         >
                           Take Listening Section
                         </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const pkgRes = await api.startPackageAttempt(preTestAssignment.id);
+                              if (pkgRes.packageAttempt.writingAttemptId) {
+                                onStartWriting?.(pkgRes.packageAttempt.writingAttemptId);
+                              } else if (pkgRes.testPackage.writingTask1Id || pkgRes.testPackage.writingTask2Id) {
+                                const wAtt = await api.startWritingAttempt({
+                                  mode: preTestAssignment.mode,
+                                  assignmentId: preTestAssignment.id,
+                                  packageAttemptId: pkgRes.packageAttempt.id,
+                                  task1Id: pkgRes.testPackage.writingTask1Id,
+                                  task2Id: pkgRes.testPackage.writingTask2Id,
+                                  durationMinutes: (pkgRes.testPackage.writingTask1Id && pkgRes.testPackage.writingTask2Id) ? 60 : 40,
+                                });
+                                onStartWriting?.(wAtt.attempt.id);
+                              } else {
+                                alert('Writing is not configured for this pre-test package.');
+                              }
+                            } catch (e: any) {
+                              alert(e.message);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                        >
+                          Take Writing Section
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -380,6 +411,33 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                           >
                             Take Listening Post-Test
                           </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const pkgRes = await api.startPackageAttempt(postTestAssignment.id);
+                                if (pkgRes.packageAttempt.writingAttemptId) {
+                                  onStartWriting?.(pkgRes.packageAttempt.writingAttemptId);
+                                } else if (pkgRes.testPackage.writingTask1Id || pkgRes.testPackage.writingTask2Id) {
+                                  const wAtt = await api.startWritingAttempt({
+                                    mode: postTestAssignment.mode,
+                                    assignmentId: postTestAssignment.id,
+                                    packageAttemptId: pkgRes.packageAttempt.id,
+                                    task1Id: pkgRes.testPackage.writingTask1Id,
+                                    task2Id: pkgRes.testPackage.writingTask2Id,
+                                    durationMinutes: (pkgRes.testPackage.writingTask1Id && pkgRes.testPackage.writingTask2Id) ? 60 : 40,
+                                  });
+                                  onStartWriting?.(wAtt.attempt.id);
+                                } else {
+                                  alert('Writing is not configured for this post-test package.');
+                                }
+                              } catch (e: any) {
+                                alert(e.message);
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-colors"
+                          >
+                            Take Writing Post-Test
+                          </button>
                         </div>
                       ) : (
                         <div className="text-xs text-slate-400 italic">
@@ -462,6 +520,41 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                               <span className="px-3 py-1.5 rounded bg-slate-100 text-slate-600 text-xs font-medium">
                                 In-Class / Online Session
                               </span>
+                            )
+                          ) : a.skill === 'writing' ? (
+                            a.studentStatus === 'submitted' ? (
+                              <button
+                                onClick={() => {
+                                  if (a.activeAttemptId) {
+                                    onViewWritingFeedback?.(a.activeAttemptId);
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
+                              >
+                                Review AI Feedback
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    if (a.activeAttemptId) {
+                                      onStartWriting?.(a.activeAttemptId);
+                                    } else {
+                                      const res = await api.startWritingAttempt({
+                                        assignmentId: a.id,
+                                        task1Id: a.testId,
+                                        mode: a.mode,
+                                      });
+                                      onStartWriting?.(res.attempt.id);
+                                    }
+                                  } catch (err: any) {
+                                    alert(err.message);
+                                  }
+                                }}
+                                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded transition-colors"
+                              >
+                                {a.studentStatus === 'in_progress' ? 'Continue Writing' : 'Start Writing'}
+                              </button>
                             )
                           ) : a.studentStatus === 'submitted' ? (
                             <button

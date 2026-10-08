@@ -14,6 +14,9 @@ import { AdminUsersView } from './views/AdminUsersView';
 import { StudentClassDashboardView } from './views/StudentClassDashboardView';
 import { TeacherClassManagementView } from './views/TeacherClassManagementView';
 import { TeacherSpeakingAssessmentView } from './views/TeacherSpeakingAssessmentView';
+import { WritingWorkspaceView } from './views/WritingWorkspaceView';
+import { WritingFeedbackView } from './views/WritingFeedbackView';
+import { TeacherWritingEditorView } from './views/TeacherWritingEditorView';
 import { LoginModal } from './views/LoginModal';
 import { ElevateModal } from './views/ElevateModal';
 
@@ -25,6 +28,7 @@ const AppContent: React.FC = () => {
   const [activeTestId, setActiveTestId] = useState<string | null>(null);
   const [activeModeOverride, setActiveModeOverride] = useState<'practice' | 'mock' | undefined>(undefined);
   const [activeAttemptId, setActiveAttemptId] = useState<string | null>(null);
+  const [activeWritingAttemptId, setActiveWritingAttemptId] = useState<string | null>(null);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | undefined>(undefined);
   const [activePackageAttemptId, setActivePackageAttemptId] = useState<string | undefined>(undefined);
 
@@ -35,6 +39,22 @@ const AppContent: React.FC = () => {
   // Modals
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [elevateModalOpen, setElevateModalOpen] = useState(false);
+
+  // Handlers for Writing
+  const handleStartWriting = (attemptId: string) => {
+    setActiveWritingAttemptId(attemptId);
+    setCurrentView('writing_workspace');
+  };
+
+  const handleFinishWriting = (attemptId: string) => {
+    setActiveWritingAttemptId(attemptId);
+    setCurrentView('writing_feedback');
+  };
+
+  const handleViewWritingFeedback = (attemptId: string) => {
+    setActiveWritingAttemptId(attemptId);
+    setCurrentView('writing_feedback');
+  };
 
   // Handlers for Reading
   const handleStartTest = (testId: string, modeOverride?: 'practice' | 'mock', assignmentId?: string, packageAttemptId?: string) => {
@@ -105,11 +125,11 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const isExamView = currentView === 'test_runner' || currentView === 'listening_test_runner';
+  const isExamView = currentView === 'test_runner' || currentView === 'listening_test_runner' || currentView === 'writing_workspace';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Conditionally render header: TestRunner and ListeningTestRunner use their own distraction-free exam header */}
+      {/* Conditionally render header: TestRunner, ListeningTestRunner, and WritingWorkspace use their own distraction-free exam header */}
       {!isExamView && (
         <Navbar
           currentView={currentView}
@@ -125,8 +145,10 @@ const AppContent: React.FC = () => {
           <CatalogueView
             onStartTest={handleStartTest}
             onStartListeningTest={handleStartListeningTest}
+            onStartWriting={handleStartWriting}
             onViewResults={handleViewResults}
             onViewListeningResults={handleViewListeningResults}
+            onViewWritingFeedback={handleViewWritingFeedback}
             onOpenLogin={() => setLoginModalOpen(true)}
             isLoggedIn={!!user}
           />
@@ -156,6 +178,24 @@ const AppContent: React.FC = () => {
           />
         )}
 
+        {/* Writing Workspace */}
+        {currentView === 'writing_workspace' && activeWritingAttemptId && (
+          <WritingWorkspaceView
+            attemptId={activeWritingAttemptId}
+            onFinish={handleFinishWriting}
+            onExit={() => setCurrentView('catalogue')}
+          />
+        )}
+
+        {/* Writing Diagnostic Feedback */}
+        {currentView === 'writing_feedback' && activeWritingAttemptId && (
+          <WritingFeedbackView
+            attemptId={activeWritingAttemptId}
+            onExit={() => setCurrentView('catalogue')}
+            onRevise={(attId) => handleStartWriting(attId)}
+          />
+        )}
+
         {/* Reading Results */}
         {currentView === 'results' && activeAttemptId && (
           <ResultsView
@@ -180,6 +220,7 @@ const AppContent: React.FC = () => {
             onBackToCatalogue={() => setCurrentView('catalogue')}
             onViewResults={handleViewResults}
             onViewListeningResults={handleViewListeningResults}
+            onViewWritingFeedback={handleViewWritingFeedback}
             onRetryTest={(tId) => handleStartTest(tId, 'practice')}
             onRetryListeningTest={(tId) => handleStartListeningTest(tId, 'practice')}
           />
@@ -190,8 +231,10 @@ const AppContent: React.FC = () => {
           <StudentClassDashboardView
             onStartReading={handleStartTest}
             onStartListening={handleStartListeningTest}
+            onStartWriting={handleStartWriting}
             onViewReadingResults={handleViewResults}
             onViewListeningResults={handleViewListeningResults}
+            onViewWritingFeedback={handleViewWritingFeedback}
           />
         )}
 
@@ -203,6 +246,11 @@ const AppContent: React.FC = () => {
         {/* Teacher Speaking Assessment */}
         {currentView === 'teacher_speaking' && (
           <TeacherSpeakingAssessmentView />
+        )}
+
+        {/* Teacher Writing Editor & Assessment Guidance */}
+        {currentView === 'teacher_writing' && (
+          <TeacherWritingEditorView />
         )}
 
         {/* Teacher Dashboard */}
@@ -259,6 +307,8 @@ const AppContent: React.FC = () => {
               <span>Classes & Journey (M3)</span>
               <span>•</span>
               <span>Teacher Speaking (M4)</span>
+              <span>•</span>
+              <span>Writing & AI (M5)</span>
             </div>
           </div>
         </footer>

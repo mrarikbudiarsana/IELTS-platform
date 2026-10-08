@@ -177,8 +177,93 @@ This document tracks implementation status across the stages outlined in the Pro
 
 ---
 
+## Milestone 5: Writing Workspace and AI Assessment (COMPLETED & VERIFIED)
+
+### Phase 1: Models, Database Schema & Scoring Calibration
+- [x] Shared data models in `shared/types.ts`:
+  - `WritingTaskType`, `WritingTestType`, `WritingTaskNumber`, `WritingTaskSubtype`
+  - `WritingTask`, `WritingTaskVersion`, `WritingAttempt`, `WritingResponse`, `WritingAiAssessment`
+  - `WritingAllowanceLedger`, `WritingAllowanceBalance`
+- [x] Database schema in `server/db.ts`:
+  - `writing_tasks`, `writing_task_versions`, `writing_attempts`, `writing_responses`, `writing_assessments`, `writing_allowance_ledger`
+  - Schema migrations for `test_packages` and `package_attempts` writing columns
+- [x] Official IELTS Writing scoring engine in `shared/scoring.ts`:
+  - `calculateIeltsWritingTaskBand`: arithmetic mean of 4 criteria (TA/TR, CC, LR, GRA) rounded to nearest 0.5/whole band
+  - `calculateIeltsWritingOverallBand`: official IELTS candidate guide weighting where Task 2 carries double the weight of Task 1:
+    $$\text{Writing Band} = \text{roundIeltsBand}\left(\frac{\text{Task 1 Band} + 2 \times \text{Task 2 Band}}{3}\right)$$
+  - `calculateIeltsFourSkillOverallBand`:
+    $$\text{Overall Band} = \text{roundIeltsBand}\left(\frac{L + R + W + S}{4}\right)$$
+  - `countWords`: official IELTS word counting standard (hyphenated words count as one)
+
+### Phase 2: Teacher Content Editor & Visual Grounding Contract
+- [x] Teacher content editor supporting:
+  - Academic Task 1: charts, tables, maps, processes, diagrams
+  - General Training Task 1: formal, semi-formal, and personal letters
+  - Task 2 essays: opinion, discussion, problem/solution, direct questions
+- [x] Teacher-verified visual grounding (`teacherVisualDescription`):
+  - Mandatory on Academic Task 1 before publication
+  - Ground truth data points, axes, and trends passed to AI prompt to prevent factual hallucinations
+- [x] Immutability & versioning: published tasks remain immutable; draft edits create new versions
+- [x] Confidential guidance isolation: `teacherAssessmentGuidance` and unpublished `modelResponse` are strictly scrubbed from candidate API responses
+
+### Phase 3: Student Workspace & Response Management
+- [x] Split-screen interface (`WritingWorkspaceView.tsx`):
+  - Left pane: prompt, instructions, structured data tables, visual images
+  - Right pane: response text editor with live IELTS word count progress
+  - Responsive layout for smaller screens
+- [x] State recovery & autosave:
+  - Debounced autosave every 3 seconds to `POST /api/writing/attempts/:id/save`
+  - Real-time save status indicator ("Saved", "Saving...", "Offline")
+  - Automatic session recovery after browser refresh or reconnection
+- [x] Full mock shared timer:
+  - Shared 60-minute server-enforced countdown for complete mocks (Task 1 + Task 2)
+  - Early submission confirmation modal and automatic submission upon expiry
+- [x] Response locking & revision drafts:
+  - Submissions lock student response versions permanently
+  - Students can fork revision drafts (`POST /api/writing/attempts/:id/revisions`) without altering past assessed work
+
+### Phase 4: Server-Side AI Assessment & Background Queue
+- [x] Asynchronous queue pipeline (`server/aiWritingService.ts`):
+  - Lifecycle: `queued` → `processing` → `completed` / `failed`
+  - Real OpenAI API call with timeout protection and calibrated rubric fallback (`isSimulated = 1`)
+- [x] Prompt injection defense:
+  - Candidate essays isolated inside `<candidate_essay>` XML delimiters
+  - Explicit system instruction declaring candidate text as untrusted linguistic data to be evaluated, never executed
+- [x] Multi-criterion diagnostic feedback (`WritingFeedbackView.tsx`):
+  - Band scores for TA/TR, CC, LR, GRA
+  - Evidence quotes extracted directly from candidate submission
+  - Identified strengths and prioritized improvement actions
+  - Actionable sentence corrections with grammatical and cohesion explanations
+
+### Phase 5: Auditable Allowance Ledger (Non-Commercial)
+- [x] Transactional ledger (`server/allowanceService.ts` & `writing_allowance_ledger`):
+  - Transaction types: `grant`, `reservation`, `consumption`, `release`
+  - 1 allowance = 1 task evaluation
+  - Atomic reservation on assessment request; consumption on completion; immediate refund on failure
+  - Admin pilot grant modal in teacher view (no commercial pricing or Stripe terms invented)
+
+### Phase 6: Pre/Post Diagnostic Integration & 4-Skill Overall Band
+- [x] Multi-skill test packages (`test_packages`) support configuring published Writing tasks
+- [x] Pre-Test and Post-Test execution links writing attempts (`writing_attempt_id`)
+- [x] Pre/Post diagnostic comparison report (`PrePostComparisonModal.tsx`):
+  - Displays Writing band breakdown (Task 1, Task 2, Overall Writing Band, AI Assessor badge)
+  - When all 4 skills are completed, computes and displays the official Four-Skill IELTS Overall Band
+  - Displays overall band delta (`deltas.overallBandDelta`) and pedagogical advisory notice
+
+### Phase 7: Automated Verification Suite & Production Build
+- [x] Milestone 5 automated test runner (`test/runWritingTests.ts`) passing 47/47 checks (100%):
+  1. Official IELTS Writing Scoring & 4-Skill Band Calculations (8 checks)
+  2. Task Authoring & Teacher-Verified Visual Grounding (5 checks)
+  3. Auditable Allowance Ledger & Invariants (4 checks)
+  4. Student Workspace, Autosave & Shared Mock Timer (14 checks)
+  5. AI Writing Assessment Execution & Criteria Breakdown (13 checks)
+  6. TestPackage & Pre/Post Comparison 4-Skill Integration (3 checks)
+- [x] Unified test suite (`npm test`) passing all 83 checks across all 5 milestones (Reading 9, Listening 8, Classes & Journey 9, Speaking 10, Writing 47)
+- [x] Production client build (`npm run build --prefix client`) passing with 0 errors
+
+---
+
 ## Future Milestones (Deferred per Blueprint)
-- **Milestone 5**: Writing Assessment Engine (Task 1 & Task 2, criteria TR/TA, CC, LR, GRA, word count limits, rubrics).
 - **Milestone 6**: Live AI Speaking (interactive voice calling, AI evaluation queue with allowance gating).
 - **Milestone 7**: Commercial access, plans, ledger, teacher codes, Stripe / payment webhooks.
 - **Milestone 8**: Production load testing and final pilot onboarding (10–50 learners).

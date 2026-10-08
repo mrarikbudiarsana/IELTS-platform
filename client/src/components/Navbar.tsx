@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { BookOpen, Shield, LogOut, Award, UserCheck, Layers, Users, GraduationCap } from 'lucide-react';
+import { api } from '../api';
+import { BookOpen, Shield, LogOut, Award, UserCheck, Layers, Users, GraduationCap, PenTool, Sparkles } from 'lucide-react';
 
 interface NavbarProps {
   currentView: string;
@@ -16,9 +17,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenElevate,
 }) => {
   const { user, logout, quickLoginAs } = useAuth();
+  const [allowanceBalance, setAllowanceBalance] = useState<number | null>(null);
 
   const isTeacherOrAdmin = user?.role === 'teacher' || user?.role === 'admin';
   const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
+    if (user?.role === 'student') {
+      api.getMyAllowanceBalance()
+        .then((res: any) => setAllowanceBalance(res.balance.available))
+        .catch(() => {});
+    } else {
+      setAllowanceBalance(null);
+    }
+  }, [user]);
 
   return (
     <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40 border-b border-slate-800">
@@ -33,7 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="font-bold text-lg tracking-tight leading-tight flex items-center gap-2">
                 IELTS Mastery
                 <span className="text-xs bg-indigo-500/30 text-indigo-300 font-semibold px-2 py-0.5 rounded border border-indigo-400/30">
-                  Reading, Listening & Speaking
+                  Full 4 Skills: R, L, W, S
                 </span>
               </div>
               <div className="text-xs text-slate-400 font-medium">Learn English With Arik</div>
@@ -107,6 +119,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Speaking Assessments
                 </button>
                 <button
+                  onClick={() => onNavigate('teacher_writing')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    currentView === 'teacher_writing'
+                      ? 'bg-emerald-950 text-emerald-200 border-b-2 border-emerald-500'
+                      : 'text-emerald-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <PenTool className="w-4 h-4" />
+                  Writing Editor & AI
+                </button>
+                <button
                   onClick={() => onNavigate('teacher_editor')}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
                     currentView === 'teacher_editor'
@@ -172,6 +195,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                     )}
                   </div>
                 </div>
+
+                {user.role === 'student' && allowanceBalance !== null && (
+                  <span
+                    title="Available AI Writing Assessments (1 assessment = 1 task evaluated)"
+                    className="text-xs bg-slate-800 text-blue-300 border border-blue-500/40 px-2.5 py-1.5 rounded-md flex items-center gap-1 font-medium"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{allowanceBalance} AI Credits</span>
+                  </span>
+                )}
 
                 {user.role === 'student' && (
                   <button

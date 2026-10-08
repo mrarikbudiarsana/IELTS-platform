@@ -97,6 +97,28 @@ import {
   listTeacherAssessmentQueue,
   listStudentSpeakingAssessments,
 } from './speakingService';
+import { seedWritingData } from './writingSeed';
+import {
+  createWritingTask,
+  updateWritingTaskDraft,
+  publishWritingTask,
+  forkWritingTaskVersion,
+  archiveWritingTask,
+  getWritingTaskById,
+  listWritingTasks,
+  startOrResumeWritingAttempt,
+  saveWritingDraftResponse,
+  submitWritingAttempt,
+  createResponseRevision,
+  getWritingAttemptById,
+  getWritingResponseById,
+} from './writingService';
+import { requestAiWritingAssessment } from './aiWritingService';
+import {
+  getUserAllowanceBalance,
+  listAllowanceLedger,
+  grantTestingAllowance,
+} from './allowanceService';
 import { ClassTestType } from '../shared/types';
 
 const app = express();
@@ -116,7 +138,7 @@ app.use(express.static(path.resolve(__dirname, '../public')));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', milestones: ['reading', 'listening', 'classes'] });
+  res.json({ status: 'ok', milestones: ['reading', 'listening', 'classes', 'speaking', 'writing'] });
 });
 
 // -------------------------------------------------------------
@@ -1143,6 +1165,283 @@ app.get('/api/speaking/my-assessments', authMiddleware, (req: AuthenticatedReque
   }
 });
 
+// -------------------------------------------------------------
+// WRITING TASKS (TEACHER & STUDENT API)
+// -------------------------------------------------------------
+
+// GET /api/writing/tasks - list tasks
+app.get('/api/writing/tasks', (req: any, res) => {
+  try {
+    const userRole = (req.user?.role || 'student') as 'student' | 'teacher' | 'admin';
+    const tasks = listWritingTasks({
+      status: req.query.status as any,
+      taskType: req.query.taskType as any,
+      testType: req.query.testType as any,
+      taskNumber: req.query.taskNumber ? (Number(req.query.taskNumber) as any) : undefined,
+      userRole,
+    });
+    res.json({ tasks });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/writing/tasks/:id - get single task
+app.get('/api/writing/tasks/:id', (req: any, res) => {
+  try {
+    const userRole = (req.user?.role || 'student') as 'student' | 'teacher' | 'admin';
+    const task = getWritingTaskById(req.params.id, userRole);
+    if (!task) return res.status(404).json({ error: 'Writing task not found' });
+    res.json({ task });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/tasks - create new writing task
+app.post('/api/writing/tasks', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const task = createWritingTask({
+      createdById: req.user!.id,
+      title: req.body.title,
+      taskType: req.body.taskType,
+      taskNumber: req.body.taskNumber,
+      testType: req.body.testType,
+      subtype: req.body.subtype,
+      prompt: req.body.prompt,
+      instructions: req.body.instructions,
+      minWords: req.body.minWords,
+      suggestedTimeMinutes: req.body.suggestedTimeMinutes,
+      images: req.body.images,
+      structuredData: req.body.structuredData,
+      teacherVisualDescription: req.body.teacherVisualDescription,
+      modelResponse: req.body.modelResponse,
+      teacherAssessmentGuidance: req.body.teacherAssessmentGuidance,
+    });
+    res.status(201).json({ task });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/writing/tasks/:id/draft - update draft
+app.put('/api/writing/tasks/:id/draft', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const task = updateWritingTaskDraft(req.params.id, req.body);
+    res.json({ task });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/tasks/:id/publish - publish draft
+app.post('/api/writing/tasks/:id/publish', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const task = publishWritingTask(req.params.id);
+    res.json({ task });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/tasks/:id/fork - fork new draft version
+app.post('/api/writing/tasks/:id/fork', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const task = forkWritingTaskVersion(req.params.id);
+    res.json({ task });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/tasks/:id/archive - archive task
+app.post('/api/writing/tasks/:id/archive', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const task = archiveWritingTask(req.params.id);
+    res.json({ task });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// STUDENT WRITING ATTEMPTS, RESPONSES & REVISIONS
+// -------------------------------------------------------------
+
+// POST /api/writing/attempts - start or resume attempt
+app.post('/api/writing/attempts', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const attempt = startOrResumeWritingAttempt({
+      userId: req.user!.id,
+      mode: req.body.mode || 'practice',
+      task1Id: req.body.task1Id,
+      task2Id: req.body.task2Id,
+      assignmentId: req.body.assignmentId,
+      packageAttemptId: req.body.packageAttemptId,
+    });
+    res.json({ attempt });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/writing/attempts/:id - get full attempt
+app.get('/api/writing/attempts/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const attempt = getWritingAttemptById(req.params.id);
+    if (!attempt) return res.status(404).json({ error: 'Writing attempt not found' });
+    if (req.user!.role === 'student' && attempt.userId !== req.user!.id) {
+      return res.status(403).json({ error: 'Access forbidden to this attempt.' });
+    }
+    res.json({ attempt });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/attempts/:id/save - autosave draft response
+app.post('/api/writing/attempts/:id/save', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const result = saveWritingDraftResponse({
+      attemptId: req.params.id,
+      taskNumber: req.body.taskNumber,
+      responseText: req.body.responseText,
+      userId: req.user!.id,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/attempts/:id/submit - submit attempt and lock responses
+app.post('/api/writing/attempts/:id/submit', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const attempt = submitWritingAttempt(req.params.id, req.user!.id);
+    res.json({ attempt });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/attempts/:id/revisions - fork revision draft
+app.post('/api/writing/attempts/:id/revisions', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const response = createResponseRevision({
+      attemptId: req.params.id,
+      taskNumber: req.body.taskNumber,
+      userId: req.user!.id,
+    });
+    res.json({ response });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// AI WRITING ASSESSMENT & AUDITABLE ALLOWANCE LEDGER
+// -------------------------------------------------------------
+
+// POST /api/writing/assessments/request - request AI evaluation
+app.post('/api/writing/assessments/request', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const assessment = await requestAiWritingAssessment({
+      responseId: req.body.responseId,
+      userId: req.user!.id,
+    });
+    res.json({ assessment });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/writing/assessments/:id - get assessment status & results
+app.get('/api/writing/assessments/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const row = db.prepare('SELECT * FROM writing_assessments WHERE id = ?').get(req.params.id) as any;
+    if (!row) return res.status(404).json({ error: 'Assessment not found' });
+
+    // Check attempt ownership if student
+    const attempt = db.prepare('SELECT user_id FROM writing_attempts WHERE id = ?').get(row.attempt_id) as any;
+    if (req.user!.role === 'student' && attempt?.user_id !== req.user!.id) {
+      return res.status(403).json({ error: 'Access forbidden.' });
+    }
+
+    res.json({
+      assessment: {
+        id: row.id,
+        responseId: row.response_id,
+        attemptId: row.attempt_id,
+        taskNumber: row.task_number,
+        status: row.status,
+        taskType: row.task_type,
+        taskBand: row.task_band,
+        criteria:
+          row.score_ta_tr !== null
+            ? {
+                taskAchievementOrResponse: row.score_ta_tr,
+                coherenceCohesion: row.score_cc,
+                lexicalResource: row.score_lr,
+                grammaticalRange: row.score_gra,
+              }
+            : undefined,
+        criterionFeedback: {
+          taskAchievementOrResponse: row.feedback_ta_tr || undefined,
+          coherenceCohesion: row.feedback_cc || undefined,
+          lexicalResource: row.feedback_lr || undefined,
+          grammaticalRange: row.feedback_gra || undefined,
+        },
+        evidenceQuotes: row.evidence_quotes_json ? JSON.parse(row.evidence_quotes_json) : undefined,
+        strengths: row.strengths_json ? JSON.parse(row.strengths_json) : undefined,
+        improvements: row.improvements_json ? JSON.parse(row.improvements_json) : undefined,
+        corrections: row.corrections_json ? JSON.parse(row.corrections_json) : undefined,
+        overallFeedback: row.overall_feedback || undefined,
+        isSimulated: Boolean(row.is_simulated),
+        errorMessage: row.error_message || undefined,
+        createdAt: row.created_at,
+        completedAt: row.completed_at || undefined,
+      },
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/writing/allowances/balance - get user's balance
+app.get('/api/writing/allowances/balance', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const balance = getUserAllowanceBalance(req.user!.id);
+    res.json({ balance });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/writing/allowances/ledger - get user's ledger transactions
+app.get('/api/writing/allowances/ledger', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const ledger = listAllowanceLedger(req.user!.id);
+    res.json({ ledger });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/allowances/grant - grant allowance (teacher/admin only)
+app.post('/api/writing/allowances/grant', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const entry = grantTestingAllowance({
+      adminId: req.user!.id,
+      userId: req.body.userId,
+      amount: Number(req.body.amount),
+      notes: req.body.notes,
+    });
+    res.json({ entry, balance: getUserAllowanceBalance(req.body.userId) });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Serve compiled React frontend if present
 const clientDistPath = path.resolve(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
@@ -1159,9 +1458,11 @@ seedDatabase();
 seedListeningDatabase();
 seedClassDatabase();
 seedSpeakingDatabase();
+seedWritingData();
 
 app.listen(PORT, () => {
   console.log(`IELTS Platform API server listening on http://localhost:${PORT}`);
 });
 
 export default app;
+

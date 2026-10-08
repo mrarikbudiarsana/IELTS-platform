@@ -148,6 +148,47 @@ export const api = {
     return request<{ queue: any[] }>(`/speaking/teacher/queue${q ? `?${q}` : ''}`);
   },
   getMySpeakingAssessments: () => request<{ assessments: any[] }>('/speaking/my-assessments'),
+
+  // Writing Tasks
+  getWritingTasks: (params?: { status?: string; taskType?: string; testType?: string; taskNumber?: number }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return request<{ tasks: any[] }>(`/writing/tasks${q ? `?${q}` : ''}`);
+  },
+  getWritingTask: (id: string) => request<{ task: any }>(`/writing/tasks/${id}`),
+  createWritingTask: (body: any) => request<{ task: any }>('/writing/tasks', { method: 'POST', body: JSON.stringify(body) }),
+  updateWritingDraft: (id: string, body: any) => request<{ task: any }>(`/writing/tasks/${id}/draft`, { method: 'PUT', body: JSON.stringify(body) }),
+  publishWritingTask: (id: string) => request<{ task: any }>(`/writing/tasks/${id}/publish`, { method: 'POST' }),
+  forkWritingDraft: (id: string) => request<{ task: any }>(`/writing/tasks/${id}/fork`, { method: 'POST' }),
+  archiveWritingTask: (id: string) => request<{ task: any }>(`/writing/tasks/${id}/archive`, { method: 'POST' }),
+
+  // Writing Attempts & Responses
+  startWritingAttempt: (body: { mode?: string; task1Id?: string; task2Id?: string; assignmentId?: string; packageAttemptId?: string; durationMinutes?: number }) =>
+    request<{ attempt: any }>('/writing/attempts', { method: 'POST', body: JSON.stringify(body) }),
+  getWritingAttempts: () => request<{ attempts: any[] }>('/writing/attempts'),
+  getWritingAttempt: (id: string) => request<{ attempt: any }>(`/writing/attempts/${id}`),
+  saveWritingDraft: (attemptId: string, body: { taskNumber: number; responseText: string }) =>
+    request<{ responseId: string; wordCount: number; lastSavedAt: string }>(`/writing/attempts/${attemptId}/save`, { method: 'POST', body: JSON.stringify(body) }),
+  submitWritingAttempt: (attemptId: string) =>
+    request<{ attempt: any }>(`/writing/attempts/${attemptId}/submit`, { method: 'POST' }),
+  createWritingRevision: (attemptId: string, taskNumber: number) =>
+    request<{ response: any }>(`/writing/attempts/${attemptId}/revisions`, { method: 'POST', body: JSON.stringify({ attemptId, taskNumber }) }),
+
+  // AI Writing Assessment
+  requestWritingAssessment: (responseId: string) =>
+    request<{ assessment: any }>('/writing/assessments/request', { method: 'POST', body: JSON.stringify({ responseId }) }),
+  getWritingAssessment: (id: string) =>
+    request<{ assessment: any }>(`/writing/assessments/${id}`),
+
+  // Allowances
+  getWritingAllowanceBalance: () =>
+    request<{ balance: { totalGranted: number; totalConsumed: number; totalReserved: number; available: number } }>('/writing/allowances/balance'),
+  getMyAllowanceBalance: () =>
+    request<{ balance: { totalGranted: number; totalConsumed: number; totalReserved: number; available: number } }>('/writing/allowances/balance'),
+  getWritingAllowanceLedger: () =>
+    request<{ ledger: any[] }>('/writing/allowances/ledger'),
+  grantWritingAllowance: (body: { userId: string; amount: number; notes?: string }) =>
+    request<{ entry: any; balance: any }>('/writing/allowances/grant', { method: 'POST', body: JSON.stringify(body) }),
 };
+
 
 

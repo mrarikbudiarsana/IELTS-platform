@@ -314,15 +314,15 @@ export function markStudentAnswer(params: {
  *   (6.0 + 6.5 + 6.0 + 6.0) / 4 = 6.125 -> rounds to 6.0
  *   (6.0 + 6.5 + 6.5 + 6.5) / 4 = 6.375 -> rounds to 6.5
  */
-export function calculateIeltsSpeakingBand(
-  fluencyCoherence: number,
-  lexicalResource: number,
-  grammaticalRange: number,
-  pronunciation: number
-): number {
-  const mean = (fluencyCoherence + lexicalResource + grammaticalRange + pronunciation) / 4;
-  const whole = Math.floor(mean);
-  const frac = Number((mean - whole).toFixed(4));
+/**
+ * Helper to round raw averages according to official IELTS band score rounding rules:
+ * - If the fractional part is < 0.25, round DOWN to the whole band (.0).
+ * - If the fractional part is >= 0.25 and < 0.75, round UP to the half band (.5).
+ * - If the fractional part is >= 0.75, round UP to the next whole band (+1.0).
+ */
+export function roundIeltsBand(score: number): number {
+  const whole = Math.floor(score);
+  const frac = Number((score - whole).toFixed(4));
 
   if (frac < 0.25) {
     return whole;
@@ -331,6 +331,101 @@ export function calculateIeltsSpeakingBand(
   } else {
     return whole + 1.0;
   }
+}
+
+/**
+ * Calculates the overall Speaking band score from the four criteria:
+ * mean = (FC + LR + GRA + P) / 4, rounded to official IELTS whole/half band.
+ */
+export function calculateIeltsSpeakingBand(
+  fluencyCoherence: number,
+  lexicalResource: number,
+  grammaticalRange: number,
+  pronunciation: number
+): number {
+  const mean = (fluencyCoherence + lexicalResource + grammaticalRange + pronunciation) / 4;
+  return roundIeltsBand(mean);
+}
+
+/**
+ * Calculates the IELTS Writing Task Band (for either Task 1 or Task 2).
+ * Each task is assessed on four criteria:
+ * - Task 1: Task Achievement (TA), Coherence and Cohesion (CC), Lexical Resource (LR), Grammatical Range and Accuracy (GRA)
+ * - Task 2: Task Response (TR), Coherence and Cohesion (CC), Lexical Resource (LR), Grammatical Range and Accuracy (GRA)
+ * The task band is the arithmetic mean of the four criteria rounded to the nearest half or whole band.
+ */
+export function calculateIeltsWritingTaskBand(
+  taOrTr: number,
+  cc: number,
+  lr: number,
+  gra: number
+): number {
+  const mean = (taOrTr + cc + lr + gra) / 4;
+  return roundIeltsBand(mean);
+}
+
+/**
+ * Calculates the Overall Writing Band Score.
+ *
+ * Official IELTS Reference:
+ * IELTS Information for Candidates & IELTS Writing Scoring Guide:
+ * "Task 2 contributes twice as much as Task 1 to the Writing score."
+ * Writing Band = (Task 1 Band + 2 * Task 2 Band) / 3, rounded to nearest whole or half band.
+ *
+ * If only one task is taken (e.g. single-task practice), returns that task's band.
+ */
+export function calculateIeltsWritingOverallBand(
+  task1Band?: number,
+  task2Band?: number
+): number | undefined {
+  if (task1Band !== undefined && task2Band !== undefined) {
+    const weighted = (task1Band + 2 * task2Band) / 3;
+    return roundIeltsBand(weighted);
+  }
+  if (task1Band !== undefined) return task1Band;
+  if (task2Band !== undefined) return task2Band;
+  return undefined;
+}
+
+/**
+ * Calculates the Official IELTS Four-Skill Overall Band Score:
+ * Overall = (Listening + Reading + Writing + Speaking) / 4
+ * rounded according to official IELTS band score rounding rules.
+ * Returns undefined if any skill is missing.
+ */
+export function calculateIeltsFourSkillOverallBand(
+  listening?: number,
+  reading?: number,
+  writing?: number,
+  speaking?: number
+): number | undefined {
+  if (
+    listening === undefined ||
+    reading === undefined ||
+    writing === undefined ||
+    speaking === undefined
+  ) {
+    return undefined;
+  }
+  const mean = (listening + reading + writing + speaking) / 4;
+  return roundIeltsBand(mean);
+}
+
+/**
+ * Validates a Writing criterion score (1.0 to 9.0 in 0.5 increments).
+ */
+export function validateWritingCriterionScore(score: any): { valid: boolean; error?: string } {
+  if (typeof score !== 'number' || isNaN(score)) {
+    return { valid: false, error: 'Criterion score must be a valid number.' };
+  }
+  if (score < 1.0 || score > 9.0) {
+    return { valid: false, error: 'Criterion score must be between 1.0 and 9.0.' };
+  }
+  const remainder = (score * 10) % 5;
+  if (remainder !== 0) {
+    return { valid: false, error: 'Criterion score must be in whole or half band increments (e.g. 6.0, 6.5).' };
+  }
+  return { valid: true };
 }
 
 /**

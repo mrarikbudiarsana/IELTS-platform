@@ -18,6 +18,8 @@ import { formatMakassarDateTime, isOverdue } from '../shared/dateUtils';
 import { startOrResumeAttempt } from './attemptService';
 import { startOrResumeListeningAttempt } from './listeningAttemptService';
 import { getSpeakingAssessmentById } from './speakingService';
+import { getWritingAttemptById } from './writingService';
+import { calculateIeltsFourSkillOverallBand } from '../shared/scoring';
 
 // -------------------------------------------------------------
 // TEST PACKAGES (4-SKILL SLOTS / FIXED VERSIONS)
@@ -33,6 +35,10 @@ export function createTestPackage(
     listeningVersionId?: string;
     readingTestId?: string;
     readingVersionId?: string;
+    writingTask1Id?: string;
+    writingTask1VersionId?: string;
+    writingTask2Id?: string;
+    writingTask2VersionId?: string;
     speakingSetId?: string;
     speakingSetVersionId?: string;
   }
@@ -57,6 +63,20 @@ export function createTestPackage(
     }
   }
 
+  // Validate writing task versions if provided
+  if (data.writingTask1Id && !data.writingTask1VersionId) {
+    const w1Version = db.prepare('SELECT id FROM writing_task_versions WHERE task_id = ? ORDER BY version_number DESC LIMIT 1').get(data.writingTask1Id) as any;
+    if (w1Version) {
+      data.writingTask1VersionId = w1Version.id;
+    }
+  }
+  if (data.writingTask2Id && !data.writingTask2VersionId) {
+    const w2Version = db.prepare('SELECT id FROM writing_task_versions WHERE task_id = ? ORDER BY version_number DESC LIMIT 1').get(data.writingTask2Id) as any;
+    if (w2Version) {
+      data.writingTask2VersionId = w2Version.id;
+    }
+  }
+
   // Validate speaking set version if provided
   if (data.speakingSetId && !data.speakingSetVersionId) {
     const speakingVersion = db.prepare('SELECT id FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1').get(data.speakingSetId) as any;
@@ -65,6 +85,7 @@ export function createTestPackage(
     }
   }
 
+  const writingStatus = (data.writingTask1Id || data.writingTask2Id) ? 'configured' : 'not_implemented';
   const speakingStatus = data.speakingSetId ? 'configured' : 'not_implemented';
 
   const id = uuidv4();
@@ -73,11 +94,13 @@ export function createTestPackage(
       id, title, package_type, test_type,
       listening_test_id, listening_version_id,
       reading_test_id, reading_version_id,
+      writing_task1_id, writing_task1_version_id,
+      writing_task2_id, writing_task2_version_id,
       speaking_set_id, speaking_set_version_id,
       writing_status, speaking_status,
       created_by_id, created_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_implemented', ?, ?, datetime('now'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(
     id,
     data.title.trim(),
@@ -87,8 +110,13 @@ export function createTestPackage(
     data.listeningVersionId || null,
     data.readingTestId || null,
     data.readingVersionId || null,
+    data.writingTask1Id || null,
+    data.writingTask1VersionId || null,
+    data.writingTask2Id || null,
+    data.writingTask2VersionId || null,
     data.speakingSetId || null,
     data.speakingSetVersionId || null,
+    writingStatus,
     speakingStatus,
     teacherId
   );
@@ -101,10 +129,14 @@ export function getTestPackageById(packageId: string): TestPackage {
     SELECT tp.*,
       rt.title as reading_test_title,
       lt.title as listening_test_title,
+      wt1.title as writing_task1_title,
+      wt2.title as writing_task2_title,
       ss.title as speaking_set_title
     FROM test_packages tp
     LEFT JOIN reading_tests rt ON tp.reading_test_id = rt.id
     LEFT JOIN listening_tests lt ON tp.listening_test_id = lt.id
+    LEFT JOIN writing_tasks wt1 ON tp.writing_task1_id = wt1.id
+    LEFT JOIN writing_tasks wt2 ON tp.writing_task2_id = wt2.id
     LEFT JOIN speaking_sets ss ON tp.speaking_set_id = ss.id
     WHERE tp.id = ?
   `).get(packageId) as any;
@@ -124,10 +156,16 @@ export function getTestPackageById(packageId: string): TestPackage {
     readingTestId: row.reading_test_id || undefined,
     readingVersionId: row.reading_version_id || undefined,
     readingTestTitle: row.reading_test_title || undefined,
+    writingTask1Id: row.writing_task1_id || undefined,
+    writingTask1VersionId: row.writing_task1_version_id || undefined,
+    writingTask1Title: row.writing_task1_title || undefined,
+    writingTask2Id: row.writing_task2_id || undefined,
+    writingTask2VersionId: row.writing_task2_version_id || undefined,
+    writingTask2Title: row.writing_task2_title || undefined,
     speakingSetId: row.speaking_set_id || undefined,
     speakingSetVersionId: row.speaking_set_version_id || undefined,
     speakingSetTitle: row.speaking_set_title || undefined,
-    writingStatus: 'not_implemented',
+    writingStatus: (row.writing_task1_id || row.writing_task2_id) ? 'configured' : 'not_implemented',
     speakingStatus: row.speaking_set_id ? 'configured' : 'not_implemented',
     createdById: row.created_by_id,
     createdAt: row.created_at,
@@ -139,10 +177,14 @@ export function listTestPackages(testType?: ClassTestType): TestPackage[] {
     SELECT tp.*,
       rt.title as reading_test_title,
       lt.title as listening_test_title,
+      wt1.title as writing_task1_title,
+      wt2.title as writing_task2_title,
       ss.title as speaking_set_title
     FROM test_packages tp
     LEFT JOIN reading_tests rt ON tp.reading_test_id = rt.id
     LEFT JOIN listening_tests lt ON tp.listening_test_id = lt.id
+    LEFT JOIN writing_tasks wt1 ON tp.writing_task1_id = wt1.id
+    LEFT JOIN writing_tasks wt2 ON tp.writing_task2_id = wt2.id
     LEFT JOIN speaking_sets ss ON tp.speaking_set_id = ss.id
   `;
   const params: any[] = [];
@@ -164,10 +206,16 @@ export function listTestPackages(testType?: ClassTestType): TestPackage[] {
     readingTestId: row.reading_test_id || undefined,
     readingVersionId: row.reading_version_id || undefined,
     readingTestTitle: row.reading_test_title || undefined,
+    writingTask1Id: row.writing_task1_id || undefined,
+    writingTask1VersionId: row.writing_task1_version_id || undefined,
+    writingTask1Title: row.writing_task1_title || undefined,
+    writingTask2Id: row.writing_task2_id || undefined,
+    writingTask2VersionId: row.writing_task2_version_id || undefined,
+    writingTask2Title: row.writing_task2_title || undefined,
     speakingSetId: row.speaking_set_id || undefined,
     speakingSetVersionId: row.speaking_set_version_id || undefined,
     speakingSetTitle: row.speaking_set_title || undefined,
-    writingStatus: 'not_implemented',
+    writingStatus: (row.writing_task1_id || row.writing_task2_id) ? 'configured' : 'not_implemented',
     speakingStatus: row.speaking_set_id ? 'configured' : 'not_implemented',
     createdById: row.created_by_id,
     createdAt: row.created_at,
@@ -504,6 +552,35 @@ function populateStudentAssignmentStatus(a: Assignment, studentId: string): void
       a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'in_progress';
     }
     return;
+  } else if (a.skill === 'writing') {
+    // Writing assignment
+    const attempts = db.prepare(`
+      SELECT * FROM writing_attempts
+      WHERE assignment_id = ? AND user_id = ?
+      ORDER BY started_at DESC
+    `).all(a.id, studentId) as any[];
+
+    a.studentAttemptCount = attempts.length;
+
+    if (!a.isReleased || new Date(a.releaseAt).getTime() > Date.now()) {
+      a.studentStatus = 'not_started';
+      return;
+    }
+
+    if (attempts.length === 0) {
+      a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'not_started';
+      return;
+    }
+
+    const latest = attempts[0];
+    a.activeAttemptId = latest.id;
+    if (latest.status === 'submitted' || latest.status === 'expired') {
+      a.studentStatus = 'submitted';
+      a.lastAttemptBand = latest.overall_writing_band !== null ? latest.overall_writing_band : undefined;
+    } else {
+      a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'in_progress';
+    }
+    return;
   } else {
     // Reading or Listening single skill assignment
     let attempts: any[] = [];
@@ -633,6 +710,7 @@ export function getPackageAttemptById(attemptId: string, userId: string, isAdmin
 function mapPackageAttemptRow(row: any): PackageAttempt {
   let readingAttempt: any;
   let listeningAttempt: any;
+  let writingAttempt: any;
   let speakingAssessment: SpeakingAssessment | undefined;
 
   if (row.reading_attempt_id) {
@@ -640,6 +718,9 @@ function mapPackageAttemptRow(row: any): PackageAttempt {
   }
   if (row.listening_attempt_id) {
     listeningAttempt = db.prepare('SELECT * FROM listening_attempts WHERE id = ?').get(row.listening_attempt_id);
+  }
+  if (row.writing_attempt_id) {
+    writingAttempt = getWritingAttemptById(row.writing_attempt_id) || undefined;
   }
   if (row.speaking_assessment_id) {
     speakingAssessment = getSpeakingAssessmentById(row.speaking_assessment_id, row.user_id, 'teacher') || undefined;
@@ -697,6 +778,8 @@ function mapPackageAttemptRow(row: any): PackageAttempt {
       interruptionEvents: [],
       answers: {},
     } : undefined,
+    writingAttemptId: row.writing_attempt_id || undefined,
+    writingAttempt,
     speakingAssessmentId: row.speaking_assessment_id || undefined,
     speakingAssessment,
     startedAt: row.started_at,
@@ -706,11 +789,11 @@ function mapPackageAttemptRow(row: any): PackageAttempt {
 }
 
 /**
- * Links a specific skill attempt (reading, listening, or speaking) to the package attempt.
+ * Links a specific skill attempt (reading, listening, writing, or speaking) to the package attempt.
  */
 export function linkSkillToPackageAttempt(
   packageAttemptId: string,
-  skill: 'reading' | 'listening' | 'speaking',
+  skill: 'reading' | 'listening' | 'writing' | 'speaking',
   skillAttemptId: string
 ): void {
   const col =
@@ -718,6 +801,8 @@ export function linkSkillToPackageAttempt(
       ? 'reading_attempt_id'
       : skill === 'listening'
       ? 'listening_attempt_id'
+      : skill === 'writing'
+      ? 'writing_attempt_id'
       : 'speaking_assessment_id';
 
   db.prepare(`
@@ -738,6 +823,10 @@ export function linkSkillToPackageAttempt(
     if (pkg.listeningTestId) {
       const l = current.listening_attempt_id ? db.prepare('SELECT status FROM listening_attempts WHERE id = ?').get(current.listening_attempt_id) as any : null;
       if (!l || (l.status !== 'submitted' && l.status !== 'expired')) allDone = false;
+    }
+    if (pkg.writingTask1Id || pkg.writingTask2Id) {
+      const w = current.writing_attempt_id ? db.prepare('SELECT status FROM writing_attempts WHERE id = ?').get(current.writing_attempt_id) as any : null;
+      if (!w || (w.status !== 'submitted' && w.status !== 'expired')) allDone = false;
     }
     if (pkg.speakingSetId) {
       const s = current.speaking_assessment_id ? db.prepare('SELECT status FROM speaking_assessments WHERE id = ?').get(current.speaking_assessment_id) as any : null;
@@ -783,18 +872,21 @@ export function getPrePostComparison(
   const preAssignment = db.prepare("SELECT * FROM assignments WHERE class_id = ? AND purpose = 'pre_test' LIMIT 1").get(classId) as any;
   const postAssignment = db.prepare("SELECT * FROM assignments WHERE class_id = ? AND purpose = 'post_test' LIMIT 1").get(classId) as any;
 
+  const prePkg = preAssignment?.package_id ? getTestPackageById(preAssignment.package_id) : null;
+  const postPkg = postAssignment?.package_id ? getTestPackageById(postAssignment.package_id) : null;
+
   const preSkills: Record<'reading' | 'listening' | 'writing' | 'speaking', SkillComparisonItem> = {
-    reading: { skill: 'reading', status: 'not_started' },
-    listening: { skill: 'listening', status: 'not_started' },
-    writing: { skill: 'writing', status: 'not_implemented' },
-    speaking: { skill: 'speaking', status: 'not_implemented' },
+    reading: { skill: 'reading', status: prePkg?.readingTestId ? 'not_started' : 'not_implemented' },
+    listening: { skill: 'listening', status: prePkg?.listeningTestId ? 'not_started' : 'not_implemented' },
+    writing: { skill: 'writing', status: prePkg?.writingStatus === 'configured' ? 'not_started' : 'not_implemented' },
+    speaking: { skill: 'speaking', status: prePkg?.speakingStatus === 'configured' ? 'not_started' : 'not_implemented' },
   };
 
   const postSkills: Record<'reading' | 'listening' | 'writing' | 'speaking', SkillComparisonItem> = {
-    reading: { skill: 'reading', status: 'not_started' },
-    listening: { skill: 'listening', status: 'not_started' },
-    writing: { skill: 'writing', status: 'not_implemented' },
-    speaking: { skill: 'speaking', status: 'not_implemented' },
+    reading: { skill: 'reading', status: postPkg?.readingTestId ? 'not_started' : 'not_implemented' },
+    listening: { skill: 'listening', status: postPkg?.listeningTestId ? 'not_started' : 'not_implemented' },
+    writing: { skill: 'writing', status: postPkg?.writingStatus === 'configured' ? 'not_started' : 'not_implemented' },
+    speaking: { skill: 'speaking', status: postPkg?.speakingStatus === 'configured' ? 'not_started' : 'not_implemented' },
   };
 
   // Populate pre-test skills
@@ -813,6 +905,9 @@ export function getPrePostComparison(
     readingBandDelta?: number;
     listeningRawDelta?: number;
     listeningBandDelta?: number;
+    writingBandDelta?: number;
+    speakingBandDelta?: number;
+    overallBandDelta?: number;
   } = {};
 
   if (
@@ -840,6 +935,15 @@ export function getPrePostComparison(
   }
 
   if (
+    preSkills.writing.status === 'completed' &&
+    postSkills.writing.status === 'completed' &&
+    preSkills.writing.bandScore !== undefined &&
+    postSkills.writing.bandScore !== undefined
+  ) {
+    deltas.writingBandDelta = Number((postSkills.writing.bandScore - preSkills.writing.bandScore).toFixed(1));
+  }
+
+  if (
     preSkills.speaking.status === 'completed' &&
     postSkills.speaking.status === 'completed' &&
     preSkills.speaking.bandScore !== undefined &&
@@ -848,8 +952,29 @@ export function getPrePostComparison(
     deltas.speakingBandDelta = Number((postSkills.speaking.bandScore - preSkills.speaking.bandScore).toFixed(1));
   }
 
-  const pedagogicalNote =
-    'Note: Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions. No overall 4-skill band is calculated because Writing and Speaking remain to be implemented in full (Writing is pending implementation).';
+  // 4-Skill Overall Band calculations
+  const overallBandPre = calculateIeltsFourSkillOverallBand(
+    preSkills.listening.bandScore,
+    preSkills.reading.bandScore,
+    preSkills.writing.bandScore,
+    preSkills.speaking.bandScore
+  );
+
+  const overallBandPost = calculateIeltsFourSkillOverallBand(
+    postSkills.listening.bandScore,
+    postSkills.reading.bandScore,
+    postSkills.writing.bandScore,
+    postSkills.speaking.bandScore
+  );
+
+  if (overallBandPre !== undefined && overallBandPost !== undefined) {
+    deltas.overallBandDelta = Number((overallBandPost - overallBandPre).toFixed(1));
+  }
+
+  const allFourComplete = overallBandPre !== undefined && overallBandPost !== undefined;
+  const pedagogicalNote = allFourComplete
+    ? 'Note: Overall Band score represents the official IELTS arithmetic mean across Listening, Reading, Writing, and Speaking, rounded according to official IELTS half-band rounding rules. Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions.'
+    : 'Note: Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions. No overall 4-skill band is calculated because Writing and Speaking remain to be implemented in full or completed.';
 
   return {
     studentId,
@@ -870,6 +995,8 @@ export function getPrePostComparison(
       skills: postSkills,
     },
     deltas,
+    overallBandPre,
+    overallBandPost,
     pedagogicalNote,
   };
 }
@@ -925,6 +1052,36 @@ function populateAssignmentSkillResults(
       mode: listeningAtt.mode as TestMode,
       wasInterrupted: Boolean(listeningAtt.was_interrupted),
       isFirstAttempt: Boolean(listeningAtt.is_first_attempt),
+    };
+  }
+
+  // Check writing attempts for this assignment or linked package attempt
+  const writingAtt = db.prepare(`
+    SELECT wa.*, wt1.title as task1_title, wt2.title as task2_title
+    FROM writing_attempts wa
+    LEFT JOIN writing_tasks wt1 ON wa.task1_id = wt1.id
+    LEFT JOIN writing_tasks wt2 ON wa.task2_id = wt2.id
+    WHERE (wa.assignment_id = ? OR wa.package_attempt_id IN (
+      SELECT id FROM package_attempts WHERE assignment_id = ?
+    ))
+    AND wa.user_id = ?
+    ORDER BY wa.started_at DESC LIMIT 1
+  `).get(assignmentId, assignmentId, studentId) as any;
+
+  if (writingAtt) {
+    const isCompleted = writingAtt.status === 'submitted' || writingAtt.status === 'expired';
+    const titleParts = [writingAtt.task1_title, writingAtt.task2_title].filter(Boolean);
+    skills.writing = {
+      skill: 'writing',
+      status: isCompleted ? 'completed' : 'in_progress',
+      testTitle: titleParts.length > 0 ? titleParts.join(' & ') : 'Writing Assessment',
+      bandScore: writingAtt.overall_writing_band !== null && writingAtt.overall_writing_band !== undefined ? writingAtt.overall_writing_band : undefined,
+      writingTask1Band: writingAtt.task1_band !== null && writingAtt.task1_band !== undefined ? writingAtt.task1_band : undefined,
+      writingTask2Band: writingAtt.task2_band !== null && writingAtt.task2_band !== undefined ? writingAtt.task2_band : undefined,
+      writingOverallBand: writingAtt.overall_writing_band !== null && writingAtt.overall_writing_band !== undefined ? writingAtt.overall_writing_band : undefined,
+      assessor: 'AI Assessment',
+      completedAt: formatMakassarDateTime(writingAtt.submitted_at || writingAtt.started_at),
+      mode: writingAtt.mode as TestMode,
     };
   }
 

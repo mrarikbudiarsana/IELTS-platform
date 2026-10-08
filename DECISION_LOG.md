@@ -219,3 +219,30 @@ This log tracks architectural and product decisions, reversible implementation c
   - **Audio Recording Optionality**: Voice recording upload is entirely optional. Full evaluations and band scores can be completed and submitted purely from live teacher notes without audio.
   - **Audio Retention & Disclosure Policy**: If an audio recording is uploaded, candidate disclosure is confirmed via `recordingRetentionAcknowledged = true`. Platform policy enforces strict learner/teacher access controls and a 90-day data retention period, after which audio artifacts are scheduled for deletion.
 
+---
+
+### Decision 17: Official IELTS Writing Scoring Weighting & 4-Skill Overall Band Calculation
+- **Context**: Milestone 5 introduces Academic and General Training Task 1 and Task 2 essays, full 60-minute mock exams, and complete four-skill diagnostic reporting.
+- **Official IELTS Scoring Standards**:
+  - **Task 1 Band**: Arithmetic mean of the 4 criteria: Task Achievement (TA), Coherence & Cohesion (CC), Lexical Resource (LR), and Grammatical Range & Accuracy (GRA), rounded to the nearest half or whole band using official IELTS rounding rules.
+  - **Task 2 Band**: Arithmetic mean of the 4 criteria: Task Response (TR), Coherence & Cohesion (CC), Lexical Resource (LR), and Grammatical Range & Accuracy (GRA), rounded to the nearest half or whole band.
+  - **Full Writing Mock Band (Official 1:2 Weighting)**: As specified in official IELTS candidate guidelines, Task 2 contributes twice as much as Task 1 toward the writing score:
+    $$\text{Writing Band} = \text{roundIeltsBand}\left(\frac{\text{Task 1 Band} + 2 \times \text{Task 2 Band}}{3}\right)$$
+  - **Four-Skill IELTS Overall Band**:
+    $$\text{Overall Band} = \text{roundIeltsBand}\left(\frac{\text{Listening} + \text{Reading} + \text{Writing} + \text{Speaking}}{4}\right)$$
+    Using official IELTS rounding:
+    - Fractional part $< 0.25 \to$ round down to whole band (e.g., $6.125 \to 6.0$).
+    - Fractional part $\ge 0.25$ and $< 0.75 \to$ round to half band (e.g., $6.25 \to 6.5$, $6.625 \to 6.5$).
+    - Fractional part $\ge 0.75 \to$ round up to next whole band (e.g., $6.75 \to 7.0$).
+- **Integrity Invariant**: When any skill slot is unconfigured or incomplete, overall four-skill scores are not fabricated; the diagnostic report displays completion progress and explicit pedagogical notes.
+
+---
+
+### Decision 18: Auditable AI Assessment Allowance Ledger & Visual Grounding Contract
+- **Context**: Milestone 5 requires automated AI assessment without inventing commercial payment terms or subscription packages, while preventing hallucinated scoring on visual charts and defending against prompt injection.
+- **Architectural Solution**:
+  - **Non-Commercial Allowance Ledger (`writing_allowance_ledger`)**: Stores transactional credit balance per user. Transaction types: `grant`, `reservation`, `consumption`, `release`. 1 credit = 1 task evaluation.
+  - **Atomic & Fault-Tolerant Reservation**: When an assessment is requested, 1 credit is atomically reserved. If AI generation succeeds, the credit is permanently consumed; if the background task fails or times out, the credit is automatically refunded.
+  - **Visual Grounding Contract (`teacherVisualDescription`)**: Academic Task 1 prompts require teacher-verified factual descriptions of key trends, high/low values, and axes. This ground truth is passed to the AI prompt so the evaluator verifies whether candidate claims match the actual chart rather than hallucinated assumptions.
+  - **Confidentiality & Prompt Injection Defense**: Candidate essays are strictly wrapped in `<candidate_essay>` XML delimiters with explicit instructions that text inside is untrusted candidate prose. Teacher guidance notes and model responses are scrubbed on server responses to learners until authorized review.
+

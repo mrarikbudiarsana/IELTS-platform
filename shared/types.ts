@@ -1,7 +1,7 @@
 export type UserRole = 'student' | 'teacher' | 'admin';
 
 export type ReadingTestType = 'academic' | 'general';
-export type SkillType = 'reading' | 'listening';
+export type SkillType = 'reading' | 'listening' | 'writing' | 'speaking';
 export type TestMode = 'practice' | 'mock';
 export type PublicationStatus = 'draft' | 'published' | 'archived';
 export type AttemptStatus = 'in_progress' | 'submitted' | 'expired';
@@ -393,10 +393,16 @@ export interface TestPackage {
   readingTestId?: string;
   readingVersionId?: string;
   readingTestTitle?: string;
+  writingTask1Id?: string;
+  writingTask1VersionId?: string;
+  writingTask1Title?: string;
+  writingTask2Id?: string;
+  writingTask2VersionId?: string;
+  writingTask2Title?: string;
   speakingSetId?: string;
   speakingSetVersionId?: string;
   speakingSetTitle?: string;
-  writingStatus: 'not_implemented';
+  writingStatus: 'configured' | 'not_implemented';
   speakingStatus: 'configured' | 'not_implemented';
   createdById: string;
   createdAt: string;
@@ -411,7 +417,7 @@ export interface Assignment {
   purpose: AssignmentPurpose;
   packageId?: string;
   packageTitle?: string;
-  skill?: 'reading' | 'listening' | 'speaking' | 'all';
+  skill?: 'reading' | 'listening' | 'writing' | 'speaking' | 'all';
   testId?: string;
   testTitle?: string;
   versionId?: string;
@@ -432,6 +438,8 @@ export interface Assignment {
   lastAttemptBand?: number;
   speakingSessionStatus?: 'awaiting_session' | 'awaiting_feedback' | 'feedback_available';
   speakingAssessmentId?: string;
+  writingAttemptId?: string;
+  writingAssessmentStatus?: 'not_started' | 'queued' | 'assessed';
 }
 
 export interface PackageAttempt {
@@ -447,6 +455,8 @@ export interface PackageAttempt {
   readingAttempt?: ReadingAttempt;
   listeningAttemptId?: string;
   listeningAttempt?: ListeningAttempt;
+  writingAttemptId?: string;
+  writingAttempt?: WritingAttempt;
   speakingAssessmentId?: string;
   speakingAssessment?: SpeakingAssessment;
   startedAt: string;
@@ -466,10 +476,13 @@ export interface SkillComparisonItem {
   mode?: TestMode;
   wasInterrupted?: boolean;
   isFirstAttempt?: boolean;
-  criteria?: SpeakingCriteriaScores;
-  assessor?: string; // e.g. 'Teacher assessment'
-  sessionType?: 'complete_mock' | 'partial_practice';
+  criteria?: any;
+  assessor?: string; // e.g. 'Teacher assessment', 'AI Assessment'
+  sessionType?: string;
   correctionCount?: number;
+  writingTask1Band?: number;
+  writingTask2Band?: number;
+  writingOverallBand?: number;
 }
 
 export interface PrePostComparisonReport {
@@ -495,8 +508,12 @@ export interface PrePostComparisonReport {
     readingBandDelta?: number;
     listeningRawDelta?: number;
     listeningBandDelta?: number;
+    writingBandDelta?: number;
     speakingBandDelta?: number;
+    overallBandDelta?: number;
   };
+  overallBandPre?: number;
+  overallBandPost?: number;
   pedagogicalNote: string;
 }
 
@@ -611,3 +628,195 @@ export interface SpeakingAssessment {
   createdAt: string;
   updatedAt: string;
 }
+
+// -------------------------------------------------------------
+// WRITING TEST & AI ASSESSMENT MODELS (MILESTONE 5)
+// -------------------------------------------------------------
+
+export type WritingTaskType = 'academic_task_1' | 'gt_task_1' | 'task_2';
+export type WritingTestType = 'academic' | 'general' | 'both';
+export type WritingTaskNumber = 1 | 2;
+export type WritingTaskSubtype =
+  | 'chart'
+  | 'table'
+  | 'map'
+  | 'process'
+  | 'diagram'
+  | 'letter_formal'
+  | 'letter_semi_formal'
+  | 'letter_personal'
+  | 'opinion'
+  | 'discussion'
+  | 'problem_solution'
+  | 'direct_question'
+  | 'general_essay';
+
+export interface WritingTaskVersion {
+  id: string;
+  taskId: string;
+  versionNumber: number;
+  status: PublicationStatus;
+  taskType: WritingTaskType;
+  taskNumber: WritingTaskNumber;
+  testType: WritingTestType;
+  subtype?: WritingTaskSubtype;
+  title: string;
+  prompt: string;
+  instructions: string;
+  minWords: number; // 150 for Task 1, 250 for Task 2
+  suggestedTimeMinutes: number; // 20 for Task 1, 40 for Task 2
+  images?: string[];
+  structuredData?: any;
+  teacherVisualDescription?: string; // Teacher-verified grounding description for factual accuracy
+  modelResponse?: string; // Model response (released only at review stage)
+  teacherAssessmentGuidance?: string; // Confidential teacher notes - NEVER exposed to student
+  validationErrors?: string[];
+  publishedAt?: string;
+  createdAt: string;
+}
+
+export interface WritingTask {
+  id: string;
+  title: string;
+  taskType: WritingTaskType;
+  taskNumber: WritingTaskNumber;
+  testType: WritingTestType;
+  currentVersionNumber: number;
+  status: PublicationStatus;
+  latestVersionId: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  versions?: WritingTaskVersion[];
+  subtype?: WritingTaskSubtype;
+  prompt?: string;
+  instructions?: string;
+  minWords?: number;
+  suggestedTimeMinutes?: number;
+  hasTeacherVisual?: boolean;
+}
+
+export interface WritingCriterionItem {
+  score: number; // 1.0 - 9.0 in 0.5 increments
+  feedback: string;
+}
+
+export interface WritingCriteriaScores {
+  taskAchievementOrResponse: WritingCriterionItem;
+  coherenceCohesion: WritingCriterionItem;
+  lexicalResource: WritingCriterionItem;
+  grammaticalRange: WritingCriterionItem;
+}
+
+export interface WritingEvidenceQuote {
+  criterion: 'task_achievement_or_response' | 'coherence_cohesion' | 'lexical_resource' | 'grammatical_range';
+  quote: string;
+  comment: string;
+}
+
+export interface WritingCorrection {
+  original: string;
+  corrected: string;
+  explanation: string;
+  type: 'grammar' | 'vocabulary' | 'cohesion' | 'punctuation';
+}
+
+export interface WritingAiAssessment {
+  id: string;
+  responseId: string;
+  attemptId: string;
+  taskNumber: WritingTaskNumber;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  taskType: WritingTaskType;
+  taskBand?: number;
+  criteria?: {
+    taskAchievementOrResponse: number;
+    coherenceCohesion: number;
+    lexicalResource: number;
+    grammaticalRange: number;
+  };
+  criterionFeedback?: {
+    taskAchievementOrResponse?: string;
+    coherenceCohesion?: string;
+    lexicalResource?: string;
+    grammaticalRange?: string;
+  };
+  evidenceQuotes?: WritingEvidenceQuote[];
+  strengths?: string[];
+  improvements?: string[];
+  corrections?: WritingCorrection[];
+  overallFeedback?: string;
+  isSimulated?: boolean;
+  errorMessage?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface WritingResponse {
+  id: string;
+  attemptId: string;
+  taskId: string;
+  taskVersionId: string;
+  taskNumber: WritingTaskNumber;
+  responseText: string;
+  wordCount: number;
+  version: number;
+  parentResponseId?: string;
+  isLocked: boolean;
+  aiAssessment?: WritingAiAssessment;
+  lastSavedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WritingAttempt {
+  id: string;
+  userId: string;
+  userName?: string;
+  mode: TestMode;
+  assignmentId?: string;
+  packageAttemptId?: string;
+  task1Id?: string;
+  task1VersionId?: string;
+  task1Title?: string;
+  task2Id?: string;
+  task2VersionId?: string;
+  task2Title?: string;
+  status: AttemptStatus;
+  task1Response?: WritingResponse;
+  task2Response?: WritingResponse;
+  durationMinutes: number; // 20, 40, or 60
+  deadlineAt?: string; // Shared timer deadline for mock
+  task1Band?: number;
+  task2Band?: number;
+  overallWritingBand?: number; // Weighted average (Task 1 + 2*Task 2) / 3
+  startedAt: string;
+  submittedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WritingAllowanceLedger {
+  id: string;
+  userId: string;
+  amount: number; // + for grant/release, - for reserve/consume
+  balanceAfter: number;
+  transactionType: 'grant' | 'reservation' | 'consumption' | 'release';
+  assessmentId?: string;
+  responseId?: string;
+  idempotencyKey?: string;
+  notes?: string;
+  createdById?: string;
+  createdAt: string;
+}
+
+export interface WritingAllowanceBalance {
+  userId?: string;
+  totalGranted: number;
+  totalConsumed: number;
+  totalReserved: number;
+  available: number;
+}
+

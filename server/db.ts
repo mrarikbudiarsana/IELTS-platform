@@ -374,6 +374,148 @@ export function initDatabase() {
       FOREIGN KEY (teacher_id) REFERENCES users(id)
     );
 
+    -- Writing Tasks (container)
+    CREATE TABLE IF NOT EXISTS writing_tasks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      task_type TEXT NOT NULL CHECK(task_type IN ('academic_task_1', 'gt_task_1', 'task_2')),
+      task_number INTEGER NOT NULL CHECK(task_number IN (1, 2)),
+      test_type TEXT NOT NULL CHECK(test_type IN ('academic', 'general', 'both')),
+      current_version_number INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'published', 'archived')),
+      created_by_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (created_by_id) REFERENCES users(id)
+    );
+
+    -- Writing Task Versions (immutable snapshot when published)
+    CREATE TABLE IF NOT EXISTS writing_task_versions (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      version_number INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'archived')),
+      task_type TEXT NOT NULL CHECK(task_type IN ('academic_task_1', 'gt_task_1', 'task_2')),
+      task_number INTEGER NOT NULL CHECK(task_number IN (1, 2)),
+      test_type TEXT NOT NULL CHECK(test_type IN ('academic', 'general', 'both')),
+      subtype TEXT,
+      title TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      instructions TEXT NOT NULL,
+      min_words INTEGER NOT NULL DEFAULT 150,
+      suggested_time_minutes INTEGER NOT NULL DEFAULT 20,
+      images_json TEXT,
+      structured_data_json TEXT,
+      teacher_visual_description TEXT,
+      model_response TEXT,
+      teacher_assessment_guidance TEXT,
+      validation_errors_json TEXT,
+      published_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (task_id) REFERENCES writing_tasks(id) ON DELETE CASCADE,
+      UNIQUE(task_id, version_number)
+    );
+
+    -- Student Writing Attempts
+    CREATE TABLE IF NOT EXISTS writing_attempts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      mode TEXT NOT NULL CHECK(mode IN ('practice', 'mock')),
+      assignment_id TEXT,
+      package_attempt_id TEXT,
+      task1_id TEXT,
+      task1_version_id TEXT,
+      task2_id TEXT,
+      task2_version_id TEXT,
+      status TEXT NOT NULL DEFAULT 'in_progress' CHECK(status IN ('in_progress', 'submitted', 'expired')),
+      duration_minutes INTEGER NOT NULL DEFAULT 60,
+      deadline_at TEXT,
+      task1_band REAL,
+      task2_band REAL,
+      overall_writing_band REAL,
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      submitted_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+      FOREIGN KEY (package_attempt_id) REFERENCES package_attempts(id),
+      FOREIGN KEY (task1_id) REFERENCES writing_tasks(id),
+      FOREIGN KEY (task1_version_id) REFERENCES writing_task_versions(id),
+      FOREIGN KEY (task2_id) REFERENCES writing_tasks(id),
+      FOREIGN KEY (task2_version_id) REFERENCES writing_task_versions(id)
+    );
+
+    -- Student Writing Responses (autosaved drafts and locked versions)
+    CREATE TABLE IF NOT EXISTS writing_responses (
+      id TEXT PRIMARY KEY,
+      attempt_id TEXT NOT NULL,
+      task_id TEXT NOT NULL,
+      task_version_id TEXT NOT NULL,
+      task_number INTEGER NOT NULL CHECK(task_number IN (1, 2)),
+      response_text TEXT NOT NULL DEFAULT '',
+      word_count INTEGER NOT NULL DEFAULT 0,
+      version INTEGER NOT NULL DEFAULT 1,
+      parent_response_id TEXT,
+      is_locked INTEGER NOT NULL DEFAULT 0,
+      last_saved_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (attempt_id) REFERENCES writing_attempts(id) ON DELETE CASCADE,
+      FOREIGN KEY (task_id) REFERENCES writing_tasks(id),
+      FOREIGN KEY (task_version_id) REFERENCES writing_task_versions(id),
+      FOREIGN KEY (parent_response_id) REFERENCES writing_responses(id)
+    );
+
+    -- Writing AI Assessments (queued evaluation results)
+    CREATE TABLE IF NOT EXISTS writing_assessments (
+      id TEXT PRIMARY KEY,
+      response_id TEXT NOT NULL,
+      attempt_id TEXT NOT NULL,
+      task_number INTEGER NOT NULL CHECK(task_number IN (1, 2)),
+      status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued', 'processing', 'completed', 'failed')),
+      task_type TEXT NOT NULL,
+      task_band REAL,
+      score_ta_tr REAL,
+      score_cc REAL,
+      score_lr REAL,
+      score_gra REAL,
+      feedback_ta_tr TEXT,
+      feedback_cc TEXT,
+      feedback_lr TEXT,
+      feedback_gra TEXT,
+      evidence_quotes_json TEXT,
+      strengths_json TEXT,
+      improvements_json TEXT,
+      corrections_json TEXT,
+      overall_feedback TEXT,
+      is_simulated INTEGER NOT NULL DEFAULT 0,
+      error_message TEXT,
+      prompt_tokens INTEGER,
+      completion_tokens INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at TEXT,
+      FOREIGN KEY (response_id) REFERENCES writing_responses(id) ON DELETE CASCADE,
+      FOREIGN KEY (attempt_id) REFERENCES writing_attempts(id) ON DELETE CASCADE
+    );
+
+    -- Auditable Allowance Ledger for AI assessments
+    CREATE TABLE IF NOT EXISTS writing_allowance_ledger (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      balance_after INTEGER NOT NULL,
+      transaction_type TEXT NOT NULL CHECK(transaction_type IN ('grant', 'reservation', 'consumption', 'release')),
+      assessment_id TEXT,
+      response_id TEXT,
+      idempotency_key TEXT UNIQUE,
+      notes TEXT,
+      created_by_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (created_by_id) REFERENCES users(id)
+    );
+
     -- Indices for high performance
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_reading_tests_status ON reading_tests(status, test_type);
@@ -397,6 +539,13 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_speaking_assessments_teacher ON speaking_assessments(teacher_id, status);
     CREATE INDEX IF NOT EXISTS idx_speaking_assessments_assignment ON speaking_assessments(assignment_id, student_id);
     CREATE INDEX IF NOT EXISTS idx_speaking_corrections_assessment ON speaking_score_corrections(assessment_id);
+
+    CREATE INDEX IF NOT EXISTS idx_writing_tasks_status ON writing_tasks(status, task_type);
+    CREATE INDEX IF NOT EXISTS idx_writing_task_versions ON writing_task_versions(task_id, version_number);
+    CREATE INDEX IF NOT EXISTS idx_writing_attempts_user ON writing_attempts(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_writing_responses_attempt ON writing_responses(attempt_id, task_number);
+    CREATE INDEX IF NOT EXISTS idx_writing_assessments_response ON writing_assessments(response_id);
+    CREATE INDEX IF NOT EXISTS idx_writing_allowance_user ON writing_allowance_ledger(user_id);
   `);
 
   // Safe column migrations for assignment_id
@@ -424,8 +573,11 @@ export function initDatabase() {
     if (!pkgAttemptCols.some((col) => col.name === 'speaking_assessment_id')) {
       db.exec('ALTER TABLE package_attempts ADD COLUMN speaking_assessment_id TEXT REFERENCES speaking_assessments(id);');
     }
+    if (!pkgAttemptCols.some((col) => col.name === 'writing_attempt_id')) {
+      db.exec('ALTER TABLE package_attempts ADD COLUMN writing_attempt_id TEXT REFERENCES writing_attempts(id);');
+    }
   } catch (err) {
-    console.warn('Note: package_attempts.speaking_assessment_id check/alter', err);
+    console.warn('Note: package_attempts column check/alter', err);
   }
 
   try {
@@ -436,14 +588,26 @@ export function initDatabase() {
     if (!testPkgCols.some((col) => col.name === 'speaking_set_version_id')) {
       db.exec('ALTER TABLE test_packages ADD COLUMN speaking_set_version_id TEXT REFERENCES speaking_set_versions(id);');
     }
+    if (!testPkgCols.some((col) => col.name === 'writing_task1_id')) {
+      db.exec('ALTER TABLE test_packages ADD COLUMN writing_task1_id TEXT REFERENCES writing_tasks(id);');
+    }
+    if (!testPkgCols.some((col) => col.name === 'writing_task1_version_id')) {
+      db.exec('ALTER TABLE test_packages ADD COLUMN writing_task1_version_id TEXT REFERENCES writing_task_versions(id);');
+    }
+    if (!testPkgCols.some((col) => col.name === 'writing_task2_id')) {
+      db.exec('ALTER TABLE test_packages ADD COLUMN writing_task2_id TEXT REFERENCES writing_tasks(id);');
+    }
+    if (!testPkgCols.some((col) => col.name === 'writing_task2_version_id')) {
+      db.exec('ALTER TABLE test_packages ADD COLUMN writing_task2_version_id TEXT REFERENCES writing_task_versions(id);');
+    }
   } catch (err) {
-    console.warn('Note: test_packages speaking columns check/alter', err);
+    console.warn('Note: test_packages writing/speaking columns check/alter', err);
   }
 
   // Safe migration for assignments.skill check constraint
   try {
     const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='assignments'").get() as any;
-    if (tableSql && !tableSql.sql.includes("'speaking'")) {
+    if (tableSql && (!tableSql.sql.includes("'speaking'") || !tableSql.sql.includes("'writing'"))) {
       db.pragma('foreign_keys = OFF');
       db.exec(`
         CREATE TABLE assignments_new (
@@ -453,7 +617,7 @@ export function initDatabase() {
           instructions TEXT,
           purpose TEXT NOT NULL CHECK(purpose IN ('pre_test', 'practice', 'post_test')),
           package_id TEXT,
-          skill TEXT CHECK(skill IN ('reading', 'listening', 'speaking', 'all')),
+          skill TEXT CHECK(skill IN ('reading', 'listening', 'writing', 'speaking', 'all')),
           test_id TEXT,
           version_id TEXT,
           mode TEXT NOT NULL DEFAULT 'mock' CHECK(mode IN ('mock', 'practice')),
