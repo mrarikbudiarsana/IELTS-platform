@@ -13,6 +13,7 @@ import { ListeningEditorView } from './views/ListeningEditorView';
 import { AdminUsersView } from './views/AdminUsersView';
 import { StudentClassDashboardView } from './views/StudentClassDashboardView';
 import { TeacherClassManagementView } from './views/TeacherClassManagementView';
+import { TeacherSpeakingAssessmentView } from './views/TeacherSpeakingAssessmentView';
 import { LoginModal } from './views/LoginModal';
 import { ElevateModal } from './views/ElevateModal';
 
@@ -199,6 +200,11 @@ const AppContent: React.FC = () => {
           <TeacherClassManagementView />
         )}
 
+        {/* Teacher Speaking Assessment */}
+        {currentView === 'teacher_speaking' && (
+          <TeacherSpeakingAssessmentView />
+        )}
+
         {/* Teacher Dashboard */}
         {(currentView === 'teacher_editor' || currentView === 'teacher_attempts') && (
           <TeacherDashboardView
@@ -252,7 +258,7 @@ const AppContent: React.FC = () => {
               <span>•</span>
               <span>Classes & Journey (M3)</span>
               <span>•</span>
-              <span>Non-Fuzzy Marking & Band Tables</span>
+              <span>Teacher Speaking (M4)</span>
             </div>
           </div>
         </footer>

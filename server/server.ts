@@ -80,6 +80,23 @@ import {
   getPrePostComparison,
   getClassOverview,
 } from './assignmentService';
+import { seedSpeakingDatabase } from './speakingSeed';
+import {
+  createSpeakingSet,
+  updateSpeakingDraftVersion,
+  publishSpeakingSetVersion,
+  forkSpeakingDraftVersion,
+  archiveSpeakingSet,
+  getSpeakingSetById,
+  getSpeakingSetVersionById,
+  listSpeakingSets,
+  recordSpeakingAssessment,
+  releaseSpeakingAssessment,
+  correctReleasedSpeakingScores,
+  getSpeakingAssessmentById,
+  listTeacherAssessmentQueue,
+  listStudentSpeakingAssessments,
+} from './speakingService';
 import { ClassTestType } from '../shared/types';
 
 const app = express();
@@ -957,6 +974,175 @@ app.get('/api/classes/:classId/students/:studentId/comparison', authMiddleware, 
   }
 });
 
+// -------------------------------------------------------------
+// SPEAKING ASSESSMENT & CONTENT EDITOR ROUTES
+// -------------------------------------------------------------
+
+// POST /api/speaking/sets - create speaking set
+app.post('/api/speaking/sets', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const result = createSpeakingSet(req.user!.id, req.body);
+    res.status(201).json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/speaking/sets - list speaking sets
+app.get('/api/speaking/sets', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const sets = listSpeakingSets(req.user!.role, {
+      status: req.query.status as any,
+      includeArchived: req.query.includeArchived === 'true',
+    });
+    res.json({ sets });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/speaking/sets/:id - get single speaking set
+app.get('/api/speaking/sets/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const set = getSpeakingSetById(req.params.id);
+    if (!set) {
+      res.status(404).json({ error: 'Speaking set not found' });
+      return;
+    }
+    res.json({ set });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/speaking/sets/:id/versions/:versionId - get specific speaking version
+app.get('/api/speaking/sets/:id/versions/:versionId', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const version = getSpeakingSetVersionById(req.params.versionId);
+    if (!version) {
+      res.status(404).json({ error: 'Speaking set version not found' });
+      return;
+    }
+    res.json({ version });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/speaking/sets/:id/versions/:versionId - update draft version
+app.put('/api/speaking/sets/:id/versions/:versionId', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const result = updateSpeakingDraftVersion({
+      setId: req.params.id,
+      versionId: req.params.versionId,
+      ...req.body,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sets/:id/publish - publish version
+app.post('/api/speaking/sets/:id/publish', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const { versionId } = req.body;
+    if (!versionId) {
+      res.status(400).json({ error: 'versionId is required' });
+      return;
+    }
+    publishSpeakingSetVersion(req.params.id, versionId);
+    res.json({ message: 'Speaking set version published successfully.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sets/:id/fork - fork new draft
+app.post('/api/speaking/sets/:id/fork', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const version = forkSpeakingDraftVersion(req.params.id);
+    res.status(201).json({ version });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sets/:id/archive - archive set
+app.post('/api/speaking/sets/:id/archive', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    archiveSpeakingSet(req.params.id);
+    res.json({ message: 'Speaking set archived.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/assessments - record draft or release assessment
+app.post('/api/speaking/assessments', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const assessment = recordSpeakingAssessment(req.user!.id, req.body, req.user!.role === 'admin');
+    res.status(201).json({ assessment });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/assessments/:id/release - explicit release
+app.post('/api/speaking/assessments/:id/release', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const assessment = releaseSpeakingAssessment(req.user!.id, req.params.id, req.user!.role === 'admin');
+    res.json({ assessment, message: 'Assessment released successfully to student.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/assessments/:id/correct - correct released scores with audit trail
+app.post('/api/speaking/assessments/:id/correct', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const assessment = correctReleasedSpeakingScores(req.user!.id, req.params.id, req.body, req.user!.role === 'admin');
+    res.json({ assessment, message: 'Speaking scores corrected and audited successfully.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/speaking/assessments/:id - get assessment (draft privacy enforced)
+app.get('/api/speaking/assessments/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const assessment = getSpeakingAssessmentById(req.params.id, req.user!.id, req.user!.role);
+    if (!assessment) {
+      res.status(404).json({ error: 'Assessment not found' });
+      return;
+    }
+    res.json({ assessment });
+  } catch (err: any) {
+    const status = err.message.includes('draft state') || err.message.includes('forbidden') ? 403 : 400;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// GET /api/speaking/teacher/queue - teacher queue
+app.get('/api/speaking/teacher/queue', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const queue = listTeacherAssessmentQueue(req.user!.id, req.query as any, req.user!.role === 'admin');
+    res.json({ queue });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/speaking/my-assessments - student's released assessments
+app.get('/api/speaking/my-assessments', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const assessments = listStudentSpeakingAssessments(req.user!.id);
+    res.json({ assessments });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Serve compiled React frontend if present
 const clientDistPath = path.resolve(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
@@ -972,6 +1158,7 @@ initDatabase();
 seedDatabase();
 seedListeningDatabase();
 seedClassDatabase();
+seedSpeakingDatabase();
 
 app.listen(PORT, () => {
   console.log(`IELTS Platform API server listening on http://localhost:${PORT}`);

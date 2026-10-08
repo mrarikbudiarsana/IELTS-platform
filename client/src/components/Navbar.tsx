@@ -33,7 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="font-bold text-lg tracking-tight leading-tight flex items-center gap-2">
                 IELTS Mastery
                 <span className="text-xs bg-indigo-500/30 text-indigo-300 font-semibold px-2 py-0.5 rounded border border-indigo-400/30">
-                  Reading & Listening
+                  Reading, Listening & Speaking
                 </span>
               </div>
               <div className="text-xs text-slate-400 font-medium">Learn English With Arik</div>
@@ -94,6 +94,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <GraduationCap className="w-4 h-4" />
                   Class Management
+                </button>
+                <button
+                  onClick={() => onNavigate('teacher_speaking')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    currentView === 'teacher_speaking'
+                      ? 'bg-purple-950 text-purple-200 border-b-2 border-purple-500'
+                      : 'text-purple-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="w-4 h-4 text-center">🎙️</span>
+                  Speaking Assessments
                 </button>
                 <button
                   onClick={() => onNavigate('teacher_editor')}

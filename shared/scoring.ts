@@ -283,3 +283,82 @@ export function markStudentAnswer(params: {
 
   return { isCorrect: isMatch, mark: isMatch ? 1 : 0 };
 }
+
+// -------------------------------------------------------------
+// IELTS SPEAKING SCORING & BAND CALCULATION (MILESTONE 4)
+// -------------------------------------------------------------
+
+/**
+ * Official IELTS Speaking Scoring Guidance & Rounding Rule:
+ *
+ * Official Reference:
+ * - IELTS Information for Candidates (ielts.org, British Council, Cambridge Assessment English, IDP IELTS)
+ * - Section: "How IELTS is Scored - Speaking Band Calculation"
+ *
+ * Rule:
+ * 1. The candidate receives an individual band score (1.0 to 9.0 in 0.5 increments) for each of four criteria:
+ *    - Fluency and Coherence (FC)
+ *    - Lexical Resource (LR)
+ *    - Grammatical Range and Accuracy (GRA)
+ *    - Pronunciation (P)
+ * 2. The overall Speaking band score is the arithmetic mean of the four criterion scores:
+ *    mean = (FC + LR + GRA + P) / 4
+ * 3. Rounding convention:
+ *    - If the fractional part is < 0.25, round DOWN to the whole band (.0).
+ *    - If the fractional part is >= 0.25 and < 0.75, round UP to the half band (.5).
+ *    - If the fractional part is >= 0.75, round UP to the next whole band (+1.0).
+ *
+ * Examples:
+ *   (6.0 + 6.0 + 6.0 + 7.0) / 4 = 6.25 -> rounds to 6.5
+ *   (6.0 + 7.0 + 7.0 + 7.0) / 4 = 6.75 -> rounds to 7.0
+ *   (6.0 + 6.5 + 6.0 + 6.0) / 4 = 6.125 -> rounds to 6.0
+ *   (6.0 + 6.5 + 6.5 + 6.5) / 4 = 6.375 -> rounds to 6.5
+ */
+export function calculateIeltsSpeakingBand(
+  fluencyCoherence: number,
+  lexicalResource: number,
+  grammaticalRange: number,
+  pronunciation: number
+): number {
+  const mean = (fluencyCoherence + lexicalResource + grammaticalRange + pronunciation) / 4;
+  const whole = Math.floor(mean);
+  const frac = Number((mean - whole).toFixed(4));
+
+  if (frac < 0.25) {
+    return whole;
+  } else if (frac < 0.75) {
+    return whole + 0.5;
+  } else {
+    return whole + 1.0;
+  }
+}
+
+/**
+ * Validates an individual criterion score.
+ * Permitted values: 1.0 to 9.0 in increments of 0.5.
+ */
+export function validateSpeakingCriterionScore(score: any): { valid: boolean; error?: string } {
+  if (typeof score !== 'number' || isNaN(score)) {
+    return { valid: false, error: 'Criterion score must be a valid number.' };
+  }
+  if (score < 1.0 || score > 9.0) {
+    return { valid: false, error: 'Criterion score must be between 1.0 and 9.0.' };
+  }
+  // Verify 0.5 step
+  const remainder = (score * 10) % 5;
+  if (remainder !== 0) {
+    return { valid: false, error: 'Criterion score must be in whole or half band increments (e.g. 6.0, 6.5).' };
+  }
+  return { valid: true };
+}
+
+/**
+ * Mandatory disclosure notice and data retention policy for session audio recordings.
+ */
+export const SPEAKING_AUDIO_RETENTION_POLICY = {
+  disclosureNotice:
+    'Learner Audio Recording Disclosure: Session audio recordings are strictly confidential and collected solely for pedagogical review, teacher evaluation, and candidate self-reflection. Recordings are private between the student and their authorized teacher.',
+  retentionPeriodDays: 90,
+  deletionNotice:
+    'Recordings are automatically flagged for deletion 90 days after assessment release or upon student removal from the class. Students may request immediate removal of their audio at any time without affecting entered criterion scores.',
+};

@@ -37,19 +37,39 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
       <tr className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
         <td className="px-4 py-3 font-semibold text-slate-800 capitalize flex items-center space-x-2">
           <span>{skillName}</span>
+          {skillName === 'Speaking' && (
+            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded">
+              Teacher Led
+            </span>
+          )}
         </td>
 
         {/* Pre-Test Column */}
         <td className="px-4 py-3 text-sm">
           {pre.status === 'completed' ? (
             <div>
-              <div className="font-semibold text-slate-800">
-                Band {pre.bandScore?.toFixed(1) || '—'}
-                <span className="text-xs font-normal text-slate-500 ml-1.5">
-                  ({pre.rawScore}/{pre.totalQuestions} raw)
-                </span>
+              <div className="font-semibold text-slate-800 flex items-center space-x-1.5">
+                <span>Band {pre.bandScore !== undefined ? pre.bandScore.toFixed(1) : '—'}</span>
+                {pre.rawScore !== undefined && pre.totalQuestions !== undefined && (
+                  <span className="text-xs font-normal text-slate-500">
+                    ({pre.rawScore}/{pre.totalQuestions} raw)
+                  </span>
+                )}
+                {pre.assessor && (
+                  <span className="text-[11px] font-normal px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    {pre.assessor}
+                  </span>
+                )}
               </div>
-              <div className="text-xs text-slate-500">{pre.testTitle}</div>
+              {pre.criteria && (
+                <div className="text-[11px] text-slate-600 mt-0.5 font-mono">
+                  FC: {pre.criteria.fluencyCoherence ?? '—'} | LR: {pre.criteria.lexicalResource ?? '—'} | GRA: {pre.criteria.grammaticalRange ?? '—'} | P: {pre.criteria.pronunciation ?? '—'}
+                  {Boolean(pre.correctionCount) && pre.correctionCount! > 0 && (
+                    <span className="text-amber-600 ml-1 font-sans">({pre.correctionCount} score audit)</span>
+                  )}
+                </div>
+              )}
+              <div className="text-xs text-slate-500 mt-0.5">{pre.testTitle}</div>
               <div className="text-xs text-slate-400">{pre.completedAt}</div>
             </div>
           ) : (
@@ -63,13 +83,28 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
         <td className="px-4 py-3 text-sm">
           {post.status === 'completed' ? (
             <div>
-              <div className="font-semibold text-slate-800">
-                Band {post.bandScore?.toFixed(1) || '—'}
-                <span className="text-xs font-normal text-slate-500 ml-1.5">
-                  ({post.rawScore}/{post.totalQuestions} raw)
-                </span>
+              <div className="font-semibold text-slate-800 flex items-center space-x-1.5">
+                <span>Band {post.bandScore !== undefined ? post.bandScore.toFixed(1) : '—'}</span>
+                {post.rawScore !== undefined && post.totalQuestions !== undefined && (
+                  <span className="text-xs font-normal text-slate-500">
+                    ({post.rawScore}/{post.totalQuestions} raw)
+                  </span>
+                )}
+                {post.assessor && (
+                  <span className="text-[11px] font-normal px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    {post.assessor}
+                  </span>
+                )}
               </div>
-              <div className="text-xs text-slate-500">{post.testTitle}</div>
+              {post.criteria && (
+                <div className="text-[11px] text-slate-600 mt-0.5 font-mono">
+                  FC: {post.criteria.fluencyCoherence ?? '—'} | LR: {post.criteria.lexicalResource ?? '—'} | GRA: {post.criteria.grammaticalRange ?? '—'} | P: {post.criteria.pronunciation ?? '—'}
+                  {Boolean(post.correctionCount) && post.correctionCount! > 0 && (
+                    <span className="text-amber-600 ml-1 font-sans">({post.correctionCount} score audit)</span>
+                  )}
+                </div>
+              )}
+              <div className="text-xs text-slate-500 mt-0.5">{post.testTitle}</div>
               <div className="text-xs text-slate-400">{post.completedAt}</div>
             </div>
           ) : (
@@ -94,9 +129,11 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
               >
                 {(bandDelta || 0) > 0 ? `+${bandDelta}` : bandDelta ?? '0.0'} Band
               </span>
-              <span className="text-xs text-slate-500 mt-0.5">
-                {(rawDelta || 0) > 0 ? `+${rawDelta}` : rawDelta ?? '0'} raw
-              </span>
+              {rawDelta !== undefined && (
+                <span className="text-xs text-slate-500 mt-0.5">
+                  {(rawDelta || 0) > 0 ? `+${rawDelta}` : rawDelta ?? '0'} raw
+                </span>
+              )}
             </div>
           ) : (
             <span className="text-xs text-slate-400 italic">Pending completion</span>
@@ -181,7 +218,9 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                 {renderSkillRow(
                   'Speaking',
                   report.preTest.skills.speaking,
-                  report.postTest.skills.speaking
+                  report.postTest.skills.speaking,
+                  undefined,
+                  report.deltas.speakingBandDelta
                 )}
               </tbody>
             </table>

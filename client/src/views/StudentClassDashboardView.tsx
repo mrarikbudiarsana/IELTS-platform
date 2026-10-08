@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { ClassItem, Assignment, PrePostComparisonReport } from '../types';
+import { ClassItem, Assignment, PrePostComparisonReport, SpeakingAssessment } from '../types';
 import { formatMakassarDateTime } from '../../../shared/dateUtils';
 import { PrePostComparisonModal } from './PrePostComparisonModal';
+import { SpeakingFeedbackModal } from './SpeakingFeedbackModal';
 
 interface StudentClassDashboardViewProps {
   onStartReading: (testId: string, mode: 'practice' | 'mock', assignmentId?: string, packageAttemptId?: string) => void;
@@ -32,6 +33,9 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
   // Comparison Report Modal State
   const [comparisonReport, setComparisonReport] = useState<PrePostComparisonReport | null>(null);
   const [loadingReport, setLoadingReport] = useState<boolean>(false);
+
+  // Speaking Feedback Modal State
+  const [speakingModalAssessment, setSpeakingModalAssessment] = useState<SpeakingAssessment | null>(null);
 
   useEffect(() => {
     loadClasses();
@@ -435,7 +439,31 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                         </div>
 
                         <div>
-                          {a.studentStatus === 'submitted' ? (
+                          {a.skill === 'speaking' ? (
+                            a.studentStatus === 'submitted' && a.speakingAssessmentId ? (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await api.getSpeakingAssessment(a.speakingAssessmentId!);
+                                    setSpeakingModalAssessment(res.assessment);
+                                  } catch (err: any) {
+                                    alert(err.message);
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
+                              >
+                                View Speaking Feedback
+                              </button>
+                            ) : a.studentStatus === 'in_progress' ? (
+                              <span className="px-3 py-1.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium">
+                                Teacher Review in Progress
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1.5 rounded bg-slate-100 text-slate-600 text-xs font-medium">
+                                In-Class / Online Session
+                              </span>
+                            )
+                          ) : a.studentStatus === 'submitted' ? (
                             <button
                               onClick={() => {
                                 if (a.activeAttemptId) {
@@ -534,6 +562,15 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
         <PrePostComparisonModal
           report={comparisonReport}
           onClose={() => setComparisonReport(null)}
+        />
+      )}
+
+      {/* Speaking Feedback Modal */}
+      {speakingModalAssessment && (
+        <SpeakingFeedbackModal
+          assessment={speakingModalAssessment}
+          onClose={() => setSpeakingModalAssessment(null)}
+          isTeacher={false}
         />
       )}
     </div>

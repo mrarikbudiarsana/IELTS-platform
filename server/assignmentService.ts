@@ -11,11 +11,13 @@ import {
   TestMode,
   PrePostComparisonReport,
   SkillComparisonItem,
+  SpeakingAssessment,
 } from '../shared/types';
 import { isStudentInClass } from './classService';
 import { formatMakassarDateTime, isOverdue } from '../shared/dateUtils';
 import { startOrResumeAttempt } from './attemptService';
 import { startOrResumeListeningAttempt } from './listeningAttemptService';
+import { getSpeakingAssessmentById } from './speakingService';
 
 // -------------------------------------------------------------
 // TEST PACKAGES (4-SKILL SLOTS / FIXED VERSIONS)
@@ -31,6 +33,8 @@ export function createTestPackage(
     listeningVersionId?: string;
     readingTestId?: string;
     readingVersionId?: string;
+    speakingSetId?: string;
+    speakingSetVersionId?: string;
   }
 ): TestPackage {
   if (!data.title || !data.title.trim()) {
@@ -53,16 +57,27 @@ export function createTestPackage(
     }
   }
 
+  // Validate speaking set version if provided
+  if (data.speakingSetId && !data.speakingSetVersionId) {
+    const speakingVersion = db.prepare('SELECT id FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1').get(data.speakingSetId) as any;
+    if (speakingVersion) {
+      data.speakingSetVersionId = speakingVersion.id;
+    }
+  }
+
+  const speakingStatus = data.speakingSetId ? 'configured' : 'not_implemented';
+
   const id = uuidv4();
   db.prepare(`
     INSERT INTO test_packages (
       id, title, package_type, test_type,
       listening_test_id, listening_version_id,
       reading_test_id, reading_version_id,
+      speaking_set_id, speaking_set_version_id,
       writing_status, speaking_status,
       created_by_id, created_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'not_implemented', 'not_implemented', ?, datetime('now'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_implemented', ?, ?, datetime('now'))
   `).run(
     id,
     data.title.trim(),
@@ -72,6 +87,9 @@ export function createTestPackage(
     data.listeningVersionId || null,
     data.readingTestId || null,
     data.readingVersionId || null,
+    data.speakingSetId || null,
+    data.speakingSetVersionId || null,
+    speakingStatus,
     teacherId
   );
 
@@ -82,10 +100,12 @@ export function getTestPackageById(packageId: string): TestPackage {
   const row = db.prepare(`
     SELECT tp.*,
       rt.title as reading_test_title,
-      lt.title as listening_test_title
+      lt.title as listening_test_title,
+      ss.title as speaking_set_title
     FROM test_packages tp
     LEFT JOIN reading_tests rt ON tp.reading_test_id = rt.id
     LEFT JOIN listening_tests lt ON tp.listening_test_id = lt.id
+    LEFT JOIN speaking_sets ss ON tp.speaking_set_id = ss.id
     WHERE tp.id = ?
   `).get(packageId) as any;
 
@@ -104,8 +124,11 @@ export function getTestPackageById(packageId: string): TestPackage {
     readingTestId: row.reading_test_id || undefined,
     readingVersionId: row.reading_version_id || undefined,
     readingTestTitle: row.reading_test_title || undefined,
+    speakingSetId: row.speaking_set_id || undefined,
+    speakingSetVersionId: row.speaking_set_version_id || undefined,
+    speakingSetTitle: row.speaking_set_title || undefined,
     writingStatus: 'not_implemented',
-    speakingStatus: 'not_implemented',
+    speakingStatus: row.speaking_set_id ? 'configured' : 'not_implemented',
     createdById: row.created_by_id,
     createdAt: row.created_at,
   };
@@ -115,10 +138,12 @@ export function listTestPackages(testType?: ClassTestType): TestPackage[] {
   let query = `
     SELECT tp.*,
       rt.title as reading_test_title,
-      lt.title as listening_test_title
+      lt.title as listening_test_title,
+      ss.title as speaking_set_title
     FROM test_packages tp
     LEFT JOIN reading_tests rt ON tp.reading_test_id = rt.id
     LEFT JOIN listening_tests lt ON tp.listening_test_id = lt.id
+    LEFT JOIN speaking_sets ss ON tp.speaking_set_id = ss.id
   `;
   const params: any[] = [];
   if (testType) {
@@ -139,8 +164,11 @@ export function listTestPackages(testType?: ClassTestType): TestPackage[] {
     readingTestId: row.reading_test_id || undefined,
     readingVersionId: row.reading_version_id || undefined,
     readingTestTitle: row.reading_test_title || undefined,
+    speakingSetId: row.speaking_set_id || undefined,
+    speakingSetVersionId: row.speaking_set_version_id || undefined,
+    speakingSetTitle: row.speaking_set_title || undefined,
     writingStatus: 'not_implemented',
-    speakingStatus: 'not_implemented',
+    speakingStatus: row.speaking_set_id ? 'configured' : 'not_implemented',
     createdById: row.created_by_id,
     createdAt: row.created_at,
   }));
@@ -158,7 +186,7 @@ export function createAssignment(
     instructions?: string;
     purpose: AssignmentPurpose;
     packageId?: string;
-    skill?: 'reading' | 'listening' | 'all';
+    skill?: 'reading' | 'listening' | 'speaking' | 'all';
     testId?: string;
     versionId?: string;
     mode?: TestMode;
@@ -187,7 +215,7 @@ export function createAssignment(
   let warning: string | undefined;
   if (data.purpose === 'post_test') {
     const existingPreTest = db.prepare(`
-      SELECT a.*, tp.reading_test_id, tp.listening_test_id
+      SELECT a.*, tp.reading_test_id, tp.listening_test_id, tp.speaking_set_id
       FROM assignments a
       LEFT JOIN test_packages tp ON a.package_id = tp.id
       WHERE a.class_id = ? AND a.purpose = 'pre_test'
@@ -198,7 +226,8 @@ export function createAssignment(
       const postPkg = getTestPackageById(data.packageId);
       if (
         (postPkg.readingTestId && postPkg.readingTestId === existingPreTest.reading_test_id) ||
-        (postPkg.listeningTestId && postPkg.listeningTestId === existingPreTest.listening_test_id)
+        (postPkg.listeningTestId && postPkg.listeningTestId === existingPreTest.listening_test_id) ||
+        (postPkg.speakingSetId && postPkg.speakingSetId === existingPreTest.speaking_set_id)
       ) {
         warning =
           'Overlapping material detected: The selected post-test package contains the same test material as the class pre-test. Pre-test and post-test must use different comparable content to assess learning accurately. Difficulty equivalence is not assumed without verified standardization.';
@@ -281,12 +310,14 @@ export function getAssignmentById(assignmentId: string, studentId?: string): Ass
       c.title as class_title,
       tp.title as package_title,
       rt.title as reading_title,
-      lt.title as listening_title
+      lt.title as listening_title,
+      ss.title as speaking_title
     FROM assignments a
     JOIN classes c ON a.class_id = c.id
     LEFT JOIN test_packages tp ON a.package_id = tp.id
     LEFT JOIN reading_tests rt ON a.test_id = rt.id
     LEFT JOIN listening_tests lt ON a.test_id = lt.id
+    LEFT JOIN speaking_sets ss ON a.test_id = ss.id
     WHERE a.id = ?
   `).get(assignmentId) as any;
 
@@ -305,7 +336,7 @@ export function getAssignmentById(assignmentId: string, studentId?: string): Ass
     packageTitle: row.package_title || undefined,
     skill: row.skill || undefined,
     testId: row.test_id || undefined,
-    testTitle: row.reading_title || row.listening_title || undefined,
+    testTitle: row.reading_title || row.listening_title || row.speaking_title || undefined,
     versionId: row.version_id || undefined,
     mode: row.mode as TestMode,
     releaseAt: row.release_at,
@@ -338,9 +369,10 @@ export function isTestReservedInUnreleasedPostTest(testId: string): boolean {
         a.test_id = ?
         OR tp.reading_test_id = ?
         OR tp.listening_test_id = ?
+        OR tp.speaking_set_id = ?
       )
     LIMIT 1
-  `).get(testId, testId, testId);
+  `).get(testId, testId, testId, testId);
 
   return Boolean(row);
 }
@@ -443,8 +475,37 @@ function populateStudentAssignmentStatus(a: Assignment, studentId: string): void
     } else {
       a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'in_progress';
     }
+  } else if (a.skill === 'speaking') {
+    // Speaking assessment assignment
+    const assessment = db.prepare(`
+      SELECT * FROM speaking_assessments
+      WHERE assignment_id = ? AND student_id = ?
+      ORDER BY updated_at DESC LIMIT 1
+    `).get(a.id, studentId) as any;
+
+    if (!a.isReleased || new Date(a.releaseAt).getTime() > Date.now()) {
+      a.studentStatus = 'not_started';
+      return;
+    }
+
+    if (!assessment) {
+      a.studentAttemptCount = 0;
+      a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'not_started';
+      return;
+    }
+
+    a.studentAttemptCount = 1;
+    a.speakingAssessmentId = assessment.id;
+    a.speakingSessionStatus = assessment.status; // 'draft' | 'released'
+    if (assessment.status === 'released') {
+      a.studentStatus = 'submitted';
+      a.lastAttemptBand = assessment.overall_band !== null ? assessment.overall_band : undefined;
+    } else {
+      a.studentStatus = isOverdue(a.deadlineAt) ? 'overdue' : 'in_progress';
+    }
+    return;
   } else {
-    // Single skill assignment
+    // Reading or Listening single skill assignment
     let attempts: any[] = [];
     if (a.skill === 'listening') {
       attempts = db.prepare(`
@@ -572,12 +633,16 @@ export function getPackageAttemptById(attemptId: string, userId: string, isAdmin
 function mapPackageAttemptRow(row: any): PackageAttempt {
   let readingAttempt: any;
   let listeningAttempt: any;
+  let speakingAssessment: SpeakingAssessment | undefined;
 
   if (row.reading_attempt_id) {
     readingAttempt = db.prepare('SELECT * FROM reading_attempts WHERE id = ?').get(row.reading_attempt_id);
   }
   if (row.listening_attempt_id) {
     listeningAttempt = db.prepare('SELECT * FROM listening_attempts WHERE id = ?').get(row.listening_attempt_id);
+  }
+  if (row.speaking_assessment_id) {
+    speakingAssessment = getSpeakingAssessmentById(row.speaking_assessment_id, row.user_id, 'teacher') || undefined;
   }
 
   return {
@@ -632,6 +697,8 @@ function mapPackageAttemptRow(row: any): PackageAttempt {
       interruptionEvents: [],
       answers: {},
     } : undefined,
+    speakingAssessmentId: row.speaking_assessment_id || undefined,
+    speakingAssessment,
     startedAt: row.started_at,
     completedAt: row.completed_at || undefined,
     createdAt: row.created_at,
@@ -639,14 +706,20 @@ function mapPackageAttemptRow(row: any): PackageAttempt {
 }
 
 /**
- * Links a specific skill attempt (reading or listening) to the package attempt.
+ * Links a specific skill attempt (reading, listening, or speaking) to the package attempt.
  */
 export function linkSkillToPackageAttempt(
   packageAttemptId: string,
-  skill: 'reading' | 'listening',
+  skill: 'reading' | 'listening' | 'speaking',
   skillAttemptId: string
 ): void {
-  const col = skill === 'reading' ? 'reading_attempt_id' : 'listening_attempt_id';
+  const col =
+    skill === 'reading'
+      ? 'reading_attempt_id'
+      : skill === 'listening'
+      ? 'listening_attempt_id'
+      : 'speaking_assessment_id';
+
   db.prepare(`
     UPDATE package_attempts
     SET ${col} = ?
@@ -665,6 +738,10 @@ export function linkSkillToPackageAttempt(
     if (pkg.listeningTestId) {
       const l = current.listening_attempt_id ? db.prepare('SELECT status FROM listening_attempts WHERE id = ?').get(current.listening_attempt_id) as any : null;
       if (!l || (l.status !== 'submitted' && l.status !== 'expired')) allDone = false;
+    }
+    if (pkg.speakingSetId) {
+      const s = current.speaking_assessment_id ? db.prepare('SELECT status FROM speaking_assessments WHERE id = ?').get(current.speaking_assessment_id) as any : null;
+      if (!s || s.status !== 'released') allDone = false;
     }
 
     if (allDone) {
@@ -762,8 +839,17 @@ export function getPrePostComparison(
     }
   }
 
+  if (
+    preSkills.speaking.status === 'completed' &&
+    postSkills.speaking.status === 'completed' &&
+    preSkills.speaking.bandScore !== undefined &&
+    postSkills.speaking.bandScore !== undefined
+  ) {
+    deltas.speakingBandDelta = Number((postSkills.speaking.bandScore - preSkills.speaking.bandScore).toFixed(1));
+  }
+
   const pedagogicalNote =
-    'Note: Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions. No overall 4-skill band is calculated because Writing and Speaking remain to be implemented.';
+    'Note: Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions. No overall 4-skill band is calculated because Writing and Speaking remain to be implemented in full (Writing is pending implementation).';
 
   return {
     studentId,
@@ -840,6 +926,57 @@ function populateAssignmentSkillResults(
       wasInterrupted: Boolean(listeningAtt.was_interrupted),
       isFirstAttempt: Boolean(listeningAtt.is_first_attempt),
     };
+  }
+
+  // Check speaking assessments for this assignment or linked package attempt
+  const speakingAss = db.prepare(`
+    SELECT sa.*, ss.title as set_title, ssv.version_number
+    FROM speaking_assessments sa
+    LEFT JOIN speaking_sets ss ON sa.set_id = ss.id
+    LEFT JOIN speaking_set_versions ssv ON sa.set_version_id = ssv.id
+    WHERE (sa.assignment_id = ? OR sa.package_attempt_id IN (
+      SELECT id FROM package_attempts WHERE assignment_id = ?
+    ))
+    AND sa.student_id = ?
+    AND sa.status = 'released'
+    ORDER BY sa.session_date DESC LIMIT 1
+  `).get(assignmentId, assignmentId, studentId) as any;
+
+  if (speakingAss) {
+    const corrCount = db.prepare('SELECT count(*) as count FROM speaking_score_corrections WHERE assessment_id = ?').get(speakingAss.id) as any;
+    skills.speaking = {
+      skill: 'speaking',
+      status: 'completed',
+      testTitle: speakingAss.set_title || speakingAss.custom_topic || 'Teacher Speaking Assessment',
+      versionNumber: speakingAss.version_number || undefined,
+      bandScore: speakingAss.overall_band !== null ? speakingAss.overall_band : undefined,
+      criteria: {
+        fluencyCoherence: speakingAss.criterion_fluency_coherence ?? undefined,
+        lexicalResource: speakingAss.criterion_lexical_resource ?? undefined,
+        grammaticalRange: speakingAss.criterion_grammatical_range ?? undefined,
+        pronunciation: speakingAss.criterion_pronunciation ?? undefined,
+      },
+      assessor: speakingAss.assessor_type === 'ai' ? 'AI Assessment' : 'Teacher assessment',
+      sessionType: speakingAss.session_type,
+      correctionCount: corrCount?.count || 0,
+      completedAt: formatMakassarDateTime(speakingAss.released_at || speakingAss.session_date),
+    };
+  } else {
+    // If not released but there's a draft
+    const draftSpeaking = db.prepare(`
+      SELECT 1 FROM speaking_assessments sa
+      WHERE (sa.assignment_id = ? OR sa.package_attempt_id IN (
+        SELECT id FROM package_attempts WHERE assignment_id = ?
+      ))
+      AND sa.student_id = ?
+      LIMIT 1
+    `).get(assignmentId, assignmentId, studentId);
+    if (draftSpeaking) {
+      skills.speaking = {
+        skill: 'speaking',
+        status: 'in_progress',
+      };
+    }
   }
 }
 

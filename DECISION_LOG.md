@@ -186,3 +186,36 @@ This log tracks architectural and product decisions, reversible implementation c
   - Writing and Speaking are explicitly tagged with status `'not_implemented'`. No simulated scores, estimates, or overall 4-skill bands are fabricated.
   - Mandatory pedagogical disclaimer is attached to every report: explains that score deltas reflect performance on specific test versions under respective test conditions, warns against uncritically attributing changes solely to learning progress without accounting for test variation, and states why overall bands cannot be computed.
   - Timezone convention: Timestamps stored in UTC ISO 8601 in SQLite; all deadlines and completed timestamps are formatted in `Asia/Makassar` (WITA, UTC+8) via shared date utilities.
+
+---
+
+## Decision 15: Official IELTS Speaking Scoring Calibration, Partial Practice Isolation, and Draft Privacy
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 7 & 14: Teacher-led Speaking assessment. Verify current official IELTS scoring guidance before implementing permitted criterion values, averaging, and rounding. Cite official reference in project documentation. Incomplete criterion scores must not produce an overall score. Support partial practice without treating it as a complete mock. Maintain draft privacy and scrub teacher notes.
+- **Decision**:
+  - **Official Scoring Guidance Citation**: *IELTS Information for Candidates* & *IELTS.org Scoring in Detail* (official joint partners: British Council, IDP: IELTS Australia, Cambridge Assessment English).
+  - **Criterion Scale**: Scores for the four assessment criteria—Fluency and Coherence (FC), Lexical Resource (LR), Grammatical Range and Accuracy (GRA), and Pronunciation (P)—are assigned on a 1.0 to 9.0 scale in 0.5 step increments.
+  - **Overall Band Averaging & Rounding**:
+    - Arithmetic mean: `mean = (FC + LR + GRA + P) / 4`.
+    - If the fractional remainder ends in `.25` (e.g., 6.25), round **UP** to `.5` (e.g., 6.5).
+    - If the fractional remainder ends in `.75` (e.g., 6.75), round **UP** to next whole band (e.g., 7.0).
+    - If the fractional remainder is `< 0.25`, round down to `.0`.
+    - If the fractional remainder is `>= 0.25` and `< 0.75`, round to `.5`.
+    - If the fractional remainder is `>= 0.75`, round up to `1.0`.
+  - **Incomplete Criterion Invariant**: Complete 3-part mocks require all four criteria before an overall band can be computed or released. Missing criteria produce `overallBand: undefined`.
+  - **Partial Practice Isolation**: Single-part or modular practice (e.g. Part 1 only, or Part 2 only) is explicitly labelled as `partial_practice` and **never** generates an overall band score. It cannot satisfy complete pre/post test requirements.
+  - **Draft Privacy & Learner Scrubbing**: Assessments in `'draft'` status strictly reject student access with 403 Forbidden. When an assessment is `'released'`, `teacherPrivateNotes` are strictly scrubbed from learner API responses and UI views.
+  - **Zero Commercial Impact**: Teacher-led Speaking sessions do NOT consume AI allowances or require paid subscription upgrades.
+
+---
+
+## Decision 16: Transparent Audited Score Corrections and Optional Audio Recording Policy
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Section 7: Support score corrections after release with clear reasons. Recording is optional (scores enterable without audio). Disclose recording to learner, restrict access, and document 90-day retention/deletion policy.
+- **Decision**:
+  - **Transparent Score Correction Audit Trail**: Teachers can correct released speaking scores via `POST /api/speaking/assessments/:id/correct`. Overwrites without history are prohibited; every adjustment creates an immutable audit record in `speaking_score_corrections` storing `previousScores`, `updatedScores`, `reason` (mandatory detailed string), `teacherId`, and `correctedAt`. Recalculates official band automatically.
+  - **Audio Recording Optionality**: Voice recording upload is entirely optional. Full evaluations and band scores can be completed and submitted purely from live teacher notes without audio.
+  - **Audio Retention & Disclosure Policy**: If an audio recording is uploaded, candidate disclosure is confirmed via `recordingRetentionAcknowledged = true`. Platform policy enforces strict learner/teacher access controls and a 90-day data retention period, after which audio artifacts are scheduled for deletion.
+

@@ -393,8 +393,11 @@ export interface TestPackage {
   readingTestId?: string;
   readingVersionId?: string;
   readingTestTitle?: string;
+  speakingSetId?: string;
+  speakingSetVersionId?: string;
+  speakingSetTitle?: string;
   writingStatus: 'not_implemented';
-  speakingStatus: 'not_implemented';
+  speakingStatus: 'configured' | 'not_implemented';
   createdById: string;
   createdAt: string;
 }
@@ -408,7 +411,7 @@ export interface Assignment {
   purpose: AssignmentPurpose;
   packageId?: string;
   packageTitle?: string;
-  skill?: 'reading' | 'listening' | 'all';
+  skill?: 'reading' | 'listening' | 'speaking' | 'all';
   testId?: string;
   testTitle?: string;
   versionId?: string;
@@ -427,6 +430,8 @@ export interface Assignment {
   lastAttemptScore?: number;
   lastAttemptTotal?: number;
   lastAttemptBand?: number;
+  speakingSessionStatus?: 'awaiting_session' | 'awaiting_feedback' | 'feedback_available';
+  speakingAssessmentId?: string;
 }
 
 export interface PackageAttempt {
@@ -442,6 +447,8 @@ export interface PackageAttempt {
   readingAttempt?: ReadingAttempt;
   listeningAttemptId?: string;
   listeningAttempt?: ListeningAttempt;
+  speakingAssessmentId?: string;
+  speakingAssessment?: SpeakingAssessment;
   startedAt: string;
   completedAt?: string;
   createdAt: string;
@@ -459,6 +466,10 @@ export interface SkillComparisonItem {
   mode?: TestMode;
   wasInterrupted?: boolean;
   isFirstAttempt?: boolean;
+  criteria?: SpeakingCriteriaScores;
+  assessor?: string; // e.g. 'Teacher assessment'
+  sessionType?: 'complete_mock' | 'partial_practice';
+  correctionCount?: number;
 }
 
 export interface PrePostComparisonReport {
@@ -484,6 +495,119 @@ export interface PrePostComparisonReport {
     readingBandDelta?: number;
     listeningRawDelta?: number;
     listeningBandDelta?: number;
+    speakingBandDelta?: number;
   };
   pedagogicalNote: string;
+}
+
+// -------------------------------------------------------------
+// SPEAKING TEST & TEACHER-LED ASSESSMENT MODELS (MILESTONE 4)
+// -------------------------------------------------------------
+
+export type SpeakingPart = 'part1' | 'part2' | 'part3';
+export type SpeakingSessionType = 'complete_mock' | 'partial_practice';
+
+export interface SpeakingPart1Topic {
+  id: string;
+  topicName: string;
+  questions: string[];
+  teacherNotes?: string;
+}
+
+export interface SpeakingPart2CueCard {
+  topic: string;
+  cueCardPrompt: string;
+  bulletPoints: string[];
+  followUpQuestions?: string[];
+  teacherNotes?: string;
+}
+
+export interface SpeakingPart3Discussion {
+  theme: string;
+  discussionQuestions: string[];
+  teacherNotes?: string;
+}
+
+export interface SpeakingSetVersion {
+  id: string;
+  setId: string;
+  versionNumber: number;
+  status: PublicationStatus;
+  part1Topics: SpeakingPart1Topic[];
+  part2CueCard: SpeakingPart2CueCard;
+  part3Discussion: SpeakingPart3Discussion;
+  teacherNotes?: string;
+  validationErrors?: string[];
+  publishedAt?: string;
+  createdAt: string;
+}
+
+export interface SpeakingSet {
+  id: string;
+  title: string;
+  currentVersionNumber: number;
+  status: PublicationStatus;
+  latestVersionId: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  versions?: SpeakingSetVersion[];
+}
+
+export interface SpeakingCriteriaScores {
+  fluencyCoherence: number; // 1.0 - 9.0 in 0.5 increments
+  lexicalResource: number;
+  grammaticalRange: number;
+  pronunciation: number;
+}
+
+export interface SpeakingScoreCorrection {
+  id: string;
+  assessmentId: string;
+  teacherId: string;
+  teacherName?: string;
+  previousScores: Partial<SpeakingCriteriaScores> & { overallBand?: number };
+  updatedScores: SpeakingCriteriaScores & { overallBand: number };
+  reason: string;
+  correctedAt: string; // ISO 8601 UTC or formatted WITA
+}
+
+export interface SpeakingAssessment {
+  id: string;
+  studentId: string;
+  studentName?: string;
+  studentEmail?: string;
+  teacherId: string;
+  teacherName?: string;
+  classId?: string;
+  classTitle?: string;
+  assignmentId?: string;
+  assignmentTitle?: string;
+  packageAttemptId?: string;
+  setId?: string;
+  setVersionId?: string;
+  setTitle?: string;
+  customTopic?: string;
+  sessionType: SpeakingSessionType;
+  partsCovered: SpeakingPart[];
+  sessionDate: string; // ISO 8601 UTC
+  sessionDateFormatted?: string; // Asia/Makassar formatted
+  status: 'draft' | 'released';
+  assessorType: 'teacher' | 'ai';
+  criteria?: Partial<SpeakingCriteriaScores>;
+  overallBand?: number; // Verified official IELTS calculation rule
+  strengths?: string;
+  improvementPriorities?: string;
+  partComments?: {
+    part1?: string;
+    part2?: string;
+    part3?: string;
+  };
+  teacherPrivateNotes?: string; // SCRUBBED in student API responses!
+  recordingUrl?: string;
+  recordingRetentionAcknowledged?: boolean;
+  corrections?: SpeakingScoreCorrection[];
+  releasedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }

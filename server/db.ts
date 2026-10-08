@@ -246,7 +246,7 @@ export function initDatabase() {
       instructions TEXT,
       purpose TEXT NOT NULL CHECK(purpose IN ('pre_test', 'practice', 'post_test')),
       package_id TEXT,
-      skill TEXT CHECK(skill IN ('reading', 'listening', 'all')),
+      skill TEXT CHECK(skill IN ('reading', 'listening', 'speaking', 'all')),
       test_id TEXT,
       version_id TEXT,
       mode TEXT NOT NULL DEFAULT 'mock' CHECK(mode IN ('mock', 'practice')),
@@ -293,6 +293,87 @@ export function initDatabase() {
       FOREIGN KEY (listening_attempt_id) REFERENCES listening_attempts(id)
     );
 
+    -- Speaking Sets (container)
+    CREATE TABLE IF NOT EXISTS speaking_sets (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      current_version_number INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'published', 'archived')),
+      created_by_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (created_by_id) REFERENCES users(id)
+    );
+
+    -- Speaking Set Versions (immutable snapshot when published)
+    CREATE TABLE IF NOT EXISTS speaking_set_versions (
+      id TEXT PRIMARY KEY,
+      set_id TEXT NOT NULL,
+      version_number INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'archived')),
+      part1_topics_json TEXT NOT NULL,
+      part2_cue_card_json TEXT NOT NULL,
+      part3_discussion_json TEXT NOT NULL,
+      teacher_notes TEXT,
+      validation_errors_json TEXT,
+      published_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (set_id) REFERENCES speaking_sets(id) ON DELETE CASCADE,
+      UNIQUE(set_id, version_number)
+    );
+
+    -- Speaking Assessments (Teacher-led or AI session records)
+    CREATE TABLE IF NOT EXISTS speaking_assessments (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      teacher_id TEXT NOT NULL,
+      class_id TEXT,
+      assignment_id TEXT,
+      package_attempt_id TEXT,
+      set_id TEXT,
+      set_version_id TEXT,
+      custom_topic TEXT,
+      session_type TEXT NOT NULL CHECK(session_type IN ('complete_mock', 'partial_practice')),
+      parts_covered_json TEXT NOT NULL,
+      session_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'released')),
+      assessor_type TEXT NOT NULL DEFAULT 'teacher' CHECK(assessor_type IN ('teacher', 'ai')),
+      criterion_fluency_coherence REAL,
+      criterion_lexical_resource REAL,
+      criterion_grammatical_range REAL,
+      criterion_pronunciation REAL,
+      overall_band REAL,
+      strengths TEXT,
+      improvement_priorities TEXT,
+      part_comments_json TEXT,
+      teacher_private_notes TEXT,
+      recording_url TEXT,
+      recording_retention_acknowledged INTEGER DEFAULT 0,
+      released_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (student_id) REFERENCES users(id),
+      FOREIGN KEY (teacher_id) REFERENCES users(id),
+      FOREIGN KEY (class_id) REFERENCES classes(id),
+      FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+      FOREIGN KEY (package_attempt_id) REFERENCES package_attempts(id),
+      FOREIGN KEY (set_id) REFERENCES speaking_sets(id),
+      FOREIGN KEY (set_version_id) REFERENCES speaking_set_versions(id)
+    );
+
+    -- Speaking Score Corrections Audit History
+    CREATE TABLE IF NOT EXISTS speaking_score_corrections (
+      id TEXT PRIMARY KEY,
+      assessment_id TEXT NOT NULL,
+      teacher_id TEXT NOT NULL,
+      previous_scores_json TEXT NOT NULL,
+      updated_scores_json TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      corrected_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (assessment_id) REFERENCES speaking_assessments(id) ON DELETE CASCADE,
+      FOREIGN KEY (teacher_id) REFERENCES users(id)
+    );
+
     -- Indices for high performance
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_reading_tests_status ON reading_tests(status, test_type);
@@ -309,6 +390,13 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_class_enrolments_student ON class_enrolments(student_id, class_id);
     CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id, purpose);
     CREATE INDEX IF NOT EXISTS idx_package_attempts_user ON package_attempts(user_id, package_id);
+
+    CREATE INDEX IF NOT EXISTS idx_speaking_sets_status ON speaking_sets(status);
+    CREATE INDEX IF NOT EXISTS idx_speaking_set_versions ON speaking_set_versions(set_id, version_number);
+    CREATE INDEX IF NOT EXISTS idx_speaking_assessments_student ON speaking_assessments(student_id, status);
+    CREATE INDEX IF NOT EXISTS idx_speaking_assessments_teacher ON speaking_assessments(teacher_id, status);
+    CREATE INDEX IF NOT EXISTS idx_speaking_assessments_assignment ON speaking_assessments(assignment_id, student_id);
+    CREATE INDEX IF NOT EXISTS idx_speaking_corrections_assessment ON speaking_score_corrections(assessment_id);
   `);
 
   // Safe column migrations for assignment_id
@@ -329,4 +417,66 @@ export function initDatabase() {
   } catch (err) {
     console.warn('Note: listening_attempts.assignment_id column check/alter', err);
   }
+
+  // Safe column migrations for speaking in package_attempts and test_packages
+  try {
+    const pkgAttemptCols = db.prepare("PRAGMA table_info(package_attempts)").all() as any[];
+    if (!pkgAttemptCols.some((col) => col.name === 'speaking_assessment_id')) {
+      db.exec('ALTER TABLE package_attempts ADD COLUMN speaking_assessment_id TEXT REFERENCES speaking_assessments(id);');
+    }
+  } catch (err) {
+    console.warn('Note: package_attempts.speaking_assessment_id check/alter', err);
+  }
+
+  try {
+    const testPkgCols = db.prepare("PRAGMA table_info(test_packages)").all() as any[];
+    if (!testPkgCols.some((col) => col.name === 'speaking_set_id')) {
+      db.exec('ALTER TABLE test_packages ADD COLUMN speaking_set_id TEXT REFERENCES speaking_sets(id);');
+    }
+    if (!testPkgCols.some((col) => col.name === 'speaking_set_version_id')) {
+      db.exec('ALTER TABLE test_packages ADD COLUMN speaking_set_version_id TEXT REFERENCES speaking_set_versions(id);');
+    }
+  } catch (err) {
+    console.warn('Note: test_packages speaking columns check/alter', err);
+  }
+
+  // Safe migration for assignments.skill check constraint
+  try {
+    const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='assignments'").get() as any;
+    if (tableSql && !tableSql.sql.includes("'speaking'")) {
+      db.pragma('foreign_keys = OFF');
+      db.exec(`
+        CREATE TABLE assignments_new (
+          id TEXT PRIMARY KEY,
+          class_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          instructions TEXT,
+          purpose TEXT NOT NULL CHECK(purpose IN ('pre_test', 'practice', 'post_test')),
+          package_id TEXT,
+          skill TEXT CHECK(skill IN ('reading', 'listening', 'speaking', 'all')),
+          test_id TEXT,
+          version_id TEXT,
+          mode TEXT NOT NULL DEFAULT 'mock' CHECK(mode IN ('mock', 'practice')),
+          release_at TEXT NOT NULL,
+          deadline_at TEXT,
+          attempt_limit INTEGER NOT NULL DEFAULT 1,
+          is_released INTEGER NOT NULL DEFAULT 1,
+          created_by_id TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+          FOREIGN KEY (package_id) REFERENCES test_packages(id),
+          FOREIGN KEY (created_by_id) REFERENCES users(id)
+        );
+        INSERT INTO assignments_new SELECT * FROM assignments;
+        DROP TABLE assignments;
+        ALTER TABLE assignments_new RENAME TO assignments;
+        CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id, purpose);
+      `);
+      db.pragma('foreign_keys = ON');
+    }
+  } catch (err) {
+    console.warn('Note: assignments.skill check constraint migration', err);
+  }
 }
+

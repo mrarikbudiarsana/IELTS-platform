@@ -111,7 +111,74 @@ This document tracks implementation status across the stages outlined in the Pro
 
 ---
 
+## Milestone 4: Teacher-Led Speaking Assessment (COMPLETED & VERIFIED)
+
+### Phase 1: Speaking Content Editor & Versioning
+- [x] Shared data models for Speaking sets, cue cards, discussion themes, criteria, and audit records (`shared/types.ts`)
+- [x] Database tables: `speaking_sets`, `speaking_set_versions`, `speaking_assessments`, `speaking_score_corrections` (`server/db.ts`)
+- [x] Speaking set builder supporting Part 1 topics, Part 2 cue cards (bullet points, prep time, speaking time), Part 3 two-way discussion questions, and teacher notes
+- [x] Draft saving, validation checklist (required prompts, cue card bullets, questions), publishing, and immutable forking
+- [x] Support for "Teacher's own questions" for sessions conducted on free topics without a saved set
+
+### Phase 2: Verified Official IELTS Speaking Scoring Engine Calibration
+- [x] Verified official IELTS Speaking scoring rules implemented in `shared/scoring.ts`:
+  - Official Joint Citation: *IELTS Information for Candidates* & *IELTS.org Scoring in Detail*
+  - Four assessment criteria: Fluency and Coherence (FC), Lexical Resource (LR), Grammatical Range and Accuracy (GRA), and Pronunciation (P)
+  - 1.0 to 9.0 scale in 0.5 step increments
+  - Arithmetic mean calculation: `mean = (FC + LR + GRA + P) / 4`
+  - Exact official rounding: `.25` rounds UP to `.5`; `.75` rounds UP to whole band (+1.0); `< .25` rounds down to `.0`; `>= .25 && < .75` rounds to `.5`; `>= .75` rounds up to `1.0`
+- [x] Validation utility `validateSpeakingCriterionScore` rejecting non-conforming step values or out-of-range bounds
+- [x] Clear practice score disclaimer attached: estimated practice score based on IELTS criterion descriptors, not an official IELTS certificate
+
+### Phase 3: Teacher-Led Assessment Session & Learner Draft Privacy Guard
+- [x] Teacher assessment queue and scoring console (`/api/speaking/assessments`, `TeacherSpeakingAssessmentView.tsx`)
+- [x] Enforces draft privacy: students requesting draft assessments receive strict 403 Forbidden
+- [x] Confidential teacher private notes: strictly scrubbed from student API responses and student UI views
+- [x] Teacher-led sessions operate with zero commercial AI allowance consumption
+
+### Phase 4: Partial Practice vs Complete Mock Isolation
+- [x] Complete 3-part mock requires covering Part 1, Part 2, and Part 3 with all 4 criterion scores before release
+- [x] Incomplete criterion scores cannot produce an overall score or be released as a complete mock
+- [x] Partial practice (e.g. Part 1, Part 2, or Part 3 only) is explicitly labelled as `partial_practice`
+- [x] Invariant enforced: partial practice **never** calculates an overall band score (`overallBand === undefined`) and cannot satisfy multi-skill mock pre/post requirements
+
+### Phase 5: Score Corrections Audit Trail & Audio Policy
+- [x] Transparent score corrections endpoint (`POST /api/speaking/assessments/:id/correct`):
+  - In-place un-audited overwriting of released scores is prohibited
+  - Mandates detailed teacher reason string
+  - Creates timestamped immutable audit record in `speaking_score_corrections`
+  - Recalculates official overall band automatically
+- [x] Optional voice recording upload: scores can be entered and released purely without audio
+- [x] Audio disclosure and retention policy: explicit candidate disclosure acknowledgement required; 90-day retention/deletion policy documented
+
+### Phase 6: Pre/Post Journey Integration & Progression Report
+- [x] Multi-skill test packages (`test_packages`) support configuring published Speaking sets
+- [x] Package attempt execution links speaking assessments (`speaking_assessment_id`)
+- [x] Pre/Post diagnostic comparison report (`PrePostComparisonModal.tsx`):
+  - Populates Speaking slot when released assessment exists
+  - Displays 4-criterion breakdown (FC, LR, GRA, P), teacher assessor label, and score audit count
+  - Calculates Speaking band delta: `deltas.speakingBandDelta`
+  - Writing remains clearly labelled as `not_implemented` (pending Milestone 5)
+
+### Phase 7: Automated Verification Suite & Production Build
+- [x] Milestone 4 automated test runner (`test/runSpeakingTests.ts`) passing 10/10 checks (100%):
+  1. Official IELTS Speaking Scoring Engine Calibration & Rounding
+  2. Speaking Content Editor & Version Immutability
+  3. Teacher Assessment Draft & Learner Draft Privacy Guard
+  4. Assessment Release & Private Notes Scrubbing
+  5. Incomplete Criterion Guard for Complete Mock Release
+  6. Partial Practice Isolation (No Overall Band / Labelled Partial)
+  7. Transparent Score Corrections & Audit History
+  8. Audio Recording Optionality & Disclosure Retention Policy
+  9. Pre/Post Test Journey Integration & Speaking Delta
+  10. Teacher Queue & Student Assessment List
+- [x] Full unified platform test suite (`npm test`) passing all 36 checks (Reading 9, Listening 8, Classes & Journey 9, Speaking 10)
+- [x] Production client build (`npm run build`) passing with 0 TypeScript errors
+
+---
+
 ## Future Milestones (Deferred per Blueprint)
-- **Milestone 4**: Writing Assessment Engine & Speaking (dual route: interactive AI conversation + teacher-led scoring queue).
-- **Milestone 5**: Commercial access, plans, ledger, teacher codes, payment webhooks.
-- **Milestone 6**: Production load testing, pilot onboarding (10–50 learners).
+- **Milestone 5**: Writing Assessment Engine (Task 1 & Task 2, criteria TR/TA, CC, LR, GRA, word count limits, rubrics).
+- **Milestone 6**: Live AI Speaking (interactive voice calling, AI evaluation queue with allowance gating).
+- **Milestone 7**: Commercial access, plans, ledger, teacher codes, Stripe / payment webhooks.
+- **Milestone 8**: Production load testing and final pilot onboarding (10–50 learners).

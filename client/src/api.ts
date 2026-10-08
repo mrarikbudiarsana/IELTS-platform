@@ -124,5 +124,30 @@ export const api = {
   updateUserRole: (userId: string, role: string) => request<{ message: string }>(`/admin/users/${userId}/role`, { method: 'POST', body: JSON.stringify({ role }) }),
   getTeacherAttempts: () => request<{ attempts: any[] }>('/teacher/attempts'),
   getTeacherListeningAttempts: () => request<{ attempts: any[] }>('/teacher/listening-attempts'),
+
+  // Speaking Sets
+  getSpeakingSets: (params?: { status?: string; includeArchived?: boolean }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return request<{ sets: any[] }>(`/speaking/sets${q ? `?${q}` : ''}`);
+  },
+  getSpeakingSet: (id: string) => request<{ set: any }>(`/speaking/sets/${id}`),
+  getSpeakingSetVersion: (id: string, versionId: string) => request<{ version: any }>(`/speaking/sets/${id}/versions/${versionId}`),
+  createSpeakingSet: (body: any) => request<{ set: any; version: any }>('/speaking/sets', { method: 'POST', body: JSON.stringify(body) }),
+  updateSpeakingDraft: (id: string, versionId: string, body: any) => request<{ version: any; errors: string[] }>(`/speaking/sets/${id}/versions/${versionId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  publishSpeakingSet: (id: string, versionId: string) => request<{ message: string }>(`/speaking/sets/${id}/publish`, { method: 'POST', body: JSON.stringify({ versionId }) }),
+  forkSpeakingDraft: (id: string) => request<{ version: any }>(`/speaking/sets/${id}/fork`, { method: 'POST' }),
+  archiveSpeakingSet: (id: string) => request<{ message: string }>(`/speaking/sets/${id}/archive`, { method: 'POST' }),
+
+  // Speaking Assessments
+  recordSpeakingAssessment: (body: any) => request<{ assessment: any }>('/speaking/assessments', { method: 'POST', body: JSON.stringify(body) }),
+  releaseSpeakingAssessment: (id: string) => request<{ assessment: any; message: string }>(`/speaking/assessments/${id}/release`, { method: 'POST' }),
+  correctSpeakingScores: (id: string, body: { updatedScores: any; reason: string }) => request<{ assessment: any; message: string }>(`/speaking/assessments/${id}/correct`, { method: 'POST', body: JSON.stringify(body) }),
+  getSpeakingAssessment: (id: string) => request<{ assessment: any }>(`/speaking/assessments/${id}`),
+  getTeacherSpeakingQueue: (params?: { classId?: string; status?: string; sessionType?: string }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return request<{ queue: any[] }>(`/speaking/teacher/queue${q ? `?${q}` : ''}`);
+  },
+  getMySpeakingAssessments: () => request<{ assessments: any[] }>('/speaking/my-assessments'),
 };
+
 
