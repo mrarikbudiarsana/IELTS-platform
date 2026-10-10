@@ -382,6 +382,26 @@ export function getTestById(testId: string): ReadingTest | null {
     .prepare('SELECT * FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
     .get(testId) as any;
 
+  let passageCount = 0;
+  let questionGroupsSummary: any[] = [];
+  if (latestVersion) {
+    try {
+      const passages = JSON.parse(latestVersion.passages_json || '[]');
+      const groups = JSON.parse(latestVersion.question_groups_json || '[]');
+      passageCount = passages.length;
+      questionGroupsSummary = groups.map((g: any) => ({
+        id: g.id,
+        questionType: g.questionType,
+        passageId: g.passageId,
+        startQuestionNumber: g.startQuestionNumber,
+        endQuestionNumber: g.endQuestionNumber,
+        questionCount: g.questions?.length || (g.endQuestionNumber - g.startQuestionNumber + 1),
+      }));
+    } catch (e) {
+      // ignore
+    }
+  }
+
   return {
     id: row.id,
     title: row.title,
@@ -392,7 +412,10 @@ export function getTestById(testId: string): ReadingTest | null {
     status: row.status,
     latestVersionId: latestVersion ? latestVersion.id : '',
     totalQuestions: latestVersion ? latestVersion.total_questions : 0,
+    passageCount,
+    questionGroupsSummary,
     createdById: row.created_by_id,
+    isFreeTier: Boolean(row.is_free_tier),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -427,6 +450,8 @@ export function listTests(params: {
   return rows
     .filter((row) => {
       if (params.isTeacherOrAdmin) return true;
+      // Filter out scratch automated test titles with epoch timestamps
+      if (/\b\d{10,}\b/.test(row.title)) return false;
       // Protected post-test check: hide if reserved in an unreleased post-test
       const isReserved = db.prepare(`
         SELECT 1 FROM assignments a
@@ -439,9 +464,28 @@ export function listTests(params: {
       return !isReserved;
     })
     .map((row) => {
-    const latestVersion = db
-      .prepare('SELECT * FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-      .get(row.id) as any;
+      const latestVersion = db
+        .prepare('SELECT * FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
+        .get(row.id) as any;
+      let passageCount = 0;
+      let questionGroupsSummary: any[] = [];
+    if (latestVersion) {
+      try {
+        const passages = JSON.parse(latestVersion.passages_json || '[]');
+        const groups = JSON.parse(latestVersion.question_groups_json || '[]');
+        passageCount = passages.length;
+        questionGroupsSummary = groups.map((g: any) => ({
+          id: g.id,
+          questionType: g.questionType,
+          passageId: g.passageId,
+          startQuestionNumber: g.startQuestionNumber,
+          endQuestionNumber: g.endQuestionNumber,
+          questionCount: g.questions?.length || (g.endQuestionNumber - g.startQuestionNumber + 1),
+        }));
+      } catch (e) {
+        // ignore parse errors
+      }
+    }
 
     return {
       id: row.id,
@@ -453,7 +497,10 @@ export function listTests(params: {
       status: row.status,
       latestVersionId: latestVersion ? latestVersion.id : '',
       totalQuestions: latestVersion ? latestVersion.total_questions : 0,
+      passageCount,
+      questionGroupsSummary,
       createdById: row.created_by_id,
+      isFreeTier: Boolean(row.is_free_tier),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

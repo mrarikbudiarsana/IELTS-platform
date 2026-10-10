@@ -6,13 +6,15 @@ import {
   SpeakingPart3Discussion,
 } from '../shared/types';
 import { createSpeakingSet, publishSpeakingSetVersion } from './speakingService';
+import { grantSpeakingAllowance } from './speakingAllowanceService';
 
 export function seedSpeakingDatabase() {
   initDatabase();
 
   const existingSpeaking = db.prepare('SELECT COUNT(*) as count FROM speaking_sets').get() as any;
   if (existingSpeaking.count > 0) {
-    console.log('Speaking sets already seeded, skipping.');
+    console.log('Speaking sets already seeded, ensuring student allowances are seeded.');
+    seedStudentSpeakingAllowances();
     return;
   }
 
@@ -152,4 +154,30 @@ export function seedSpeakingDatabase() {
   publishSpeakingSetVersion(set2.set.id, set2.version.id);
 
   console.log('Successfully seeded 2 published IELTS Speaking demonstration sets.');
+
+  // Seed initial Speaking allowances for active students
+  seedStudentSpeakingAllowances(adminId);
 }
+
+export function seedStudentSpeakingAllowances(adminId?: string) {
+  const authorId = adminId || (db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get() as any)?.id;
+  if (!authorId) return;
+
+  const students = db.prepare("SELECT id FROM users WHERE role = 'student'").all() as any[];
+  for (const s of students) {
+    try {
+      const existing = db.prepare("SELECT COUNT(*) as count FROM speaking_allowance_ledger WHERE user_id = ?").get(s.id) as any;
+      if (!existing || existing.count === 0) {
+        grantSpeakingAllowance({
+          adminId: authorId,
+          userId: s.id,
+          amount: 5,
+          notes: 'Complimentary pilot allowance grant for IELTS Speaking AI simulation',
+        });
+      }
+    } catch {
+      // Ignore if already granted
+    }
+  }
+}
+

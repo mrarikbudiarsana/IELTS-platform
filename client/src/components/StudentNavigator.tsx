@@ -1,6 +1,13 @@
 import React from 'react';
 import { StudentAnswer } from '../types';
-import { Flag, CheckCircle, Send } from 'lucide-react';
+
+export interface NavigatorSection {
+  title: string;
+  startQuestion: number;
+  endQuestion: number;
+  sectionIndex: number;
+  questionNumbers?: number[];
+}
 
 interface StudentNavigatorProps {
   totalQuestions: number;
@@ -8,6 +15,12 @@ interface StudentNavigatorProps {
   activeQuestionNumber: number;
   onSelectQuestion: (questionNumber: number) => void;
   onSubmitClick: () => void;
+  onToggleFlag?: (questionNumber: number) => void;
+  onPreviousQuestion?: () => void;
+  onNextQuestion?: () => void;
+  sections?: NavigatorSection[];
+  activeSectionIndex?: number;
+  onSelectSection?: (index: number) => void;
 }
 
 export const StudentNavigator: React.FC<StudentNavigatorProps> = ({
@@ -15,79 +28,114 @@ export const StudentNavigator: React.FC<StudentNavigatorProps> = ({
   answers,
   activeQuestionNumber,
   onSelectQuestion,
-  onSubmitClick,
+  sections,
+  activeSectionIndex = 0,
+  onSelectSection,
 }) => {
-  const answeredCount = Object.values(answers).filter(
-    (a) => a.userAnswer !== undefined && a.userAnswer !== '' && (!Array.isArray(a.userAnswer) || a.userAnswer.length > 0)
-  ).length;
-
-  const flaggedCount = Object.values(answers).filter((a) => a.isFlagged).length;
+  // Normalize sections: default to standard 3 parts if not provided
+  const activeSections: NavigatorSection[] =
+    sections && sections.length > 0
+      ? sections
+      : [
+          { title: 'Part 1', startQuestion: 1, endQuestion: 13, sectionIndex: 0 },
+          { title: 'Part 2', startQuestion: 14, endQuestion: 26, sectionIndex: 1 },
+          { title: 'Part 3', startQuestion: 27, endQuestion: totalQuestions, sectionIndex: 2 },
+        ];
 
   return (
-    <footer className="bg-slate-900 border-t border-slate-800 text-white p-3 z-30 shadow-lg">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-        {/* Left Stats */}
-        <div className="flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-1.5 font-semibold text-slate-200">
-            <CheckCircle className="w-4 h-4 text-emerald-400" />
-            <span>
-              {answeredCount} of {totalQuestions} Answered
-            </span>
-          </div>
+    <footer className="bg-white border-t border-slate-200 text-slate-800 px-4 sm:px-8 py-2 z-30 select-none shrink-0 h-13 flex items-center">
+      <div className="w-full flex items-center justify-between gap-4 overflow-x-auto custom-scrollbar">
+        {activeSections.map((sec) => {
+          const isActiveSection = activeSectionIndex === sec.sectionIndex;
+          const questionsCount = sec.endQuestion - sec.startQuestion + 1;
 
-          {flaggedCount > 0 && (
-            <div className="flex items-center gap-1 text-amber-300 bg-amber-950/60 border border-amber-700/50 px-2 py-0.5 rounded">
-              <Flag className="w-3.5 h-3.5 fill-amber-400" />
-              <span>{flaggedCount} Flagged</span>
-            </div>
-          )}
-        </div>
+          // Count answered questions in this section
+          let answeredInSection = 0;
+          for (let q = sec.startQuestion; q <= sec.endQuestion; q++) {
+            const a = answers[q];
+            if (
+              a &&
+              a.userAnswer !== undefined &&
+              a.userAnswer !== '' &&
+              (!Array.isArray(a.userAnswer) || a.userAnswer.length > 0)
+            ) {
+              answeredInSection++;
+            }
+          }
 
-        {/* Center: Scrollable Question Numbers Grid */}
-        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full py-1 px-1 custom-scrollbar">
-          {Array.from({ length: totalQuestions }, (_, i) => i + 1).map((qNum) => {
-            const ans = answers[qNum];
-            const isAnswered =
-              ans &&
-              ans.userAnswer !== undefined &&
-              ans.userAnswer !== '' &&
-              (!Array.isArray(ans.userAnswer) || ans.userAnswer.length > 0);
-            const isFlagged = ans?.isFlagged;
-            const isActive = activeQuestionNumber === qNum;
-
+          if (!isActiveSection) {
+            // INACTIVE PART: Clickable pill showing "Part X   Y of Z"
             return (
               <button
-                key={qNum}
-                onClick={() => onSelectQuestion(qNum)}
-                className={`relative min-w-8 h-8 rounded text-xs font-bold flex items-center justify-center transition-all ${
-                  isActive
-                    ? 'ring-2 ring-amber-400 scale-105 z-10'
-                    : 'hover:scale-105'
-                } ${
-                  isAnswered
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
-                }`}
+                key={sec.sectionIndex}
+                type="button"
+                onClick={() => onSelectSection && onSelectSection(sec.sectionIndex)}
+                className="flex items-center gap-2 text-xs sm:text-[13px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-50 px-3 py-1.5 rounded transition-colors shrink-0"
               >
-                {qNum}
-                {isFlagged && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-slate-900"></span>
-                )}
+                <span className="font-bold text-slate-800">{sec.title}</span>
+                <span className="text-slate-500 font-normal">
+                  {answeredInSection} of {questionsCount}
+                </span>
               </button>
             );
-          })}
-        </div>
+          }
 
-        {/* Right Submit Button */}
-        <div>
-          <button
-            onClick={onSubmitClick}
-            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold rounded-lg shadow-sm transition-colors"
-          >
-            <Send className="w-4 h-4" />
-            Submit Test
-          </button>
-        </div>
+          // ACTIVE PART: Shows thin top progress line, bold "Part X", and all question numbers!
+          const questionsList =
+            sec.questionNumbers && sec.questionNumbers.length > 0
+              ? sec.questionNumbers
+              : Array.from({ length: questionsCount }, (_, i) => sec.startQuestion + i);
+
+          return (
+            <div
+              key={sec.sectionIndex}
+              className="flex flex-col justify-center shrink-0 min-w-0"
+            >
+              {/* Subtle top indicator bar spanning active section */}
+              <div className="h-[2px] bg-slate-300 w-full mb-1 rounded-full" />
+
+              <div className="flex items-center gap-3 sm:gap-4">
+                <span className="font-bold text-xs sm:text-sm text-slate-900 shrink-0">
+                  {sec.title}
+                </span>
+
+                <div className="flex items-center gap-1 sm:gap-1.5">
+                  {questionsList.map((qNum) => {
+                    const ans = answers[qNum];
+                    const isAnswered =
+                      ans &&
+                      ans.userAnswer !== undefined &&
+                      ans.userAnswer !== '' &&
+                      (!Array.isArray(ans.userAnswer) || ans.userAnswer.length > 0);
+                    const isActive = activeQuestionNumber === qNum;
+
+                    return (
+                      <button
+                        key={qNum}
+                        type="button"
+                        onClick={() => onSelectQuestion(qNum)}
+                        className={`text-xs sm:text-[13px] relative transition-all cursor-pointer min-w-[26px] h-[26px] flex items-center justify-center ${
+                          isActive
+                            ? 'border border-[#0066cc] text-[#0066cc] font-semibold rounded-[2px]'
+                            : isAnswered
+                            ? 'font-medium text-slate-800 hover:text-slate-950'
+                            : 'font-normal text-slate-600 hover:text-slate-900'
+                        }`}
+                        title={`Question ${qNum}${isAnswered ? ' (Answered)' : ''}`}
+                      >
+                        {/* Green indicator bar above answered question number */}
+                        {isAnswered && (
+                          <span className="absolute -top-1.5 left-0.5 right-0.5 h-[3px] bg-[#16a34a] rounded-xs" />
+                        )}
+                        {qNum}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </footer>
   );

@@ -516,6 +516,197 @@ export function initDatabase() {
       FOREIGN KEY (created_by_id) REFERENCES users(id)
     );
 
+    -- Live AI Speaking Sessions (Milestone 6)
+    CREATE TABLE IF NOT EXISTS speaking_ai_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      assignment_id TEXT,
+      package_attempt_id TEXT,
+      set_id TEXT,
+      set_version_id TEXT,
+      mode TEXT NOT NULL DEFAULT 'mock' CHECK(mode IN ('practice', 'mock')),
+      stage TEXT NOT NULL DEFAULT 'setup' CHECK(stage IN ('setup', 'part_1', 'part_2_prep', 'part_2_speaking', 'part_3', 'completed', 'abandoned')),
+      current_part INTEGER NOT NULL DEFAULT 1 CHECK(current_part IN (1, 2, 3)),
+      current_question_index INTEGER NOT NULL DEFAULT 0,
+      part2_notes TEXT,
+      duration_seconds INTEGER NOT NULL DEFAULT 0,
+      was_interrupted INTEGER NOT NULL DEFAULT 0,
+      interruption_count INTEGER NOT NULL DEFAULT 0,
+      assessment_id TEXT,
+      allowance_reserved INTEGER NOT NULL DEFAULT 0,
+      allowance_consumed INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+      FOREIGN KEY (package_attempt_id) REFERENCES package_attempts(id),
+      FOREIGN KEY (set_id) REFERENCES speaking_sets(id),
+      FOREIGN KEY (set_version_id) REFERENCES speaking_set_versions(id)
+    );
+
+    -- Audio turns recorded during Speaking session
+    CREATE TABLE IF NOT EXISTS speaking_audio_turns (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      part INTEGER NOT NULL CHECK(part IN (1, 2, 3)),
+      turn_number INTEGER NOT NULL,
+      speaker TEXT NOT NULL CHECK(speaker IN ('examiner', 'candidate')),
+      text TEXT NOT NULL,
+      audio_url TEXT,
+      duration_seconds REAL NOT NULL DEFAULT 0,
+      timestamp_seconds REAL NOT NULL DEFAULT 0,
+      is_follow_up INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (session_id) REFERENCES speaking_ai_sessions(id) ON DELETE CASCADE
+    );
+
+    -- Dedicated Speaking AI Allowance Ledger (1 session = 1 test + feedback)
+    CREATE TABLE IF NOT EXISTS speaking_allowance_ledger (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      balance_after INTEGER NOT NULL,
+      transaction_type TEXT NOT NULL CHECK(transaction_type IN ('grant', 'reservation', 'consumption', 'release')),
+      session_id TEXT,
+      assessment_id TEXT,
+      idempotency_key TEXT UNIQUE,
+      notes TEXT,
+      created_by_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (created_by_id) REFERENCES users(id)
+    );
+
+    -- Commercial Products (Milestone 7)
+    CREATE TABLE IF NOT EXISTS commercial_products (
+      id TEXT PRIMARY KEY,
+      sku TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      product_type TEXT NOT NULL CHECK(product_type IN ('paid_plan', 'writing_assessment', 'speaking_session', 'bundle')),
+      price_amount INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'IDR',
+      duration_days INTEGER,
+      writing_allowances INTEGER NOT NULL DEFAULT 0,
+      speaking_allowances INTEGER NOT NULL DEFAULT 0,
+      grants_catalogue_access INTEGER NOT NULL DEFAULT 0,
+      renewal_type TEXT NOT NULL DEFAULT 'manual' CHECK(renewal_type IN ('manual', 'recurring')),
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'published', 'archived')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Commercial Orders
+    CREATE TABLE IF NOT EXISTS commercial_orders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      product_sku TEXT NOT NULL,
+      product_title TEXT NOT NULL,
+      gross_amount INTEGER NOT NULL,
+      currency TEXT NOT NULL,
+      payment_provider TEXT NOT NULL DEFAULT 'midtrans',
+      provider_transaction_id TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'failed', 'cancelled', 'expired', 'refunded', 'disputed')),
+      payment_method TEXT,
+      paid_at TEXT,
+      refunded_at TEXT,
+      refund_amount INTEGER,
+      refund_reason TEXT,
+      checkout_url TEXT,
+      metadata_json TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (product_id) REFERENCES commercial_products(id)
+    );
+
+    -- Commercial Entitlement Grants (audited source of every access grant)
+    CREATE TABLE IF NOT EXISTS commercial_entitlement_grants (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      source_type TEXT NOT NULL CHECK(source_type IN ('purchase', 'teacher_code', 'admin_adjustment')),
+      source_id TEXT NOT NULL,
+      grant_type TEXT NOT NULL CHECK(grant_type IN ('catalogue_access', 'writing_allowance', 'speaking_allowance', 'protected_prepost')),
+      amount INTEGER NOT NULL DEFAULT 1,
+      valid_from TEXT NOT NULL,
+      valid_until TEXT,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'expired', 'revoked')),
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    -- Teacher Codes
+    CREATE TABLE IF NOT EXISTS teacher_codes (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      label TEXT NOT NULL,
+      description TEXT,
+      redemption_deadline_at TEXT,
+      access_duration_days INTEGER NOT NULL DEFAULT 30,
+      max_redemptions INTEGER NOT NULL DEFAULT 50,
+      redemption_count INTEGER NOT NULL DEFAULT 0,
+      class_id TEXT,
+      grants_catalogue_access INTEGER NOT NULL DEFAULT 1,
+      writing_allowances INTEGER NOT NULL DEFAULT 0,
+      speaking_allowances INTEGER NOT NULL DEFAULT 0,
+      protected_prepost_allowances INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'revoked', 'exhausted')),
+      created_by_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by_id) REFERENCES users(id)
+    );
+
+    -- Teacher Code Redemptions (1 redemption per learner rule)
+    CREATE TABLE IF NOT EXISTS teacher_code_redemptions (
+      id TEXT PRIMARY KEY,
+      code_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      redeemed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (code_id) REFERENCES teacher_codes(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(code_id, user_id)
+    );
+
+    -- User Subscriptions (Plan subscriptions)
+    CREATE TABLE IF NOT EXISTS user_subscriptions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      plan_id TEXT NOT NULL,
+      order_id TEXT,
+      code_id TEXT,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'cancelled', 'expired')),
+      valid_from TEXT NOT NULL,
+      valid_until TEXT NOT NULL,
+      renewal_type TEXT NOT NULL DEFAULT 'manual' CHECK(renewal_type IN ('manual', 'recurring')),
+      cancelled_at TEXT,
+      cancellation_reason TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (plan_id) REFERENCES commercial_products(id),
+      FOREIGN KEY (order_id) REFERENCES commercial_orders(id),
+      FOREIGN KEY (code_id) REFERENCES teacher_codes(id)
+    );
+
+    -- Payment Webhook Events (Idempotency log)
+    CREATE TABLE IF NOT EXISTS payment_webhook_events (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      provider_event_id TEXT UNIQUE,
+      order_id TEXT,
+      event_type TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      is_processed INTEGER NOT NULL DEFAULT 0,
+      processed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Indices for high performance
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_reading_tests_status ON reading_tests(status, test_type);
@@ -539,6 +730,9 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_speaking_assessments_teacher ON speaking_assessments(teacher_id, status);
     CREATE INDEX IF NOT EXISTS idx_speaking_assessments_assignment ON speaking_assessments(assignment_id, student_id);
     CREATE INDEX IF NOT EXISTS idx_speaking_corrections_assessment ON speaking_score_corrections(assessment_id);
+    CREATE INDEX IF NOT EXISTS idx_speaking_ai_sessions_user ON speaking_ai_sessions(user_id, stage);
+    CREATE INDEX IF NOT EXISTS idx_speaking_audio_turns_session ON speaking_audio_turns(session_id, turn_number);
+    CREATE INDEX IF NOT EXISTS idx_speaking_allowance_user ON speaking_allowance_ledger(user_id);
 
     CREATE INDEX IF NOT EXISTS idx_writing_tasks_status ON writing_tasks(status, task_type);
     CREATE INDEX IF NOT EXISTS idx_writing_task_versions ON writing_task_versions(task_id, version_number);
@@ -546,6 +740,15 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_writing_responses_attempt ON writing_responses(attempt_id, task_number);
     CREATE INDEX IF NOT EXISTS idx_writing_assessments_response ON writing_assessments(response_id);
     CREATE INDEX IF NOT EXISTS idx_writing_allowance_user ON writing_allowance_ledger(user_id);
+
+    CREATE INDEX IF NOT EXISTS idx_commercial_products_status ON commercial_products(status, product_type);
+    CREATE INDEX IF NOT EXISTS idx_commercial_orders_user ON commercial_orders(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_commercial_orders_status ON commercial_orders(status);
+    CREATE INDEX IF NOT EXISTS idx_commercial_grants_user ON commercial_entitlement_grants(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_teacher_codes_code ON teacher_codes(code, status);
+    CREATE INDEX IF NOT EXISTS idx_teacher_code_redemptions_user ON teacher_code_redemptions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user ON user_subscriptions(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_webhook_events_order ON payment_webhook_events(order_id);
   `);
 
   // Safe column migrations for assignment_id
@@ -642,5 +845,134 @@ export function initDatabase() {
   } catch (err) {
     console.warn('Note: assignments.skill check constraint migration', err);
   }
+
+  // Safe column migrations for speaking Milestone 6
+  try {
+    const spkAssessCols = db.prepare("PRAGMA table_info(speaking_assessments)").all() as any[];
+    if (!spkAssessCols.some((c) => c.name === 'evidence_quotes_json')) {
+      db.exec('ALTER TABLE speaking_assessments ADD COLUMN evidence_quotes_json TEXT;');
+    }
+    if (!spkAssessCols.some((c) => c.name === 'suggested_practice_json')) {
+      db.exec('ALTER TABLE speaking_assessments ADD COLUMN suggested_practice_json TEXT;');
+    }
+    if (!spkAssessCols.some((c) => c.name === 'acoustic_observations_json')) {
+      db.exec('ALTER TABLE speaking_assessments ADD COLUMN acoustic_observations_json TEXT;');
+    }
+    if (!spkAssessCols.some((c) => c.name === 'is_simulated')) {
+      db.exec('ALTER TABLE speaking_assessments ADD COLUMN is_simulated INTEGER DEFAULT 0;');
+    }
+    if (!spkAssessCols.some((c) => c.name === 'provider_model')) {
+      db.exec('ALTER TABLE speaking_assessments ADD COLUMN provider_model TEXT;');
+    }
+    if (!spkAssessCols.some((c) => c.name === 'session_id')) {
+      db.exec('ALTER TABLE speaking_assessments ADD COLUMN session_id TEXT REFERENCES speaking_ai_sessions(id);');
+    }
+    if (!spkAssessCols.some((c) => c.name === 'was_interrupted')) {
+      db.exec('ALTER TABLE speaking_assessments ADD COLUMN was_interrupted INTEGER DEFAULT 0;');
+    }
+    if (!spkAssessCols.some((c) => c.name === 'interruption_count')) {
+      db.exec('ALTER TABLE speaking_assessments ADD COLUMN interruption_count INTEGER DEFAULT 0;');
+    }
+  } catch (err) {
+    console.warn('Note: speaking_assessments column migrations', err);
+  }
+
+  try {
+    const spkVerCols = db.prepare("PRAGMA table_info(speaking_set_versions)").all() as any[];
+    if (!spkVerCols.some((c) => c.name === 'follow_up_guidance_json')) {
+      db.exec('ALTER TABLE speaking_set_versions ADD COLUMN follow_up_guidance_json TEXT;');
+    }
+    if (!spkVerCols.some((c) => c.name === 'teacher_only_instructions')) {
+      db.exec('ALTER TABLE speaking_set_versions ADD COLUMN teacher_only_instructions TEXT;');
+    }
+    if (!spkVerCols.some((c) => c.name === 'ai_instructions')) {
+      db.exec('ALTER TABLE speaking_set_versions ADD COLUMN ai_instructions TEXT;');
+    }
+  } catch (err) {
+    console.warn('Note: speaking_set_versions column migrations', err);
+  }
+
+  try {
+    const assignCols = db.prepare("PRAGMA table_info(assignments)").all() as any[];
+    if (!assignCols.some((c) => c.name === 'speaking_route')) {
+      db.exec("ALTER TABLE assignments ADD COLUMN speaking_route TEXT DEFAULT 'student_choice';");
+    }
+  } catch (err) {
+    console.warn('Note: assignments.speaking_route column migration', err);
+  }
+
+  try {
+    const pkgAttemptCols = db.prepare("PRAGMA table_info(package_attempts)").all() as any[];
+    if (!pkgAttemptCols.some((c) => c.name === 'speaking_ai_session_id')) {
+      db.exec('ALTER TABLE package_attempts ADD COLUMN speaking_ai_session_id TEXT REFERENCES speaking_ai_sessions(id);');
+    }
+  } catch (err) {
+    console.warn('Note: package_attempts.speaking_ai_session_id column migration', err);
+  }
+
+  try {
+    const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='speaking_allowance_ledger'").get() as any;
+    if (tableSql && tableSql.sql && tableSql.sql.includes('REFERENCES speaking_ai_sessions')) {
+      db.pragma('foreign_keys = OFF');
+      db.exec(`
+        CREATE TABLE speaking_allowance_ledger_new (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          amount INTEGER NOT NULL,
+          balance_after INTEGER NOT NULL,
+          transaction_type TEXT NOT NULL CHECK(transaction_type IN ('grant', 'reservation', 'consumption', 'release')),
+          session_id TEXT,
+          assessment_id TEXT,
+          idempotency_key TEXT UNIQUE,
+          notes TEXT,
+          created_by_id TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (user_id) REFERENCES users(id),
+          FOREIGN KEY (created_by_id) REFERENCES users(id)
+        );
+        INSERT INTO speaking_allowance_ledger_new SELECT * FROM speaking_allowance_ledger;
+        DROP TABLE speaking_allowance_ledger;
+        ALTER TABLE speaking_allowance_ledger_new RENAME TO speaking_allowance_ledger;
+        CREATE INDEX IF NOT EXISTS idx_speaking_allowance_user ON speaking_allowance_ledger(user_id);
+      `);
+      db.pragma('foreign_keys = ON');
+    }
+  } catch (err) {
+    console.warn('Note: speaking_allowance_ledger FK migration', err);
+  }
+
+  // Safe column migrations for Milestone 7: commercial access & free tier flags
+  try {
+    const userCols = db.prepare("PRAGMA table_info(users)").all() as any[];
+    if (!userCols.some((c) => c.name === 'plan_type')) {
+      db.exec("ALTER TABLE users ADD COLUMN plan_type TEXT NOT NULL DEFAULT 'free';");
+    }
+    if (!userCols.some((c) => c.name === 'plan_expires_at')) {
+      db.exec("ALTER TABLE users ADD COLUMN plan_expires_at TEXT;");
+    }
+
+    const readingCols = db.prepare("PRAGMA table_info(reading_tests)").all() as any[];
+    if (!readingCols.some((c) => c.name === 'is_free_tier')) {
+      db.exec("ALTER TABLE reading_tests ADD COLUMN is_free_tier INTEGER NOT NULL DEFAULT 0;");
+    }
+
+    const listeningCols = db.prepare("PRAGMA table_info(listening_tests)").all() as any[];
+    if (!listeningCols.some((c) => c.name === 'is_free_tier')) {
+      db.exec("ALTER TABLE listening_tests ADD COLUMN is_free_tier INTEGER NOT NULL DEFAULT 0;");
+    }
+
+    const writingCols = db.prepare("PRAGMA table_info(writing_tasks)").all() as any[];
+    if (!writingCols.some((c) => c.name === 'is_free_tier')) {
+      db.exec("ALTER TABLE writing_tasks ADD COLUMN is_free_tier INTEGER NOT NULL DEFAULT 0;");
+    }
+
+    const speakingCols = db.prepare("PRAGMA table_info(speaking_sets)").all() as any[];
+    if (!speakingCols.some((c) => c.name === 'is_free_tier')) {
+      db.exec("ALTER TABLE speaking_sets ADD COLUMN is_free_tier INTEGER NOT NULL DEFAULT 0;");
+    }
+  } catch (err) {
+    console.warn('Note: commercial columns migration', err);
+  }
 }
+
 

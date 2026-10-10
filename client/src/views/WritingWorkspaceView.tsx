@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { WritingAttempt, WritingTask, WritingTaskNumber } from '../types';
 import { countWords } from '../scoring';
+import { ExamHeader } from '../components/ExamHeader';
+import { ExamHelpModal } from '../components/ExamHelpModal';
+import { ExamSettingsModal, TextSizeOption, ContrastOption } from '../components/ExamSettingsModal';
 
 interface WritingWorkspaceViewProps {
   attemptId: string;
@@ -21,15 +24,44 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
   const [task1Text, setTask1Text] = useState('');
   const [task2Text, setTask2Text] = useState('');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
-  const [lastSavedTime, setLastSavedTime] = useState<string>('');
+  const [lastSavedTime, setLastSavedTime] = useState<string>('Saved');
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'prompt' | 'editor'>('editor');
 
+  // Accessibility / Comfort state
+  const [textSize, setTextSize] = useState<TextSizeOption>('standard');
+  const [contrast, setContrast] = useState<ContrastOption>('standard');
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Draggable splitter state
+  const [paneWidthPercent, setPaneWidthPercent] = useState(50);
+  const [isDraggingSplitter, setIsDraggingSplitter] = useState(false);
+
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingSplitter) return;
+      const newPercent = (e.clientX / window.innerWidth) * 100;
+      if (newPercent >= 25 && newPercent <= 75) {
+        setPaneWidthPercent(newPercent);
+      }
+    };
+    const handleMouseUp = () => setIsDraggingSplitter(false);
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingSplitter]);
 
   // Load attempt and tasks
   useEffect(() => {
@@ -80,19 +112,22 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
     }
   }
 
-  // Timer countdown
+  // Timer countdown / elapsed tracking
   useEffect(() => {
-    if (remainingSeconds === null || remainingSeconds <= 0) return;
-
     const timer = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev === null || prev <= 1) {
-          clearInterval(timer);
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setElapsedSeconds((prev) => prev + 1);
+
+      if (remainingSeconds !== null) {
+        setRemainingSeconds((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleAutoSubmit();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
     }, 1000);
 
     return () => clearInterval(timer);
@@ -189,177 +224,94 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
   const currentWordCount = countWords(currentText);
   const minRequiredWords = currentVersion?.minWords || (activeTaskNum === 1 ? 150 : 250);
 
-  const wordCountPercent = Math.min(100, Math.round((currentWordCount / minRequiredWords) * 100));
+  const getTextSizeClass = () => {
+    switch (textSize) {
+      case 'large':
+        return 'text-base leading-relaxed';
+      case 'xlarge':
+        return 'text-lg leading-loose';
+      default:
+        return 'text-[15px] leading-relaxed';
+    }
+  };
 
-  function formatTime(totalSeconds: number): string {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
+  const getThemeClass = () => {
+    switch (contrast) {
+      case 'dark':
+        return 'bg-slate-900 text-slate-100';
+      case 'yellow_on_black':
+        return 'bg-black text-amber-300';
+      case 'high_contrast':
+        return 'bg-white text-black';
+      default:
+        return 'bg-white text-slate-900';
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Top Header & Test Controls */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onExit}
-              className="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition"
-              title="Exit test"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </button>
-            <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
-                IELTS Writing {attempt.mode === 'mock' ? 'Mock Test' : 'Practice'}
-              </span>
-              <h1 className="text-base font-bold text-slate-800 line-clamp-1">
-                {currentVersion?.title || 'IELTS Writing Workspace'}
-              </h1>
-            </div>
-          </div>
+    <div className={`h-screen flex flex-col font-sans select-none overflow-hidden ${getThemeClass()}`}>
+      {/* 1. TOP EXAM HEADER */}
+      <ExamHeader
+        testTitle={currentVersion?.title || 'Academic Writing • Book 21'}
+        testType="Academic Writing"
+        skill="writing"
+        remainingSeconds={remainingSeconds}
+        elapsedSeconds={elapsedSeconds}
+        saveStatus={saveStatus}
+        lastSavedTime={lastSavedTime}
+        onExitClick={onExit || (() => {})}
+        onSubmitClick={() => setShowSubmitModal(true)}
+        onOpenHelp={() => setShowHelpModal(true)}
+        onOpenSettings={() => setShowSettingsModal(true)}
+      />
 
-          {/* Task 1 / Task 2 Switcher for Full Mocks */}
-          {isFullMock && (
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-              <button
-                onClick={() => setActiveTaskNum(1)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  activeTaskNum === 1
-                    ? 'bg-white text-indigo-700 shadow-sm font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Task 1 ({countWords(task1Text)}/150w)
-              </button>
-              <button
-                onClick={() => setActiveTaskNum(2)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  activeTaskNum === 2
-                    ? 'bg-white text-indigo-700 shadow-sm font-semibold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Task 2 ({countWords(task2Text)}/250w)
-              </button>
+      {/* 2. OFFICIAL SUB-HEADER: WARM CREAM BAR MATCHING REFERENCE */}
+      <div className="bg-[#F4F3EE] border-b border-[#E5E2D9] px-6 sm:px-10 py-2.5 flex items-center justify-between text-xs sm:text-sm select-none shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
+          <span className="font-bold text-slate-900 text-sm sm:text-base">
+            Task {activeTaskNum}
+          </span>
+          <span className="text-slate-600 font-normal text-xs sm:text-sm">
+            Write at least {minRequiredWords} words.
+          </span>
+        </div>
+      </div>
+
+      {/* 3. MAIN WORKSPACE: FULL-BLEED SPLIT-PANE WITH DRAGGABLE DIVIDER */}
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative select-text">
+        {/* LEFT PANE: PROMPT, TIME SUGGESTION, INSTRUCTIONS & PROMPT IMAGES */}
+        <div
+          style={{ width: window.innerWidth >= 1024 ? `${paneWidthPercent}%` : '100%' }}
+          className="h-full overflow-y-auto px-8 sm:px-12 py-7 custom-scrollbar bg-white"
+        >
+          {/* Suggested time guidance */}
+          <p className="text-sm text-slate-600 italic mb-5 leading-relaxed font-normal">
+            You should spend about {activeTaskNum === 1 ? '20' : '40'} minutes on this task. Write at least {minRequiredWords} words.
+          </p>
+
+          {/* Prompt statement */}
+          {currentVersion?.prompt && (
+            <div className={`text-slate-900 font-normal mb-6 space-y-4 ${getTextSizeClass()}`}>
+              {currentVersion.prompt.split('\n\n').map((paragraph, pIdx) => (
+                <p key={pIdx} className="leading-relaxed">
+                  {paragraph}
+                </p>
+              ))}
             </div>
           )}
 
-          {/* Status & Timer & Submission */}
-          <div className="flex items-center gap-4">
-            {/* Autosave status indicator */}
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500">
-              {saveStatus === 'saving' && (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                  <span>Saving...</span>
-                </>
-              )}
-              {saveStatus === 'saved' && (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>Saved {lastSavedTime ? `at ${lastSavedTime}` : ''}</span>
-                </>
-              )}
-              {saveStatus === 'error' && (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                  <span className="text-rose-600">Save failed</span>
-                </>
-              )}
-            </div>
-
-            {/* Countdown timer */}
-            {remainingSeconds !== null && (
-              <div
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-mono text-sm font-semibold ${
-                  remainingSeconds < 300
-                    ? 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse'
-                    : 'bg-slate-100 text-slate-700 border border-slate-200'
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>{formatTime(remainingSeconds)}</span>
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowSubmitModal(true)}
-              disabled={submitting}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold shadow-sm transition disabled:opacity-50"
-            >
-              Submit Response
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Tab bar: Prompt vs Response */}
-        <div className="flex md:hidden border-t border-slate-200 bg-white">
-          <button
-            onClick={() => setMobileTab('prompt')}
-            className={`flex-1 py-2 text-center text-xs font-semibold ${
-              mobileTab === 'prompt' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'
-            }`}
-          >
-            Prompt & Visual
-          </button>
-          <button
-            onClick={() => setMobileTab('editor')}
-            className={`flex-1 py-2 text-center text-xs font-semibold ${
-              mobileTab === 'editor' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'
-            }`}
-          >
-            Essay Editor ({currentWordCount}w)
-          </button>
-        </div>
-      </header>
-
-      {/* Main Workspace (Split-Pane on Desktop) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left Pane: Prompt, Instructions & Visual Material */}
-        <section
-          className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-y-auto flex flex-col gap-5 ${
-            mobileTab === 'prompt' ? 'block' : 'hidden md:flex'
-          }`}
-          style={{ maxHeight: 'calc(100vh - 120px)' }}
-        >
-          <div className="border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                Task {activeTaskNum}
-              </span>
-              <span className="text-xs text-slate-500">
-                Suggested Time: {currentVersion?.suggestedTimeMinutes || 20} min
-              </span>
-            </div>
-            <h2 className="text-xl font-bold text-slate-900 leading-snug">
-              {currentVersion?.title}
-            </h2>
-          </div>
-
-          {/* Official Instructions */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 leading-relaxed font-serif">
-            <span className="font-bold">Instructions: </span>
-            {currentVersion?.instructions}
-          </div>
-
           {/* Structured Data or Charts / Diagrams */}
           {currentVersion?.structuredData && (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 overflow-x-auto">
-              <h4 className="text-xs font-bold text-slate-700 uppercase mb-2">
+            <div className="border border-slate-300 rounded-[2px] p-4 my-6 overflow-x-auto bg-white">
+              <h4 className="text-xs font-bold text-slate-800 uppercase mb-3">
                 Reported Data ({currentVersion.structuredData.unit || 'Values'})
               </h4>
-              <table className="min-w-full text-xs text-slate-700 border-collapse">
+              <table className="min-w-full text-xs text-slate-800 border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-1.5 px-2 font-semibold">Category</th>
+                  <tr className="border-b border-slate-300 bg-[#F4F4F6]">
+                    <th className="text-left py-2 px-3 font-bold">Category</th>
                     {currentVersion.structuredData.years?.map((y: string) => (
-                      <th key={y} className="text-right py-1.5 px-2 font-semibold">
+                      <th key={y} className="text-right py-2 px-3 font-bold">
                         {y}
                       </th>
                     ))}
@@ -369,11 +321,11 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
                   {currentVersion.structuredData.sectors &&
                     Object.entries(currentVersion.structuredData.sectors).map(
                       ([sector, values]: [string, any]) => (
-                        <tr key={sector} className="border-b border-slate-100 hover:bg-white transition">
-                          <td className="py-1.5 px-2 font-medium">{sector}</td>
+                        <tr key={sector} className="border-b border-slate-200">
+                          <td className="py-2 px-3 font-medium">{sector}</td>
                           {Array.isArray(values) &&
                             values.map((val: any, idx: number) => (
-                              <td key={idx} className="py-1.5 px-2 text-right font-mono">
+                              <td key={idx} className="py-2 px-3 text-right font-mono">
                                 {val}
                               </td>
                             ))}
@@ -385,81 +337,111 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
             </div>
           )}
 
-          {/* Images / Process diagrams */}
+          {/* Prompt Diagram / Images matching Reference */}
           {currentVersion?.images && currentVersion.images.length > 0 && (
-            <div className="flex flex-col gap-3">
+            <div className="my-6 space-y-4">
               {currentVersion.images.map((img: string, idx: number) => (
-                <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                  <img src={img} alt={`Task visual ${idx + 1}`} className="w-full h-auto object-contain" />
+                <div key={idx} className="border border-slate-200 rounded-[2px] p-2 bg-white flex justify-center">
+                  <img
+                    src={img}
+                    alt={`Task visual ${idx + 1}`}
+                    className="max-w-full max-h-[460px] object-contain select-none"
+                  />
                 </div>
               ))}
             </div>
           )}
 
-          {/* Main Prompt Statement */}
-          <div className="text-sm text-slate-800 leading-relaxed font-serif bg-slate-50/50 p-4 rounded-xl border border-slate-100 whitespace-pre-line">
-            {currentVersion?.prompt}
-          </div>
-        </section>
-
-        {/* Right Pane: Response Editor & Word Counter */}
-        <section
-          className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col ${
-            mobileTab === 'editor' ? 'flex' : 'hidden md:flex'
-          }`}
-          style={{ maxHeight: 'calc(100vh - 120px)' }}
-        >
-          {/* Editor Header Bar */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-            <span className="text-xs font-semibold text-slate-600">
-              Your Response — Task {activeTaskNum}
-            </span>
-
-            {/* Word count meter */}
-            <div className="flex items-center gap-2">
-              <div
-                className={`text-xs font-bold px-2.5 py-1 rounded-full transition ${
-                  currentWordCount >= minRequiredWords
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                }`}
-              >
-                {currentWordCount} / {minRequiredWords} words
-              </div>
-              <span className="text-[11px] text-slate-400 hidden lg:inline">
-                ({wordCountPercent}%)
-              </span>
+          {/* Extra Instructions statement if separate from prompt and not duplicating time guidance */}
+          {currentVersion?.instructions &&
+            currentVersion.instructions !== currentVersion.prompt &&
+            !currentVersion.instructions.includes('You should spend about') && (
+            <div className="text-sm text-slate-700 italic border-t border-slate-200 pt-4 mt-6 leading-relaxed">
+              {currentVersion.instructions}
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Word Count Progress Bar */}
-          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-3">
-            <div
-              className={`h-full transition-all duration-300 ${
-                currentWordCount >= minRequiredWords ? 'bg-emerald-500' : 'bg-amber-400'
-              }`}
-              style={{ width: `${wordCountPercent}%` }}
-            ></div>
+        {/* DRAGGABLE VERTICAL SPLITTER WITH OFFICIAL < > HANDLE */}
+        <div
+          onMouseDown={() => setIsDraggingSplitter(true)}
+          className="hidden lg:flex w-[1px] bg-slate-300 relative select-none hover:bg-slate-400 cursor-col-resize shrink-0 group z-10"
+          title="Drag to resize panels"
+        >
+          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-0 w-6 h-10 bg-white border border-slate-400 rounded-[2px] shadow-2xs flex items-center justify-center text-[10px] text-slate-600 font-mono tracking-tighter cursor-col-resize hover:border-slate-800 select-none">
+            &lt; &gt;
           </div>
+        </div>
 
-          {/* Essay Input Textarea */}
-          <div className="flex-1 relative flex flex-col">
+        {/* RIGHT PANE: OFFICIAL RESPONSE EDITOR & BOTTOM-RIGHT WORD COUNT */}
+        <div
+          style={{ width: window.innerWidth >= 1024 ? `${100 - paneWidthPercent}%` : '100%' }}
+          className="h-full flex flex-col bg-white overflow-hidden relative"
+        >
+          <div className="flex-1 p-6 sm:p-8 flex flex-col overflow-hidden">
             <textarea
               value={currentText}
               onChange={(e) => handleTextChange(e.target.value)}
-              placeholder={`Write your Task ${activeTaskNum} response here. Adhere to formal academic style and IELTS standards...`}
-              className="w-full flex-1 p-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-serif text-sm leading-relaxed text-slate-800 resize-none bg-slate-50/20"
+              placeholder=""
+              className={`w-full flex-1 p-0 border-0 outline-none focus:outline-none focus:ring-0 text-slate-900 bg-transparent resize-none custom-scrollbar font-sans ${getTextSizeClass()}`}
               spellCheck="false"
+              autoFocus
             />
           </div>
 
-          {/* Footnote on IELTS Word Count standard */}
-          <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Official IELTS Standard: Hyphenated words count as one.</span>
-            <span>Independent drafts saved continuously</span>
+          {/* Minimalist Bottom-Right Word Counter matching Reference */}
+          <div className="px-6 py-2 border-t border-slate-100 flex items-center justify-end select-none shrink-0 bg-white">
+            <span className="text-xs text-slate-400 font-mono tracking-wide">
+              {currentWordCount} / {minRequiredWords}
+            </span>
           </div>
-        </section>
+        </div>
       </main>
+
+      {/* 4. DOCKED OFFICIAL IELTS TASK NAVIGATOR BAR */}
+      <footer className="bg-white border-t border-slate-200 text-slate-800 px-6 sm:px-12 py-2 z-30 select-none shrink-0 h-13 flex items-center">
+        <div className="w-full flex items-center gap-10">
+          {attempt.task1Id && (
+            <div className="relative">
+              {activeTaskNum === 1 && (
+                <div className="absolute -top-3 left-0 right-0 h-[2px] bg-slate-400 rounded-full" />
+              )}
+              <button
+                type="button"
+                onClick={() => setActiveTaskNum(1)}
+                className="flex items-center gap-2 text-xs sm:text-sm font-semibold transition-colors hover:text-slate-950"
+              >
+                <span className={activeTaskNum === 1 ? 'text-slate-950 font-bold' : 'text-slate-600'}>
+                  Task 1
+                </span>
+                <span className="text-xs text-slate-400 font-normal">
+                  {countWords(task1Text)} words
+                </span>
+              </button>
+            </div>
+          )}
+
+          {attempt.task2Id && (
+            <div className="relative">
+              {activeTaskNum === 2 && (
+                <div className="absolute -top-3 left-0 right-0 h-[2px] bg-slate-400 rounded-full" />
+              )}
+              <button
+                type="button"
+                onClick={() => setActiveTaskNum(2)}
+                className="flex items-center gap-2 text-xs sm:text-sm font-semibold transition-colors hover:text-slate-950"
+              >
+                <span className={activeTaskNum === 2 ? 'text-slate-950 font-bold' : 'text-slate-600'}>
+                  Task 2
+                </span>
+                <span className="text-xs text-slate-400 font-normal">
+                  {countWords(task2Text)} words
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
+      </footer>
 
       {/* Submit Confirmation Modal */}
       {showSubmitModal && (
@@ -517,6 +499,23 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* EXAM HELP MODAL */}
+      <ExamHelpModal
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+        skill="writing"
+      />
+
+      {/* EXAM SETTINGS MODAL */}
+      <ExamSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        textSize={textSize}
+        contrast={contrast}
+        onTextSizeChange={setTextSize}
+        onContrastChange={setContrast}
+      />
     </div>
   );
 };

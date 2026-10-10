@@ -127,7 +127,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
             type="button"
             onClick={() => { setTab('login'); setError(null); }}
             className={`flex-1 py-3 text-center transition-colors ${
-              tab === 'login' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'hover:bg-slate-100'
+              tab === 'login' ? 'bg-white text-[#084F7D] border-b-2 border-[#084F7D]' : 'hover:bg-slate-100'
             }`}
           >
             Sign In
@@ -136,7 +136,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
             type="button"
             onClick={() => { setTab('register'); setError(null); }}
             className={`flex-1 py-3 text-center transition-colors ${
-              tab === 'register' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'hover:bg-slate-100'
+              tab === 'register' ? 'bg-white text-[#084F7D] border-b-2 border-[#084F7D]' : 'hover:bg-slate-100'
             }`}
           >
             Register Student
@@ -163,7 +163,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
           {tab === 'login' && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                   Email Address
                 </label>
                 <div className="relative">
@@ -174,20 +174,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="student@example.com"
-                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-medium"
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-[#084F7D]/20 focus:border-[#084F7D] font-normal"
                   />
                 </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                     Password
                   </label>
                   <button
                     type="button"
                     onClick={() => { setTab('forgot'); setError(null); }}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    className="text-xs text-[#084F7D] hover:underline font-medium"
                   >
                     Forgot password?
                   </button>
@@ -200,7 +200,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-medium"
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-[#084F7D]/20 focus:border-[#084F7D] font-normal"
                   />
                 </div>
               </div>
@@ -208,13 +208,39 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-sm shadow transition-colors disabled:opacity-50"
+                className="w-full py-2.5 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-sm shadow-xs transition-colors disabled:opacity-50"
               >
                 {loading ? 'Authenticating...' : 'Sign In'}
               </button>
 
-              <div className="text-center text-xs text-slate-500 pt-2 border-t border-slate-100">
-                Demo Teacher: <span className="font-mono text-indigo-600">arik@ieltsplatform.test</span> / <span className="font-mono">Password123!</span>
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 text-center">
+                  Quick Demo Access
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('student@ieltsplatform.test');
+                      setPassword('Password123!');
+                      login('student@ieltsplatform.test', 'Password123!').then(onClose);
+                    }}
+                    className="py-2 px-3 rounded-xl bg-[#EBF4F9] hover:bg-[#D8EAF4] text-[#084F7D] font-semibold text-xs transition-colors text-center"
+                  >
+                    Demo Student (Arik)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('arik@ieltsplatform.test');
+                      setPassword('Password123!');
+                      login('arik@ieltsplatform.test', 'Password123!').then(onClose);
+                    }}
+                    className="py-2 px-3 rounded-xl bg-[#FAF9F5] hover:bg-[#EFECE4] text-slate-700 border border-slate-200 font-bold text-xs transition-colors text-center"
+                  >
+                    Demo Teacher
+                  </button>
+                </div>
               </div>
             </form>
           )}

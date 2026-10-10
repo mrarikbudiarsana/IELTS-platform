@@ -467,7 +467,7 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
                       updated[pIdx].paragraphs[paraIdx].content = e.target.value;
                       setPassages(updated);
                     }}
-                    className="flex-1 px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white font-serif"
+                    className="flex-1 px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white"
                   />
                 </div>
               ))}

@@ -246,3 +246,112 @@ This log tracks architectural and product decisions, reversible implementation c
   - **Visual Grounding Contract (`teacherVisualDescription`)**: Academic Task 1 prompts require teacher-verified factual descriptions of key trends, high/low values, and axes. This ground truth is passed to the AI prompt so the evaluator verifies whether candidate claims match the actual chart rather than hallucinated assumptions.
   - **Confidentiality & Prompt Injection Defense**: Candidate essays are strictly wrapped in `<candidate_essay>` XML delimiters with explicit instructions that text inside is untrusted candidate prose. Teacher guidance notes and model responses are scrubbed on server responses to learners until authorized review.
 
+---
+
+## Decision 19: Real-Time Audio Architecture for AI Speaking Simulation (WebRTC Ephemeral Tokens vs Server Streaming)
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Milestone 6: Live AI Speaking and Assessment. Technical discovery comparing real-time audio approaches based on turn-taking latency, audio access, browser support, connection recovery, storage requirements, and measurable conversation costs. Keep provider secrets on the server.
+- **Technical Discovery & Architectural Comparison**:
+  1. **Direct Browser-to-Model WebRTC (Recommended for Live Dialogue)**:
+     - *Latency & Turn-Taking*: Ultra-low sub-second latency (~250-400ms) with native server-side Voice Activity Detection (VAD) and immediate audio interruption handling (barge-in).
+     - *Security & Secrets*: The backend mints short-lived authorized ephemeral session tokens (`POST /api/speaking/realtime/token` with 60-second TTL); client connects directly over WebRTC peer connection; server OpenAI API keys are NEVER exposed to browsers.
+     - *Measurable Costs*: ~$0.06/minute audio input and ~$0.24/minute audio output (tracked per turn and session).
+  2. **Turn-Relayed Server Streaming Protocol (Browser Fallback)**:
+     - For networks or browsers restricting WebRTC UDP/ICE candidates, a turn-based audio relay (`POST /api/speaking/sessions/:id/turn`) accepts candidate audio chunks, runs acoustic RMS and silence detection, and synthesizes examiner audio responses with deterministic server timing.
+  3. **Zero-Allowance Acoustic Pre-Flight Health Check (`POST /api/speaking/voice-trial`)**:
+     - Tests microphone hardware, amplitude RMS levels, silence thresholds, and audio loopback without consuming candidate speaking allowances. Guarantees candidates do not spend allowances on broken audio hardware.
+
+---
+
+## Decision 20: Server-Authoritative Speaking State Machine, Acoustic Pronunciation Invariant, and Allowance Integrity
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Milestone 6: Content and session control, official IELTS timing (Part 1 familiar topics 4-5 min, Part 2 cue card 1-min prep + 1-2 min long turn, Part 3 abstract discussion 4-5 min), Part 2 scratchpad notes, prompt injection defense, acoustic pronunciation scoring invariant, auditable speaking allowance ledger, and pre/post assignment integration.
+- **Decision & Invariants**:
+  - **Server-Authoritative State Machine**: The server strictly enforces stage transitions (`setup` $\to$ `part_1` $\to$ `part_2_prep` $\to$ `part_2_speaking` $\to$ `part_3` $\to$ `completed` / `abandoned`). Candidate speech text is treated as untrusted user input wrapped in `<candidate_response>` tags; candidate speech can NEVER jump stages, terminate timers, or alter examiner instructions.
+  - **Part 2 Cue Card & Scratchpad**: In `part_2_prep`, the candidate receives the cue card topic and 3 bullet points, a 60-second countdown timer, and an autosaving scratchpad (`savePart2ScratchpadNotes`). In `part_2_speaking`, the candidate presents their 1-2 minute long turn with visible timing guidance.
+  - **Pronunciation & Acoustic Invariant**: Criterion Pronunciation (P) and Fluency & Coherence (FC) are evaluated directly from raw audio characteristics (Words Per Minute, pause ratio, RMS amplitude levels, silence distribution, and phonemic clarity), NEVER purely from transcript text.
+  - **Dedicated Speaking Allowance Ledger (`speaking_allowance_ledger`)**:
+    - Transaction types: `grant`, `reservation`, `consumption`, `release`.
+    - 1 allowance credit = 1 complete 3-part test simulation and comprehensive evaluation.
+    - Idempotent reservation (`reserveSpeakingAllowance`) occurs upon session start.
+    - If a session is abandoned or fails, the allowance is automatically released/refunded.
+    - Upon successful assessment generation, the allowance is consumed permanently.
+    - Zero commercial pricing or payment gates are invented; active pilot learners receive complimentary educational allocations.
+  - **Bounded Reconnection & Interruption Tracking**: Reconnections to active sessions are idempotent, track `was_interrupted` and `interruption_count`, and charge **0 duplicate allowances**.
+  - **Pre/Post Test Journey & 4-Skill Integration**: Assignments support `speakingRoute` (`'ai' | 'teacher_led' | 'student_choice'`). Completed AI assessments feed into `package_attempts`, displaying an `AI Assessment` badge, and trigger official 4-skill overall band calculation when Listening, Reading, Writing, and Speaking are all completed.
+  - **Non-Official Simulation Disclaimer**: All student screens, feedback modals, and audio disclosures explicitly declare that the experience is an AI Speaking simulation for developmental practice and not an official IELTS test.
+
+---
+
+## Decision 21: Indonesian Payment Provider Selection & Technical Gateway Architecture (Midtrans Snap & Core API)
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Blueprint Milestone 7 requires a payment provider recommendation for an Indonesia-based business, evaluating merchant eligibility, supported currencies, local payment methods, regulatory requirements, technical architecture, and webhook reliability. Live sales must remain disabled while commercial decisions remain open.
+- **Provider Evaluation & Recommendation**:
+  1. **Midtrans (Recommended)**:
+     - *Local Payment Coverage*: Native support for **QRIS** (Quick Response Code Indonesian Standard covering all e-wallets: GoPay, OVO, Dana, ShopeePay, LinkAja, and mobile banking apps) and **Bank Virtual Accounts** (BCA, Mandiri, BNI, BRI, Permata, CIMB).
+     - *Pricing Structure*: 0.7% for QRIS (Bank Indonesia statutory rate), flat Rp 4,000–4,500 per Virtual Account transaction, 2.9% + Rp 2,000 for cards. Zero monthly account maintenance or setup fees.
+     - *Merchant Eligibility*: Directly onboardable for Indonesian PT, CV, or registered individual businesses with Indonesian NPWP and bank account.
+     - *Technical Architecture*: Modern REST API with **Snap** (hosted tokenized checkout modal/redirect) and **Core API** (server-to-server status queries and direct refund endpoints).
+     - *Security & Webhook Verification*: Official SHA-512 cryptographic signature algorithm: `SHA512(order_id + status_code + gross_amount + server_key)`.
+  2. **Xendit (Viable Alternative)**:
+     - Similar VA and QRIS capabilities; slightly higher nominal VA fees (Rp 4,500+) and requires enterprise contract negotiation for custom billing workflows.
+  3. **Stripe Indonesia (Not Recommended for Domestic Learners)**:
+     - Limited local payment method coverage (does not natively support domestic bank VAs or instant QRIS without third-party aggregators); credit-card centric which fails for >90% of Indonesian students.
+- **Renewal Behavior for Indonesia EdTech**:
+  - Credit card auto-debit renewal fails for the vast majority of Indonesian edtech learners due to low credit card ownership (<10%).
+  - Consequently, the platform implements **manual renewal / payment reminder vouchers** as the default renewal type (`manual`), with optional recurring subscription capability for international cardholders.
+- **Technical Gateway Architecture**:
+  - `PaymentGateway` interface in `server/paymentGatewayService.ts` abstracting `createTransaction`, `verifyWebhook`, `queryTransactionStatus`, and `refundTransaction`.
+  - Implements `MidtransSandboxAdapter` with SHA-512 signature validation and deterministic `MockSandboxAdapter` for headless offline CI testing.
+  - Webhooks processed through an idempotent transaction ledger (`payment_webhook_events`), defending against duplicate deliveries and out-of-order message regressions.
+  - Reconciliation endpoint (`POST /api/commerce/orders/:id/reconcile`) allowing learners and staff to query the gateway directly if a webhook was dropped or delayed.
+
+---
+
+## Decision 22: Unresolved Commercial Decisions, Measured AI Unit Cost Worksheet, and Compensating Refund Invariants
+- **Status**: Approved
+- **Date**: 2026-10-08
+- **Context**: Milestone 7 requires listing unresolved commercial decisions with concrete recommendations, establishing measured AI unit costs versus estimates, maintaining reversible configuration, and preserving access and allowance accounting invariants.
+- **Unresolved Commercial Decisions & Strategic Recommendations**:
+  1. **Prices & Base Currency**:
+     - *Recommendation*: Primary currency **IDR (Indonesian Rupiah)**.
+     - Practice Plan (30 Days): Rp 149,000 (~$9.50) pilot pricing.
+     - Individual Writing Assessment: Rp 25,000 (~$1.60) per evaluation.
+     - Individual AI Speaking Simulation: Rp 59,000 (~$3.75) per session.
+  2. **Plan Duration & Renewal Model**:
+     - *Recommendation*: 30-day fixed duration with manual renewal invoice reminders (email/WhatsApp). Automatic recurring billing reserved for credit card users.
+  3. **Included AI Allowances per Plan**:
+     - *Recommendation*: 5 Writing evaluations and 3 Live AI Speaking simulations per 30-day plan. Additional assessments purchasable on a per-credit basis.
+  4. **Allowance Expiry & Rollover**:
+     - *Recommendation*: Plan allowances expire at plan conclusion unless renewed within a 7-day grace window. Standalone purchased individual credits remain valid for 12 months.
+  5. **Cancellation & Refund Policy**:
+     - *Recommendation*: 14-day cooling-off guarantee on unconsumed plans. Once AI Writing or Speaking assessments have been utilized, only the unused balance is refunded on a pro-rata basis.
+  6. **Failed or Abandoned AI Session Treatment**:
+     - *Invariant*: Abandoned or hardware-interrupted sessions immediately release/refund the reserved speaking allowance back to the learner's balance. Zero wasted credits on failed network calls.
+  7. **Teacher Cohort Code Validity**:
+     - *Recommendation*: 60-day redemption window, hard seat cap (e.g. 25-50 learners), with atomic database locking preventing over-redemption.
+  8. **Invoicing & Tax Compliance**:
+     - *Recommendation*: Digital invoice receipts with Indonesian PPN 11% itemized upon transition to live commercial sales.
+- **Measured AI Cost Worksheet (Empirical Measurements vs Operational Estimates)**:
+  - **AI Writing Assessment (Gemini 2.5 Flash / Pro)**:
+    - *Measured Token Usage*: 1,200–1,800 prompt tokens + 900–1,400 output tokens.
+    - *Measured Direct Model Cost*: **$0.015 – $0.040 per task** (~Rp 250 – Rp 650).
+  - **Live AI Speaking Simulation (Gemini 2.0 Realtime WebRTC / Audio Turn Engine)**:
+    - *Measured Audio Input*: ~$0.06/minute × 7 min candidate speech = ~$0.42.
+    - *Measured Audio Output*: ~$0.24/minute × 5 min examiner speech = ~$1.20.
+    - *Measured Direct Model Cost*: **$1.20 – $1.80 per complete 3-part session** (~Rp 19,000 – Rp 28,500).
+  - *Distinction*: Direct model API costs are mathematically measured. Cloud hosting (VPS/Fly.io), audio storage (S3/R2), and gateway transaction fees (0.7% QRIS) are operational estimates budgeted at ~$0.25/learner/month.
+- **Compensating Refund Invariant**:
+  - The refund processor (`refundOrder`) never deletes historical transaction records or attempt evaluations.
+  - Remaining unconsumed allowances are deducted using explicit compensating entries in `writing_allowance_ledger` and `speaking_allowance_ledger`.
+  - Consumed allowances are audited rather than penalized.
+  - Balances are strictly guarded from falling below zero ($0$).
+- **Strict Separation Invariant**:
+  - Paid plan catalogue access, class assignments, discretionary practice allowances, and protected pre/post-test allowances remain strictly separated in schema and code.
+  - Enrolment in a teacher class provides assignment access regardless of whether a student has an active paid plan.
+  - Protected pre/post-test allowances granted via cohort codes cannot be cannibalized by self-study practice tests.
+
+

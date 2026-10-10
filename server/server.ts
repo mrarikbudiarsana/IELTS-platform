@@ -55,6 +55,7 @@ import {
 import { seedDatabase } from './seed';
 import { seedListeningDatabase } from './listeningSeed';
 import { seedClassDatabase } from './classSeed';
+import { ingestCambridge21Test4 } from './ingestCambridge21Test4';
 import {
   createClass,
   updateClass,
@@ -97,6 +98,21 @@ import {
   listTeacherAssessmentQueue,
   listStudentSpeakingAssessments,
 } from './speakingService';
+import {
+  runVoiceTrial,
+  mintRealtimeSessionToken,
+  startOrRecoverSpeakingSession,
+  getSpeakingSessionById,
+  advanceSessionStage,
+  savePart2ScratchpadNotes,
+  submitCandidateTurn,
+  finishAndAssessSpeakingSession,
+  abandonSpeakingSession,
+} from './aiSpeakingService';
+import {
+  getUserSpeakingAllowanceBalance,
+  grantSpeakingAllowance,
+} from './speakingAllowanceService';
 import { seedWritingData } from './writingSeed';
 import {
   createWritingTask,
@@ -120,6 +136,32 @@ import {
   grantTestingAllowance,
 } from './allowanceService';
 import { ClassTestType } from '../shared/types';
+import { seedCommercialProductsAndCodes } from './commercialSeed';
+import {
+  createProduct,
+  updateProduct,
+  publishProduct,
+  archiveProduct,
+  listProducts,
+  getProductById,
+  getCheckoutPreview,
+  createOrder,
+  getOrderById,
+  listUserOrders,
+  processPaymentWebhook,
+  reconcileOrder,
+  refundOrder,
+  createTeacherCode,
+  updateTeacherCode,
+  revokeTeacherCode,
+  listTeacherCodes,
+  previewTeacherCode,
+  redeemTeacherCode,
+  getUserCommercialSummary,
+  getAdminCommercialSummary,
+  adjustUserBalance,
+  canUserAccessTest,
+} from './commercialService';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -221,6 +263,35 @@ app.post('/api/auth/login', (req, res) => {
 // Current user profile
 app.get('/api/auth/me', authMiddleware, (req: AuthenticatedRequest, res) => {
   res.json({ user: req.user });
+});
+
+// Update user profile (target band, test date, preference)
+app.patch('/api/auth/profile', authMiddleware, (req: AuthenticatedRequest, res) => {
+  const { targetBand, testDate, testTypePreference } = req.body;
+  const updates: string[] = [];
+  const params: any[] = [];
+
+  if (targetBand !== undefined) {
+    updates.push('target_band = ?');
+    params.push(targetBand === null || targetBand === '' ? null : Number(targetBand));
+  }
+  if (testDate !== undefined) {
+    updates.push('test_date = ?');
+    params.push(testDate === null || testDate === '' ? null : String(testDate));
+  }
+  if (testTypePreference !== undefined) {
+    updates.push('test_type_preference = ?');
+    params.push(String(testTypePreference));
+  }
+
+  if (updates.length > 0) {
+    params.push(req.user!.id);
+    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  }
+
+  const row = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id);
+  const user = mapUserRow(row);
+  res.json({ user });
 });
 
 // Request password reset token
@@ -1166,6 +1237,160 @@ app.get('/api/speaking/my-assessments', authMiddleware, (req: AuthenticatedReque
 });
 
 // -------------------------------------------------------------
+// LIVE AI SPEAKING SIMULATION & ASSESSMENT (MILESTONE 6)
+// -------------------------------------------------------------
+
+// POST /api/speaking/voice-trial - Pre-flight mic/speaker test (0 allowance cost)
+app.post('/api/speaking/voice-trial', async (req, res) => {
+  try {
+    const result = await runVoiceTrial(req.body);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/realtime/token - Mint short-lived WebRTC session token
+app.post('/api/speaking/realtime/token', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const tokenData = await mintRealtimeSessionToken();
+    res.json(tokenData);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sessions - Start or recover an AI Speaking simulation session
+app.post('/api/speaking/sessions', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const session = startOrRecoverSpeakingSession({
+      userId: req.user!.id,
+      setId: req.body.setId,
+      setVersionId: req.body.setVersionId,
+      assignmentId: req.body.assignmentId,
+      packageAttemptId: req.body.packageAttemptId,
+      mode: req.body.mode || 'mock',
+    });
+    res.status(201).json({ session });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/speaking/sessions/:id - Get session state and audio turns
+app.get('/api/speaking/sessions/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const session = getSpeakingSessionById(req.params.id);
+    if (!session) {
+      res.status(404).json({ error: 'Speaking session not found' });
+      return;
+    }
+    const isOwner = session.userId === req.user!.id;
+    const isTeacherOrAdmin = req.user!.role === 'teacher' || req.user!.role === 'admin';
+    if (!isOwner && !isTeacherOrAdmin) {
+      res.status(403).json({ error: 'Unauthorized access to speaking session' });
+      return;
+    }
+    res.json({ session });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sessions/:id/stage - Advance session stage
+app.post('/api/speaking/sessions/:id/stage', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const { targetStage } = req.body;
+    if (!targetStage) {
+      res.status(400).json({ error: 'targetStage is required' });
+      return;
+    }
+    const session = advanceSessionStage(req.params.id, req.user!.id, targetStage);
+    res.json({ session });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sessions/:id/part2-notes - Save Part 2 scratchpad notes
+app.post('/api/speaking/sessions/:id/part2-notes', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const { notes } = req.body;
+    savePart2ScratchpadNotes(req.params.id, req.user!.id, notes || '');
+    res.json({ message: 'Part 2 notes saved successfully.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sessions/:id/turn - Submit candidate speech & receive examiner response
+app.post('/api/speaking/sessions/:id/turn', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const result = await submitCandidateTurn({
+      sessionId: req.params.id,
+      userId: req.user!.id,
+      candidateText: req.body.candidateText,
+      audioBase64: req.body.audioBase64,
+      durationSeconds: req.body.durationSeconds,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sessions/:id/finish - Complete session and run AI assessment
+app.post('/api/speaking/sessions/:id/finish', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const assessment = await finishAndAssessSpeakingSession(req.params.id, req.user!.id);
+    res.json({ assessment, message: 'AI Speaking assessment generated successfully.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/sessions/:id/abandon - Abandon session & refund reserved allowance
+app.post('/api/speaking/sessions/:id/abandon', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    abandonSpeakingSession(req.params.id, req.user!.id, req.body.reason);
+    res.json({ message: 'Speaking session cancelled and allowance refunded.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/speaking/allowances/balance - Get current user's Speaking allowance balance
+app.get('/api/speaking/allowances/balance', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const balance = getUserSpeakingAllowanceBalance(req.user!.id);
+    res.json({ balance });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/allowances/grant - Grant allowances (Teacher/Admin only)
+app.post('/api/speaking/allowances/grant', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const { userId, amount, notes } = req.body;
+    if (!userId || !amount) {
+      res.status(400).json({ error: 'userId and positive amount are required.' });
+      return;
+    }
+    const ledgerEntry = grantSpeakingAllowance({
+      adminId: req.user!.id,
+      userId,
+      amount: Number(amount),
+      notes,
+    });
+    const balance = getUserSpeakingAllowanceBalance(userId);
+    res.status(201).json({ ledgerEntry, balance });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
 // WRITING TASKS (TEACHER & STUDENT API)
 // -------------------------------------------------------------
 
@@ -1442,6 +1667,283 @@ app.post('/api/writing/allowances/grant', authMiddleware, requireRole('teacher',
   }
 });
 
+// -------------------------------------------------------------
+// COMMERCIAL PRODUCTS (ADMIN & PUBLIC/LEARNER)
+// -------------------------------------------------------------
+
+// GET /api/commerce/products - list products
+app.get('/api/commerce/products', (req, res) => {
+  try {
+    // If auth header present, check if staff
+    let isStaff = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = (req as any).jwt?.verify ? (req as any).jwt.verify(token) : null;
+        if (decoded?.role === 'admin' || decoded?.role === 'teacher') isStaff = true;
+      } catch {
+        // ignore
+      }
+    }
+    const products = listProducts(isStaff);
+    res.json({ products });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/products - create product (admin)
+app.post('/api/commerce/products', authMiddleware, requireRole('admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const product = createProduct(req.user!.id, req.body);
+    res.status(201).json({ product });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/commerce/products/:id - update product (admin)
+app.put('/api/commerce/products/:id', authMiddleware, requireRole('admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const product = updateProduct(req.user!.id, req.params.id, req.body);
+    res.json({ product });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/products/:id/publish - publish product (admin)
+app.post('/api/commerce/products/:id/publish', authMiddleware, requireRole('admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const product = publishProduct(req.user!.id, req.params.id);
+    res.json({ product });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/products/:id/archive - archive product (admin)
+app.post('/api/commerce/products/:id/archive', authMiddleware, requireRole('admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const product = archiveProduct(req.user!.id, req.params.id);
+    res.json({ product });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// CHECKOUT & ORDERS
+// -------------------------------------------------------------
+
+// GET /api/commerce/checkout/preview/:productId - pre-payment price disclosure
+app.get('/api/commerce/checkout/preview/:productId', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const preview = getCheckoutPreview(req.user!.id, req.params.productId);
+    res.json(preview);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/checkout/create-order - create order on server
+app.post('/api/commerce/checkout/create-order', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { productId, provider = 'midtrans' } = req.body;
+    const result = await createOrder(req.user!.id, productId, provider);
+    res.status(201).json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/commerce/orders/my - list user orders
+app.get('/api/commerce/orders/my', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const orders = listUserOrders(req.user!.id);
+    res.json({ orders });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/commerce/orders/:id - get single order
+app.get('/api/commerce/orders/:id', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const order = getOrderById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found.' });
+    if (order.userId !== req.user!.id && req.user!.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized.' });
+    }
+    res.json({ order });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/orders/:id/reconcile - reconcile missed notifications
+app.post('/api/commerce/orders/:id/reconcile', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const order = getOrderById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found.' });
+    if (order.userId !== req.user!.id && req.user!.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized.' });
+    }
+    const reconciled = await reconcileOrder(req.params.id);
+    res.json({ order: reconciled });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/orders/:id/refund - refund order (admin only)
+app.post('/api/commerce/orders/:id/refund', authMiddleware, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { reason, amount } = req.body;
+    const result = await refundOrder({
+      adminId: req.user!.id,
+      orderId: req.params.id,
+      reason,
+      amount,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// WEBHOOK NOTIFICATIONS (IDEMPOTENT & SIGNED)
+// -------------------------------------------------------------
+
+// POST /api/commerce/webhooks/midtrans - Midtrans gateway callback
+app.post('/api/commerce/webhooks/midtrans', async (req, res) => {
+  try {
+    const signature = (req.headers['x-midtrans-signature'] || req.headers['signature-key']) as string | undefined;
+    const result = await processPaymentWebhook('midtrans', req.body, signature);
+    res.json(result);
+  } catch (err: any) {
+    console.warn('Midtrans webhook processing error:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/webhooks/mock - Mock gateway callback for testing
+app.post('/api/commerce/webhooks/mock', async (req, res) => {
+  try {
+    const result = await processPaymentWebhook('mock', req.body);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// TEACHER CODES
+// -------------------------------------------------------------
+
+// GET /api/commerce/codes - list teacher codes (staff only)
+app.get('/api/commerce/codes', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const codes = listTeacherCodes(true);
+    res.json({ codes });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/codes - create teacher code (staff only)
+app.post('/api/commerce/codes', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const code = createTeacherCode(req.user!.id, req.body);
+    res.status(201).json({ code });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/commerce/codes/:id - update teacher code (staff only)
+app.put('/api/commerce/codes/:id', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const code = updateTeacherCode(req.user!.id, req.params.id, req.body);
+    res.json({ code });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/codes/:id/revoke - revoke teacher code (staff only)
+app.post('/api/commerce/codes/:id/revoke', authMiddleware, requireRole('teacher', 'admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const code = revokeTeacherCode(req.user!.id, req.params.id);
+    res.json({ code });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/commerce/codes/:code/preview - preview code benefits (learner)
+app.get('/api/commerce/codes/:code/preview', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const preview = previewTeacherCode(req.params.code);
+    res.json(preview);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/codes/redeem - redeem code atomically (learner)
+app.post('/api/commerce/codes/redeem', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const result = redeemTeacherCode(req.user!.id, req.body.code);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// USER COMMERCIAL ENTITLEMENTS & ADMIN SUMMARY
+// -------------------------------------------------------------
+
+// GET /api/commerce/entitlements/my - get current user's commercial summary
+app.get('/api/commerce/entitlements/my', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const summary = getUserCommercialSummary(req.user!.id);
+    res.json(summary);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/commerce/admin/summary - admin financial and entitlement summary
+app.get('/api/commerce/admin/summary', authMiddleware, requireRole('admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const summary = getAdminCommercialSummary();
+    res.json(summary);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/commerce/admin/adjust-balance - reasoned audited balance adjustment
+app.post('/api/commerce/admin/adjust-balance', authMiddleware, requireRole('admin'), (req: AuthenticatedRequest, res) => {
+  try {
+    const { userId, skill, amount, reason } = req.body;
+    const result = adjustUserBalance({
+      adminId: req.user!.id,
+      userId,
+      skill,
+      amount: Number(amount),
+      reason,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Serve compiled React frontend if present
 const clientDistPath = path.resolve(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
@@ -1459,6 +1961,8 @@ seedListeningDatabase();
 seedClassDatabase();
 seedSpeakingDatabase();
 seedWritingData();
+seedCommercialProductsAndCodes();
+ingestCambridge21Test4();
 
 app.listen(PORT, () => {
   console.log(`IELTS Platform API server listening on http://localhost:${PORT}`);

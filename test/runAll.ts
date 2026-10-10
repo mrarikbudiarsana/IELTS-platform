@@ -28,6 +28,22 @@ if (res5.status !== 0) {
   process.exit(res5.status || 1);
 }
 
+const res6 = spawnSync('npx', ['tsx', 'test/runAiSpeakingTests.ts'], { stdio: 'inherit', shell: true });
+if (res6.status !== 0) {
+  process.exit(res6.status || 1);
+}
+
+const res7 = spawnSync('npx', ['tsx', 'test/runCommercialTests.ts'], { stdio: 'inherit', shell: true });
+if (res7.status !== 0) {
+  process.exit(res7.status || 1);
+}
+
+const res8 = spawnSync('npx', ['tsx', 'test/testCambridge21Ingestion.ts'], { stdio: 'inherit', shell: true });
+if (res8.status !== 0) {
+  process.exit(res8.status || 1);
+}
+
 console.log('\n========================================================================');
-console.log('  ALL PLATFORM MODULE TESTS (READING, LISTENING, CLASSES, SPEAKING & WRITING) PASSED! ');
+console.log('  ALL PLATFORM MODULE TESTS (M1-M7 & REAL CAMBRIDGE IELTS 21 INGESTION) PASSED! ');
 console.log('========================================================================\n');
+

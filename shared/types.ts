@@ -187,6 +187,16 @@ export interface ReadingTestVersion {
   createdAt: string;
 }
 
+export interface QuestionGroupSummary {
+  id: string;
+  questionType: string;
+  passageId?: string;
+  partNumber?: number;
+  startQuestionNumber: number;
+  endQuestionNumber: number;
+  questionCount: number;
+}
+
 export interface ReadingTest {
   id: string;
   title: string;
@@ -197,7 +207,10 @@ export interface ReadingTest {
   status: PublicationStatus;
   latestVersionId: string;
   totalQuestions: number;
+  passageCount?: number;
+  questionGroupsSummary?: QuestionGroupSummary[];
   createdById: string;
+  isFreeTier?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -258,7 +271,10 @@ export interface ListeningTest {
   status: PublicationStatus;
   latestVersionId: string;
   totalQuestions: number;
+  partCount?: number;
+  questionGroupsSummary?: QuestionGroupSummary[];
   createdById: string;
+  isFreeTier?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -438,6 +454,8 @@ export interface Assignment {
   lastAttemptBand?: number;
   speakingSessionStatus?: 'awaiting_session' | 'awaiting_feedback' | 'feedback_available';
   speakingAssessmentId?: string;
+  speakingRoute?: SpeakingRoute;
+  speakingAiSessionId?: string;
   writingAttemptId?: string;
   writingAssessmentStatus?: 'not_started' | 'queued' | 'assessed';
 }
@@ -553,7 +571,14 @@ export interface SpeakingSetVersion {
   part1Topics: SpeakingPart1Topic[];
   part2CueCard: SpeakingPart2CueCard;
   part3Discussion: SpeakingPart3Discussion;
+  followUpGuidance?: {
+    maxFollowUpsPerTopic?: number;
+    probingDepth?: 'standard' | 'deep';
+    adaptiveGuidance?: string;
+  };
   teacherNotes?: string;
+  teacherOnlyInstructions?: string;
+  aiInstructions?: string;
   validationErrors?: string[];
   publishedAt?: string;
   createdAt: string;
@@ -566,6 +591,7 @@ export interface SpeakingSet {
   status: PublicationStatus;
   latestVersionId: string;
   createdById: string;
+  isFreeTier?: boolean;
   createdAt: string;
   updatedAt: string;
   versions?: SpeakingSetVersion[];
@@ -624,9 +650,120 @@ export interface SpeakingAssessment {
   recordingUrl?: string;
   recordingRetentionAcknowledged?: boolean;
   corrections?: SpeakingScoreCorrection[];
+  evidenceQuotes?: { criterion: string; quote: string; comment: string; timestamp?: string }[];
+  suggestedPractice?: string[];
+  acousticObservations?: { speechRateWpm?: number; pauseRatio?: number; pronunciationNotes?: string };
+  isSimulated?: boolean;
+  providerModel?: string;
+  sessionId?: string;
+  wasInterrupted?: boolean;
+  interruptionCount?: number;
   releasedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// -------------------------------------------------------------
+// LIVE AI SPEAKING SIMULATION & ASSESSMENT (MILESTONE 6)
+// -------------------------------------------------------------
+
+export type SpeakingRoute = 'ai' | 'teacher_led' | 'student_choice';
+export type SpeakingAiSessionStage =
+  | 'setup'
+  | 'part_1'
+  | 'part_2_prep'
+  | 'part_2_speaking'
+  | 'part_3'
+  | 'completed'
+  | 'abandoned';
+
+export interface SpeakingAudioTurn {
+  id: string;
+  sessionId: string;
+  part: SpeakingPart;
+  turnNumber: number;
+  speaker: 'examiner' | 'candidate';
+  text: string;
+  audioUrl?: string;
+  durationSeconds: number;
+  timestampSeconds: number;
+  isFollowUp: boolean;
+  createdAt: string;
+}
+
+export interface SpeakingAiSession {
+  id: string;
+  userId: string;
+  userName?: string;
+  assignmentId?: string;
+  packageAttemptId?: string;
+  setId?: string;
+  setVersionId?: string;
+  setTitle?: string;
+  mode: TestMode;
+  stage: SpeakingAiSessionStage;
+  currentPart: SpeakingPart;
+  currentQuestionIndex: number;
+  part2Notes?: string;
+  durationSeconds: number;
+  wasInterrupted: boolean;
+  interruptionCount: number;
+  assessmentId?: string;
+  assessment?: SpeakingAssessment;
+  turns?: SpeakingAudioTurn[];
+  allowanceReserved: boolean;
+  allowanceConsumed: boolean;
+  startedAt: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SpeakingAllowanceLedger {
+  id: string;
+  userId: string;
+  amount: number;
+  balanceAfter: number;
+  transactionType: 'grant' | 'reservation' | 'consumption' | 'release';
+  sessionId?: string;
+  assessmentId?: string;
+  idempotencyKey?: string;
+  notes?: string;
+  createdById?: string;
+  createdAt: string;
+}
+
+export interface SpeakingAllowanceBalance {
+  userId?: string;
+  totalGranted: number;
+  totalConsumed: number;
+  totalReserved: number;
+  available: number;
+}
+
+export interface SpeakingVoiceTrialRequest {
+  audioBase64?: string;
+  textPrompt?: string;
+  simulateFailure?: boolean;
+}
+
+export interface SpeakingVoiceTrialResponse {
+  success: boolean;
+  audioDetected: boolean;
+  rmsLevel: number;
+  isClipping: boolean;
+  isSilent: boolean;
+  speechDurationSeconds: number;
+  examinerResponseText: string;
+  examinerAudioBase64?: string;
+  isSimulated: boolean;
+  latencyMs: number;
+  measuredCosts?: {
+    sttCostUsd: number;
+    reasoningCostUsd: number;
+    ttsCostUsd: number;
+    totalTurnCostUsd: number;
+  };
 }
 
 // -------------------------------------------------------------
@@ -685,6 +822,7 @@ export interface WritingTask {
   status: PublicationStatus;
   latestVersionId: string;
   createdById: string;
+  isFreeTier?: boolean;
   createdAt: string;
   updatedAt: string;
   versions?: WritingTaskVersion[];
@@ -818,5 +956,166 @@ export interface WritingAllowanceBalance {
   totalConsumed: number;
   totalReserved: number;
   available: number;
+}
+
+// -------------------------------------------------------------
+// MILESTONE 7: COMMERCIAL ACCESS, TEACHER CODES & PAYMENTS
+// -------------------------------------------------------------
+
+export type PlanType = 'free' | 'paid_plan';
+export type CommercialProductType = 'paid_plan' | 'writing_assessment' | 'speaking_session' | 'bundle';
+export type RenewalType = 'manual' | 'recurring';
+export type ProductStatus = 'draft' | 'published' | 'archived';
+export type OrderStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'expired' | 'refunded' | 'disputed';
+export type GrantSourceType = 'purchase' | 'teacher_code' | 'admin_adjustment';
+export type GrantType = 'catalogue_access' | 'writing_allowance' | 'speaking_allowance' | 'protected_prepost';
+export type TeacherCodeStatus = 'active' | 'revoked' | 'exhausted';
+
+export interface CommercialProduct {
+  id: string;
+  sku: string;
+  title: string;
+  description?: string;
+  productType: CommercialProductType;
+  priceAmount: number; // In base currency units (e.g. IDR rupiah or USD cents)
+  currency: string; // 'IDR' or 'USD'
+  durationDays?: number; // E.g. 30 days for monthly plan
+  writingAllowances: number;
+  speakingAllowances: number;
+  grantsCatalogueAccess: boolean;
+  renewalType: RenewalType;
+  status: ProductStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommercialOrder {
+  id: string; // E.g. 'ORD-1728374900-ABCD'
+  userId: string;
+  productId: string;
+  productSku: string;
+  productTitle: string;
+  grossAmount: number;
+  currency: string;
+  paymentProvider: string; // 'midtrans' | 'mock'
+  providerTransactionId?: string;
+  status: OrderStatus;
+  paymentMethod?: string; // 'qris' | 'bank_transfer' | 'credit_card' | 'gopay'
+  paidAt?: string;
+  refundedAt?: string;
+  refundAmount?: number;
+  refundReason?: string;
+  checkoutUrl?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommercialEntitlementGrant {
+  id: string;
+  userId: string;
+  sourceType: GrantSourceType;
+  sourceId: string;
+  grantType: GrantType;
+  amount: number;
+  validFrom: string;
+  validUntil?: string;
+  status: 'active' | 'expired' | 'revoked';
+  notes?: string;
+  createdAt: string;
+}
+
+export interface TeacherCode {
+  id: string;
+  code: string;
+  label: string;
+  description?: string;
+  redemptionDeadlineAt?: string;
+  accessDurationDays: number;
+  maxRedemptions: number;
+  redemptionCount: number;
+  classId?: string;
+  className?: string;
+  grantsCatalogueAccess: boolean;
+  writingAllowances: number;
+  speakingAllowances: number;
+  protectedPrepostAllowances: number;
+  status: TeacherCodeStatus;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeacherCodeRedemption {
+  id: string;
+  codeId: string;
+  userId: string;
+  userEmail?: string;
+  redeemedAt: string;
+}
+
+export interface UserSubscription {
+  id: string;
+  userId: string;
+  planId: string;
+  orderId?: string;
+  codeId?: string;
+  status: 'active' | 'cancelled' | 'expired';
+  validFrom: string;
+  validUntil: string;
+  renewalType: RenewalType;
+  cancelledAt?: string;
+  cancellationReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CheckoutPreviewResponse {
+  product: CommercialProduct;
+  totalPriceFormatted: string;
+  currency: string;
+  benefitsSummary: string[];
+  durationDescription: string;
+  renewalNotice: string;
+  cancellationRefundTerms: string;
+  currentAccessSummary: {
+    planType: PlanType;
+    planExpiresAt?: string;
+    hasCatalogueAccess: boolean;
+    availableWritingAllowances: number;
+    availableSpeakingAllowances: number;
+    protectedWritingAllowances: number;
+    protectedSpeakingAllowances: number;
+  };
+  impactSummary: string;
+}
+
+export interface LearnerCommercialSummary {
+  planType: PlanType;
+  planExpiresAt?: string;
+  hasCatalogueAccess: boolean;
+  subscriptions: UserSubscription[];
+  writingBalance: {
+    total: number;
+    discretionary: number;
+    protectedPrepost: number;
+  };
+  speakingBalance: {
+    total: number;
+    discretionary: number;
+    protectedPrepost: number;
+  };
+  recentOrders: CommercialOrder[];
+  activeGrants: CommercialEntitlementGrant[];
+}
+
+export interface AdminCommercialSummary {
+  totalRevenueByCurrency: Record<string, number>;
+  orderCountByStatus: Record<string, number>;
+  activeSubscribersCount: number;
+  products: CommercialProduct[];
+  recentOrders: CommercialOrder[];
+  teacherCodes: TeacherCode[];
+  recentGrants: CommercialEntitlementGrant[];
 }
 

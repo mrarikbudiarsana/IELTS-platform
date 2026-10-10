@@ -315,7 +315,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                       <Quote className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
                       <div>
                         <span className="font-bold text-indigo-700">Passage Evidence: </span>
-                        <span className="italic font-serif">"{item.evidenceQuote}"</span>
+                        <span className="italic">"{item.evidenceQuote}"</span>
                       </div>
                     </div>
                   )}

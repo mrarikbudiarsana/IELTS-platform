@@ -43,9 +43,9 @@ async function runAllTests() {
 
   const testStudentId = uuidv4();
   db.prepare(`
-    INSERT INTO users (id, email, password_hash, full_name, role, created_at)
-    VALUES (?, ?, ?, ?, 'student', datetime('now'))
-  `).run(testStudentId, `student_${Date.now()}@test.com`, hash, 'Test Student');
+    INSERT INTO users (id, email, password_hash, full_name, role, plan_type, plan_expires_at, created_at)
+    VALUES (?, ?, ?, ?, 'student', 'paid_plan', datetime('now', '+30 days'), datetime('now'))
+  `).run(testStudentId, `student_${Date.now()}@test.com`, hashPassword(password), 'Test Student');
 
   const studentRow = db.prepare('SELECT * FROM users WHERE id = ?').get(testStudentId);
   const studentUser = mapUserRow(studentRow);
@@ -70,8 +70,9 @@ async function runAllTests() {
   // ---------------------------------------------------------------
   // TEST 3: Answer-Key Scrubbing for Active In-Progress Attempts
   // ---------------------------------------------------------------
-  console.log('TEST 3: Answer-Key and Explanation Protection During Attempts');
-  const publishedMock = studentTests.find((t) => t.category === 'mock' && t.totalQuestions === 40);
+  const publishedMock =
+    studentTests.find((t) => t.title === 'Academic Reading Full Mock Examination 1') ||
+    studentTests.find((t) => t.category === 'mock' && t.totalQuestions === 40);
   assert.ok(publishedMock, '40-question mock must exist in published catalogue');
 
   const { attempt, testVersion: sanitizedTest } = startOrResumeAttempt({
@@ -314,8 +315,8 @@ async function runAllTests() {
   console.log('TEST 9: Server-Controlled Deadline Auto-Expiry');
   const testStudent2Id = uuidv4();
   db.prepare(`
-    INSERT INTO users (id, email, password_hash, full_name, role, created_at)
-    VALUES (?, ?, ?, ?, 'student', datetime('now'))
+    INSERT INTO users (id, email, password_hash, full_name, role, plan_type, plan_expires_at, created_at)
+    VALUES (?, ?, ?, ?, 'student', 'paid_plan', datetime('now', '+30 days'), datetime('now'))
   `).run(testStudent2Id, `student_timer_${Date.now()}@test.com`, hash, 'Timer Student');
 
   const timedAttempt = startOrResumeAttempt({

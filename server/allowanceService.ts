@@ -25,7 +25,7 @@ export function getUserAllowanceBalance(userId: string): WritingAllowanceBalance
     } else if (row.transaction_type === 'reservation') {
       totalReserved += Math.abs(row.amount);
     } else if (row.transaction_type === 'consumption') {
-      totalConsumed += 1;
+      totalConsumed += Math.abs(row.amount);
     } else if (row.transaction_type === 'release') {
       totalReleased += row.amount;
     }
@@ -55,8 +55,9 @@ export function grantTestingAllowance(params: {
   userId: string;
   amount: number;
   notes?: string;
+  idempotencyKey?: string;
 }): WritingAllowanceLedger {
-  const { adminId, userId, amount, notes } = params;
+  const { adminId, userId, amount, notes, idempotencyKey } = params;
 
   if (amount <= 0 || !Number.isInteger(amount)) {
     throw new Error('Allowance grant amount must be a positive integer.');
@@ -67,6 +68,27 @@ export function grantTestingAllowance(params: {
     throw new Error('Target user does not exist.');
   }
 
+  if (idempotencyKey) {
+    const existing = db
+      .prepare('SELECT * FROM writing_allowance_ledger WHERE idempotency_key = ?')
+      .get(idempotencyKey) as any;
+    if (existing) {
+      return {
+        id: existing.id,
+        userId: existing.user_id,
+        amount: existing.amount,
+        balanceAfter: existing.balance_after,
+        transactionType: existing.transaction_type,
+        assessmentId: existing.assessment_id || undefined,
+        responseId: existing.response_id || undefined,
+        idempotencyKey: existing.idempotency_key || undefined,
+        notes: existing.notes || undefined,
+        createdById: existing.created_by_id || undefined,
+        createdAt: existing.created_at,
+      };
+    }
+  }
+
   const txn = db.transaction(() => {
     const currentBalance = getUserAllowanceBalance(userId);
     const newAvailable = currentBalance.available + amount;
@@ -74,9 +96,9 @@ export function grantTestingAllowance(params: {
 
     db.prepare(
       `INSERT INTO writing_allowance_ledger (
-        id, user_id, amount, balance_after, transaction_type, notes, created_by_id
-      ) VALUES (?, ?, ?, ?, 'grant', ?, ?)`
-    ).run(ledgerId, userId, amount, newAvailable, notes || 'Pilot testing grant', adminId);
+        id, user_id, amount, balance_after, transaction_type, notes, created_by_id, idempotency_key
+      ) VALUES (?, ?, ?, ?, 'grant', ?, ?, ?)`
+    ).run(ledgerId, userId, amount, newAvailable, notes || 'Pilot testing grant', adminId, idempotencyKey || null);
 
     return db
       .prepare('SELECT * FROM writing_allowance_ledger WHERE id = ?')

@@ -138,6 +138,7 @@ export function getSpeakingSetById(setId: string): SpeakingSet | null {
     status: row.status as PublicationStatus,
     latestVersionId: latestVersion ? latestVersion.id : '',
     createdById: row.created_by_id,
+    isFreeTier: Boolean(row.is_free_tier),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -163,7 +164,7 @@ export function getSpeakingSetVersionById(versionId: string): SpeakingSetVersion
 }
 
 export function listSpeakingSets(): SpeakingSet[] {
-  const rows = db.prepare('SELECT * FROM speaking_sets WHERE status != "archived" ORDER BY created_at DESC').all() as any[];
+  const rows = db.prepare("SELECT * FROM speaking_sets WHERE status != 'archived' ORDER BY created_at DESC").all() as any[];
   return rows.map((row) => {
     const latestVersion = db
       .prepare('SELECT id FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1')
@@ -175,6 +176,7 @@ export function listSpeakingSets(): SpeakingSet[] {
       status: row.status as PublicationStatus,
       latestVersionId: latestVersion ? latestVersion.id : '',
       createdById: row.created_by_id,
+      isFreeTier: Boolean(row.is_free_tier),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

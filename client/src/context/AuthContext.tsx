@@ -11,6 +11,7 @@ interface AuthContextType {
   elevateRole: (secretKey?: string, targetRole?: 'teacher' | 'admin') => Promise<void>;
   quickLoginAs: (role: 'student' | 'teacher') => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateProfile: (data: { targetBand?: number | null; testDate?: string | null; testTypePreference?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -74,6 +75,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (data: { targetBand?: number | null; testDate?: string | null; testTypePreference?: string }) => {
+    const res = await api.updateProfile(data);
+    setUser(res.user);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -85,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         elevateRole,
         quickLoginAs,
         refreshUser,
+        updateProfile,
       }}
     >
       {children}

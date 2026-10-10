@@ -56,8 +56,8 @@ async function runListeningTests() {
   console.log('TEST 2: Answer-Key & Transcript Protection During In-Progress Attempts');
   const testStudentId = uuidv4();
   db.prepare(`
-    INSERT INTO users (id, email, password_hash, full_name, role, created_at)
-    VALUES (?, ?, ?, ?, 'student', datetime('now'))
+    INSERT INTO users (id, email, password_hash, full_name, role, plan_type, plan_expires_at, created_at)
+    VALUES (?, ?, ?, ?, 'student', 'paid_plan', datetime('now', '+30 days'), datetime('now'))
   `).run(testStudentId, `listen_student_${Date.now()}@test.com`, hashPassword('Pass123!'), 'Listening Student');
 
   const { attempt, testVersion: sanitizedTest } = startOrResumeListeningAttempt({

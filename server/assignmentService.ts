@@ -288,6 +288,7 @@ export function createAssignment(
   const releaseAt = data.releaseAt || new Date().toISOString();
   const attemptLimit = data.attemptLimit && data.attemptLimit > 0 ? data.attemptLimit : (data.purpose === 'practice' ? 3 : 1);
   const mode = data.mode || (data.purpose === 'practice' ? 'practice' : 'mock');
+  const speakingRoute = data.speakingRoute || 'student_choice';
 
   const id = uuidv4();
   db.prepare(`
@@ -295,9 +296,9 @@ export function createAssignment(
       id, class_id, title, instructions, purpose,
       package_id, skill, test_id, version_id,
       mode, release_at, deadline_at, attempt_limit, is_released,
-      created_by_id, created_at, updated_at
+      speaking_route, created_by_id, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
   `).run(
     id,
     classId,
@@ -313,6 +314,7 @@ export function createAssignment(
     data.deadlineAt || null,
     attemptLimit,
     isReleased ? 1 : 0,
+    speakingRoute,
     teacherId
   );
 
@@ -391,6 +393,7 @@ export function getAssignmentById(assignmentId: string, studentId?: string): Ass
     deadlineAt: row.deadline_at || undefined,
     attemptLimit: row.attempt_limit,
     isReleased: Boolean(row.is_released),
+    speakingRoute: (row.speaking_route as any) || 'student_choice',
     createdById: row.created_by_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -483,6 +486,7 @@ export function listClassAssignments(
       deadlineAt: row.deadline_at || undefined,
       attemptLimit: row.attempt_limit,
       isReleased: Boolean(row.is_released),
+      speakingRoute: (row.speaking_route as any) || 'student_choice',
       createdById: row.created_by_id,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -1114,6 +1118,7 @@ function populateAssignmentSkillResults(
         pronunciation: speakingAss.criterion_pronunciation ?? undefined,
       },
       assessor: speakingAss.assessor_type === 'ai' ? 'AI Assessment' : 'Teacher assessment',
+      wasInterrupted: Boolean(speakingAss.was_interrupted),
       sessionType: speakingAss.session_type,
       correctionCount: corrCount?.count || 0,
       completedAt: formatMakassarDateTime(speakingAss.released_at || speakingAss.session_date),

@@ -431,7 +431,7 @@ export const ListeningResultsView: React.FC<ListeningResultsViewProps> = ({
                   )}
 
                   {questionItem?.transcriptExcerpt && (
-                    <div className="bg-indigo-50/60 border border-indigo-100 p-2.5 rounded-lg text-indigo-950 font-serif italic text-xs">
+                    <div className="bg-indigo-50/60 border border-indigo-100 p-2.5 rounded-lg text-indigo-950 italic text-xs">
                       <div className="text-[10px] font-sans font-bold text-indigo-700 not-italic uppercase tracking-wider mb-1 flex items-center gap-1">
                         <FileText className="w-3 h-3" />
                         Audio Transcript Excerpt

@@ -42,6 +42,7 @@ export const api = {
   register: (body: any) => request<{ user: any; token: string }>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: any) => request<{ user: any; token: string }>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   me: () => request<{ user: any }>('/auth/me'),
+  updateProfile: (body: { targetBand?: number | null; testDate?: string | null; testTypePreference?: string }) => request<{ user: any }>('/auth/profile', { method: 'PATCH', body: JSON.stringify(body) }),
   forgotPassword: (email: string) => request<{ message: string; resetToken?: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (body: any) => request<{ message: string }>('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
   elevate: (body: { secretKey?: string; targetRole: string }) => request<{ message: string; user: any; token: string }>('/auth/elevate', { method: 'POST', body: JSON.stringify(body) }),
@@ -149,6 +150,19 @@ export const api = {
   },
   getMySpeakingAssessments: () => request<{ assessments: any[] }>('/speaking/my-assessments'),
 
+  // Live AI Speaking Simulation (Milestone 6)
+  runVoiceTrial: (body: any) => request<any>('/speaking/voice-trial', { method: 'POST', body: JSON.stringify(body) }),
+  getSpeakingRealtimeToken: () => request<any>('/speaking/realtime/token', { method: 'POST' }),
+  startSpeakingSession: (body: any) => request<{ session: any }>('/speaking/sessions', { method: 'POST', body: JSON.stringify(body) }),
+  getSpeakingSession: (id: string) => request<{ session: any }>(`/speaking/sessions/${id}`),
+  advanceSpeakingStage: (id: string, targetStage: string) => request<{ session: any }>(`/speaking/sessions/${id}/stage`, { method: 'POST', body: JSON.stringify({ targetStage }) }),
+  savePart2Notes: (id: string, notes: string) => request<{ message: string }>(`/speaking/sessions/${id}/part2-notes`, { method: 'POST', body: JSON.stringify({ notes }) }),
+  submitSpeakingTurn: (id: string, body: any) => request<{ session: any; examinerTurn: any; acoustic: any }>(`/speaking/sessions/${id}/turn`, { method: 'POST', body: JSON.stringify(body) }),
+  finishSpeakingSession: (id: string) => request<{ assessment: any; message: string }>(`/speaking/sessions/${id}/finish`, { method: 'POST' }),
+  abandonSpeakingSession: (id: string, reason?: string) => request<{ message: string }>(`/speaking/sessions/${id}/abandon`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  getSpeakingAllowanceBalance: () => request<{ balance: { totalGranted: number; totalConsumed: number; totalReserved: number; available: number } }>('/speaking/allowances/balance'),
+  grantSpeakingAllowance: (body: { userId: string; amount: number; notes?: string }) => request<{ ledgerEntry: any; balance: any }>('/speaking/allowances/grant', { method: 'POST', body: JSON.stringify(body) }),
+
   // Writing Tasks
   getWritingTasks: (params?: { status?: string; taskType?: string; testType?: string; taskNumber?: number }) => {
     const q = new URLSearchParams(params as any).toString();
@@ -188,6 +202,33 @@ export const api = {
     request<{ ledger: any[] }>('/writing/allowances/ledger'),
   grantWritingAllowance: (body: { userId: string; amount: number; notes?: string }) =>
     request<{ entry: any; balance: any }>('/writing/allowances/grant', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Commercial Products & Checkout (Milestone 7)
+  getCommercialProducts: () => request<{ products: any[] }>('/commerce/products'),
+  createCommercialProduct: (body: any) => request<{ product: any }>('/commerce/products', { method: 'POST', body: JSON.stringify(body) }),
+  updateCommercialProduct: (id: string, body: any) => request<{ product: any }>(`/commerce/products/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  publishCommercialProduct: (id: string) => request<{ product: any }>(`/commerce/products/${id}/publish`, { method: 'POST' }),
+  archiveCommercialProduct: (id: string) => request<{ product: any }>(`/commerce/products/${id}/archive`, { method: 'POST' }),
+  getCheckoutPreview: (productId: string) => request<any>(`/commerce/checkout/preview/${productId}`),
+  createOrder: (body: { productId: string; provider?: string }) => request<{ order: any; checkoutUrl: string }>('/commerce/checkout/create-order', { method: 'POST', body: JSON.stringify(body) }),
+  getMyOrders: () => request<{ orders: any[] }>('/commerce/orders/my'),
+  getOrder: (id: string) => request<{ order: any }>(`/commerce/orders/${id}`),
+  reconcileOrder: (id: string) => request<{ order: any }>(`/commerce/orders/${id}/reconcile`, { method: 'POST' }),
+  refundOrder: (id: string, body: { reason: string; amount?: number }) => request<any>(`/commerce/orders/${id}/refund`, { method: 'POST', body: JSON.stringify(body) }),
+
+  // Teacher Codes
+  getTeacherCodes: () => request<{ codes: any[] }>('/commerce/codes'),
+  createTeacherCode: (body: any) => request<{ code: any }>('/commerce/codes', { method: 'POST', body: JSON.stringify(body) }),
+  updateTeacherCode: (id: string, body: any) => request<{ code: any }>(`/commerce/codes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  revokeTeacherCode: (id: string) => request<{ code: any }>(`/commerce/codes/${id}/revoke`, { method: 'POST' }),
+  previewTeacherCode: (code: string) => request<any>(`/commerce/codes/${encodeURIComponent(code)}/preview`),
+  redeemTeacherCode: (code: string) => request<{ success: boolean; code: any; message: string }>('/commerce/codes/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
+
+  // Entitlements & Admin Operations
+  getMyCommercialEntitlements: () => request<any>('/commerce/entitlements/my'),
+  getAdminCommercialSummary: () => request<any>('/commerce/admin/summary'),
+  adjustUserBalance: (body: { userId: string; skill: 'writing' | 'speaking'; amount: number; reason: string }) =>
+    request<{ success: boolean; newBalance: number }>('/commerce/admin/adjust-balance', { method: 'POST', body: JSON.stringify(body) }),
 };
 
 

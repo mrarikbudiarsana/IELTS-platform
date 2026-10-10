@@ -431,7 +431,7 @@ export const WritingFeedbackView: React.FC<WritingFeedbackViewProps> = ({
                 <div className="space-y-3">
                   {assessment.evidenceQuotes.map((eq: WritingEvidenceQuote, idx: number) => (
                     <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                      <div className="font-serif italic text-slate-800 mb-1">
+                      <div className="italic text-slate-800 mb-1">
                         "{eq.quote}"
                       </div>
                       <div className="text-indigo-600 font-medium text-[11px]">
@@ -456,7 +456,7 @@ export const WritingFeedbackView: React.FC<WritingFeedbackViewProps> = ({
                         <span className="text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700 px-2 py-0.5 rounded">
                           Original
                         </span>
-                        <span className="font-serif text-slate-700 line-through">
+                        <span className="text-slate-700 line-through">
                           {corr.original}
                         </span>
                       </div>
@@ -464,7 +464,7 @@ export const WritingFeedbackView: React.FC<WritingFeedbackViewProps> = ({
                         <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
                           Recommended
                         </span>
-                        <span className="font-serif text-emerald-900 font-semibold">
+                        <span className="text-emerald-900 font-semibold">
                           {corr.corrected}
                         </span>
                       </div>
@@ -498,7 +498,7 @@ export const WritingFeedbackView: React.FC<WritingFeedbackViewProps> = ({
                 </div>
 
                 {showModelAnswer && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 font-serif text-xs leading-relaxed text-slate-800 whitespace-pre-line bg-slate-50/50 p-4 rounded-xl border border-slate-200">
+                  <div className="mt-4 pt-4 border-t border-slate-100 text-xs leading-relaxed text-slate-800 whitespace-pre-line bg-slate-50/50 p-4 rounded-xl border border-slate-200">
                     {currentVersion.modelResponse}
                   </div>
                 )}
@@ -510,7 +510,7 @@ export const WritingFeedbackView: React.FC<WritingFeedbackViewProps> = ({
               <h4 className="text-sm font-bold text-slate-800 mb-2">
                 Your Submitted Response (Task {activeTaskNum})
               </h4>
-              <div className="text-xs font-serif leading-relaxed text-slate-700 whitespace-pre-line bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div className="text-xs leading-relaxed text-slate-700 whitespace-pre-line bg-slate-50 p-4 rounded-xl border border-slate-200">
                 {activeResponse?.responseText || 'No text submitted.'}
               </div>
             </div>

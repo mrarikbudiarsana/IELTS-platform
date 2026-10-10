@@ -3,6 +3,10 @@ import { ListeningAttempt, ListeningTestVersion, StudentAnswer, ListeningPart, Q
 import { api } from '../api';
 import { ListeningQuestionRenderer } from '../components/ListeningQuestionRenderer';
 import { AudioCheckModal } from '../components/AudioCheckModal';
+import { ExamHeader } from '../components/ExamHeader';
+import { StudentNavigator, NavigatorSection } from '../components/StudentNavigator';
+import { ExamHelpModal } from '../components/ExamHelpModal';
+import { ExamSettingsModal, TextSizeOption, ContrastOption } from '../components/ExamSettingsModal';
 import {
   Volume2,
   Play,
@@ -23,6 +27,7 @@ interface ListeningTestRunnerViewProps {
   modeOverride?: 'practice' | 'mock';
   assignmentId?: string;
   packageAttemptId?: string;
+  questionTypeFilter?: string;
   onExit: () => void;
   onFinish: (attemptId: string) => void;
 }
@@ -32,6 +37,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
   modeOverride,
   assignmentId,
   packageAttemptId,
+  questionTypeFilter,
   onExit,
   onFinish,
 }) => {
@@ -67,6 +73,13 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
   const [interruptionMessage, setInterruptionMessage] = useState<string | null>(null);
   const hasLoggedReloadRef = useRef(false);
 
+  // Accessibility / Comfort state
+  const [textSize, setTextSize] = useState<TextSizeOption>('standard');
+  const [contrast, setContrast] = useState<ContrastOption>('standard');
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
+
   // Confirmation modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,6 +97,15 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
         setAttempt(res.attempt);
         setTestVersion(res.testVersion);
         setAnswers(res.attempt.answers || {});
+
+        if (questionTypeFilter && res.testVersion) {
+          const matchGroup = res.testVersion.questionGroups?.find(
+            (g: any) => g.questionType === questionTypeFilter
+          );
+          if (matchGroup && matchGroup.questions?.[0]) {
+            setActiveQuestionNumber(matchGroup.questions[0].questionNumber);
+          }
+        }
 
         // If mock test, set up deadline countdown
         if (res.attempt.deadlineAt) {
@@ -366,6 +388,12 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
     return `${mins.toString().padStart(2, '0')}:${remSecs.toString().padStart(2, '0')}`;
   };
 
+  const formatAudioTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remSecs = Math.floor(secs % 60);
+    return `${mins}:${remSecs.toString().padStart(2, '0')}`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white p-4">
@@ -397,203 +425,204 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
     );
   }
 
+  // Filter question groups and parts if skill/question-type practice is selected
+  const displayedGroups = questionTypeFilter
+    ? testVersion.questionGroups.filter((g) => g.questionType === questionTypeFilter)
+    : testVersion.questionGroups;
+
+  const displayedParts = questionTypeFilter
+    ? testVersion.parts.filter((p) => displayedGroups.some((g) => g.partNumber === p.partNumber))
+    : testVersion.parts;
+
+  const activePart = displayedParts[activePartIndex] || displayedParts[0] || testVersion.parts[0];
+
   // Calculate answered count
-  const allQuestions = testVersion.questionGroups.flatMap((g) => g.questions);
-  const totalQuestions = allQuestions.length;
-  const answeredCount = allQuestions.filter((q) => {
+  const allFilteredQuestions = displayedGroups.flatMap((g) => g.questions);
+  const totalQuestionsToCount = allFilteredQuestions.length;
+  const answeredCount = allFilteredQuestions.filter((q) => {
     const a = answers[q.questionNumber]?.userAnswer;
     if (Array.isArray(a)) return a.length > 0;
     return typeof a === 'string' && a.trim().length > 0;
   }).length;
 
   // Filter groups belonging to current part
-  const currentPartGroups: QuestionGroup[] = testVersion.questionGroups.filter(
-    (g) => g.partNumber === (currentPart?.partNumber || 1)
+  const currentPartGroups: QuestionGroup[] = displayedGroups.filter(
+    (g) => g.partNumber === (activePart?.partNumber || 1)
   );
 
+  // Build sections for StudentNavigator
+  const listeningSections: NavigatorSection[] = displayedParts.map((p, idx) => {
+    const pGroups = displayedGroups.filter((g) => g.partNumber === p.partNumber);
+    const pQuestions = pGroups.flatMap((g) => g.questions);
+    const qNums = pQuestions.map((q) => q.questionNumber).sort((a, b) => a - b);
+    const startQ = qNums.length > 0 ? qNums[0] : 1;
+    const endQ = qNums.length > 0 ? qNums[qNums.length - 1] : 1;
+    return {
+      title: `Part ${p.partNumber}`,
+      startQuestion: startQ,
+      endQuestion: endQ,
+      sectionIndex: idx,
+      questionNumbers: qNums,
+    };
+  });
+
+  const handleSelectQuestion = (qNum: number) => {
+    setActiveQuestionNumber(qNum);
+    const targetSec = listeningSections.find((s) => qNum >= s.startQuestion && qNum <= s.endQuestion);
+    if (targetSec && targetSec.sectionIndex !== activePartIndex) {
+      setActivePartIndex(targetSec.sectionIndex);
+    }
+
+    setTimeout(() => {
+      const el =
+        document.getElementById(`listening-q-box-${qNum}`) ||
+        document.getElementById(`question-input-${qNum}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
+
+  const allFilteredQuestionNumbers = allFilteredQuestions.map((q) => q.questionNumber);
+
+  const handleNextQuestion = () => {
+    if (questionTypeFilter) {
+      const idx = allFilteredQuestionNumbers.indexOf(activeQuestionNumber);
+      if (idx !== -1 && idx < allFilteredQuestionNumbers.length - 1) {
+        handleSelectQuestion(allFilteredQuestionNumbers[idx + 1]);
+      }
+    } else if (activeQuestionNumber < totalQuestionsToCount) {
+      handleSelectQuestion(activeQuestionNumber + 1);
+    }
+  };
+
+  const handlePreviousQuestion = () => {
+    if (questionTypeFilter) {
+      const idx = allFilteredQuestionNumbers.indexOf(activeQuestionNumber);
+      if (idx > 0) {
+        handleSelectQuestion(allFilteredQuestionNumbers[idx - 1]);
+      }
+    } else if (activeQuestionNumber > 1) {
+      handleSelectQuestion(activeQuestionNumber - 1);
+    }
+  };
+
+  const getTextSizeClass = () => {
+    switch (textSize) {
+      case 'large':
+        return 'text-[16px] leading-relaxed';
+      case 'xlarge':
+        return 'text-[19px] leading-loose';
+      default:
+        return 'text-[14px] leading-normal';
+    }
+  };
+
+  const getThemeClass = () => {
+    switch (contrast) {
+      case 'dark':
+        return 'bg-slate-900 text-slate-100';
+      case 'yellow_on_black':
+        return 'bg-black text-amber-300';
+      case 'high_contrast':
+        return 'bg-white text-black';
+      default:
+        return 'bg-slate-100 text-slate-900';
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-text">
+    <div className={`h-screen flex flex-col font-sans select-text overflow-hidden ${getThemeClass()} ${getTextSizeClass()}`}>
       {/* Hidden native HTML audio element */}
       <audio ref={audioRef} preload="auto" />
 
-      {/* TOP EXAM HEADER */}
-      <header className="bg-slate-900 text-white px-4 sm:px-6 py-3 sticky top-0 z-30 shadow-md border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          {/* Test Name & Mode */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onExit}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-              title="Exit test session"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-                <Headphones className="w-3.5 h-3.5" />
-                <span>IELTS Listening • {attempt.mode === 'mock' ? 'Official Timed Mock' : 'Practice Mode'}</span>
-              </div>
-              <h1 className="text-sm sm:text-base font-bold text-white truncate max-w-xs sm:max-w-md">
-                {attempt.testTitle}
-              </h1>
-            </div>
-          </div>
+      {/* 1. TOP OFFICIAL EXAM HEADER */}
+      <ExamHeader
+        testTitle={attempt.testTitle || 'Academic Listening • Book 21'}
+        testType="Academic Listening"
+        skill="listening"
+        remainingSeconds={remainingSeconds}
+        elapsedSeconds={elapsedSeconds}
+        saveStatus={saveStatus}
+        lastSavedTime={lastSavedTime}
+        onExitClick={() => setShowExitModal(true)}
+        onSubmitClick={() => setShowConfirmModal(true)}
+        onOpenHelp={() => setShowHelpModal(true)}
+        onOpenSettings={() => setShowSettingsModal(true)}
+        volume={Math.round(volume * 100)}
+        onVolumeChange={(val) => {
+          const frac = val / 100;
+          setVolume(frac);
+          if (audioRef.current) audioRef.current.volume = frac;
+        }}
+      />
 
-          {/* Autosave & Clock Status */}
-          <div className="flex items-center gap-4 sm:gap-6">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-300">
-              {saveStatus === 'saving' && (
-                <span className="flex items-center gap-1 text-amber-400">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                  Saving answer...
-                </span>
-              )}
-              {saveStatus === 'saved' && (
-                <span className="flex items-center gap-1 text-emerald-400">
-                  <Check className="w-3.5 h-3.5" />
-                  Saved ({lastSavedTime})
-                </span>
-              )}
-              {saveStatus === 'error' && (
-                <span className="flex items-center gap-1 text-rose-400">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  Save failed
-                </span>
-              )}
+      {/* 2. OFFICIAL SECTION SUBHEADER WITH AUDIO BAR (Matching Images 1-5 and Reading) */}
+      {(() => {
+        const activeSection = listeningSections[activePartIndex];
+        const currentPartStartQ = activeSection?.startQuestion || (activePartIndex * 10 + 1);
+        const currentPartEndQ = activeSection?.endQuestion || (activePartIndex * 10 + 10);
+
+        return (
+          <div className="bg-[#F4F3EE] border-b border-[#E5E2D9] px-6 sm:px-12 py-2.5 flex items-center justify-between text-xs sm:text-sm select-none shrink-0">
+            {/* Left: Part Title & Instructions */}
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
+              <span className="font-bold text-sm sm:text-base text-slate-900">
+                Part {currentPart?.partNumber || (activePartIndex + 1)}
+              </span>
+              <span className="text-slate-700 font-normal text-xs sm:text-sm">
+                Listen and answer questions {currentPartStartQ}–{currentPartEndQ}.
+              </span>
             </div>
 
-            {/* Countdown timer for mock, or elapsed timer for practice */}
-            <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl shadow-inner">
-              <Clock className="w-4 h-4 text-indigo-400" />
-              <div className="font-mono text-sm sm:text-base font-bold text-white">
-                {remainingSeconds !== null ? formatTimer(remainingSeconds) : formatTimer(elapsedSeconds)}
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              onClick={() => setShowConfirmModal(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm px-4 py-2 rounded-xl shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Send className="w-3.5 h-3.5" />
-              Finish Test
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* AUDIO PLAYER BAR */}
-      <div className="bg-slate-800 text-white border-b border-slate-700 px-4 py-2.5 shadow-sm">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          {/* Part indicator and play state */}
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="flex items-center gap-2">
-              {attempt.mode === 'practice' ? (
-                <button
-                  onClick={togglePlayPractice}
-                  className="w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-white shadow-xs transition-colors"
-                >
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
-                </button>
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-indigo-400">
-                  {isPlaying ? <Headphones className="w-4 h-4 animate-pulse" /> : <Pause className="w-4 h-4" />}
-                </div>
-              )}
-
-              <div>
-                <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-                  <span>Part {activePartIndex + 1}: {currentPart?.title}</span>
-                  {attempt.mode === 'mock' && (
-                    <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-400/30">
-                      Exam Controlled
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  {isPlaying ? 'Audio playing' : 'Audio paused / stopped'} • {formatTimer(Math.floor(audioCurrentTime))} / {formatTimer(Math.floor(audioDuration || 0))}
-                </div>
-              </div>
-            </div>
-
-            {/* Practice Seek Bar */}
-            {attempt.mode === 'practice' ? (
-              <div className="flex-1 max-w-xs sm:max-w-md mx-3 flex items-center gap-2">
-                <input
-                  type="range"
-                  min="0"
-                  max={audioDuration || 100}
-                  value={audioCurrentTime}
-                  onChange={(e) => handleSeekPractice(Number(e.target.value))}
-                  className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
-              </div>
-            ) : (
-              <div className="hidden md:flex flex-1 max-w-xs mx-3 items-center">
-                <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300"
-                    style={{ width: `${audioDuration > 0 ? (audioCurrentTime / audioDuration) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Volume and Tools */}
-          <div className="flex items-center gap-4 w-full sm:w-auto justify-end">
-            {attempt.mode === 'practice' && (
+            {/* Right: Audio Player (Black square button, time, scrubber slider, total duration) */}
+            <div className="flex items-center gap-3">
+              {/* Black square play/pause button matching Images 1-5 */}
               <button
-                onClick={handleReplay10Sec}
-                className="text-slate-300 hover:text-white px-2 py-1 rounded bg-slate-700/60 hover:bg-slate-700 flex items-center gap-1 text-[11px]"
-                title="Replay last 10 seconds"
+                type="button"
+                onClick={togglePlayPractice}
+                className="w-8 h-8 bg-black hover:bg-slate-800 text-white flex items-center justify-center transition-colors rounded-[2px] shadow-2xs cursor-pointer shrink-0"
+                title={isPlaying ? 'Pause' : 'Play'}
               >
-                <RotateCcw className="w-3 h-3" />
-                -10s
+                {isPlaying ? (
+                  <Pause className="w-4 h-4 fill-white" />
+                ) : (
+                  <Play className="w-4 h-4 fill-white ml-0.5" />
+                )}
               </button>
-            )}
 
-            {/* Volume slider */}
-            <div className="flex items-center gap-2">
-              <Volume2 className="w-4 h-4 text-slate-400" />
+              {/* Current time */}
+              <span className="font-mono text-xs sm:text-sm text-slate-800 tabular-nums min-w-[28px] text-right">
+                {formatAudioTime(audioCurrentTime)}
+              </span>
+
+              {/* Scrubber slider */}
               <input
                 type="range"
                 min="0"
-                max="1"
-                step="0.05"
-                value={volume}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setVolume(val);
-                  if (audioRef.current) audioRef.current.volume = val;
-                }}
-                className="w-20 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                title="Volume control"
+                max={audioDuration || 100}
+                value={audioCurrentTime}
+                onChange={(e) => handleSeekPractice(Number(e.target.value))}
+                className="w-28 sm:w-48 md:w-72 h-1 bg-slate-300 rounded appearance-none cursor-pointer accent-black"
+                title="Seek audio"
               />
-            </div>
 
-            {/* Rehearsal Warning Button if mock */}
-            {attempt.mode === 'mock' && (
-              <button
-                onClick={() => handleReplay10Sec()}
-                className="text-amber-400 hover:text-amber-300 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30 flex items-center gap-1 text-[11px]"
-                title="Replay recording with penalty log"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Emergency Replay
-              </button>
-            )}
+              {/* Total duration */}
+              <span className="font-mono text-xs sm:text-sm text-slate-800 tabular-nums min-w-[28px]">
+                {formatAudioTime(audioDuration || 0)}
+              </span>
+            </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* INTERRUPTION ALERT BANNER */}
       {interruptionDetected && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-800 flex items-center justify-between">
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-6 sm:px-12 py-2 text-xs text-amber-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 max-w-3xl">
             <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
-              <strong>Audio Interruption Recorded:</strong> {interruptionMessage || 'Playback was interrupted or reloaded.'} Official exam rehearsal score will document this event.
+              <strong>Audio Interruption Recorded:</strong> {interruptionMessage || 'Playback was interrupted or reloaded.'}
             </span>
           </div>
           <button
@@ -609,62 +638,15 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
         </div>
       )}
 
-      {/* PART TABS SELECTOR */}
-      <div className="bg-white border-b border-slate-200 px-4">
-        <div className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto py-2">
-          {testVersion.parts.map((p, idx) => {
-            const partGroups = testVersion.questionGroups.filter((g) => g.partNumber === p.partNumber);
-            const partQuestions = partGroups.flatMap((g) => g.questions);
-            const partAnswered = partQuestions.filter((q) => {
-              const a = answers[q.questionNumber]?.userAnswer;
-              return Array.isArray(a) ? a.length > 0 : !!a;
-            }).length;
-
-            return (
-              <button
-                key={p.partNumber}
-                onClick={() => setActivePartIndex(idx)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
-                  activePartIndex === idx
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <span>Part {p.partNumber}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                    activePartIndex === idx ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-200 text-slate-600'
-                  }`}
-                >
-                  {partAnswered}/{partQuestions.length}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 pb-28">
-        {currentPart && (
-          <div className="mb-4">
-            <div className="bg-indigo-950 text-white rounded-2xl p-5 mb-6 shadow-xs border border-indigo-900">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-indigo-800 pb-3 mb-3">
-                <div className="font-extrabold text-base sm:text-lg tracking-tight">
-                  Part {currentPart.partNumber}: {currentPart.title}
-                </div>
-                <div className="text-xs text-indigo-300 font-medium bg-indigo-900/60 px-3 py-1 rounded-full border border-indigo-700/50">
-                  {currentPartGroups.reduce((acc: number, g: QuestionGroup) => acc + g.questions.length, 0)} Questions in this section
-                </div>
-              </div>
-              <p className="text-xs sm:text-sm text-indigo-200 leading-relaxed">
-                {currentPart.context ||
-                  'Listen to the recording carefully and answer all questions. In the official test, you will hear each recording ONCE only.'}
-              </p>
+      {/* 3. MAIN SCROLLABLE CONTENT AREA (Pure white, matching Images 1-5) */}
+      <main className="flex-1 overflow-y-auto px-6 sm:px-12 py-8 bg-white select-text custom-scrollbar">
+        <div className="max-w-5xl mx-auto">
+          {currentPartGroups.length === 0 ? (
+            <div className="text-slate-400 text-sm py-12 text-center">
+              No questions assigned to this part.
             </div>
-
-            {/* QUESTION GROUPS */}
-            {currentPartGroups.map((group: QuestionGroup) => (
+          ) : (
+            currentPartGroups.map((group: QuestionGroup) => (
               <ListeningQuestionRenderer
                 key={group.id}
                 group={group}
@@ -673,70 +655,34 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
                 onToggleFlag={handleToggleFlag}
                 activeQuestionNumber={activeQuestionNumber}
               />
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </main>
 
-      {/* BOTTOM QUESTION NAVIGATOR BAR */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-300 shadow-lg px-4 py-3 z-20">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-indigo-600"></span>
-              <span>Answered ({answeredCount}/{totalQuestions})</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-slate-200 border border-slate-300"></span>
-              <span>Unanswered ({totalQuestions - answeredCount})</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Flag className="w-3 h-3 fill-amber-500 text-amber-500" />
-              <span>Flagged for Review</span>
-            </div>
-          </div>
-
-          {/* Quick jump question numbers */}
-          <div className="flex items-center gap-1 overflow-x-auto max-w-full py-1">
-            {allQuestions.map((q) => {
-              const ansObj = answers[q.questionNumber];
-              const isAns = ansObj?.userAnswer && (Array.isArray(ansObj.userAnswer) ? ansObj.userAnswer.length > 0 : !!ansObj.userAnswer);
-              const isFlagged = ansObj?.isFlagged;
-              const isCurrent = q.questionNumber === activeQuestionNumber;
-
-              return (
-                <button
-                  key={q.id}
-                  onClick={() => {
-                    setActiveQuestionNumber(q.questionNumber);
-                    // Find part containing this question
-                    const pIdx = testVersion.parts.findIndex((p) =>
-                      testVersion.questionGroups.some((g) => g.partNumber === p.partNumber && g.questions.some((item) => item.questionNumber === q.questionNumber))
-                    );
-                    if (pIdx !== -1 && pIdx !== activePartIndex) {
-                      setActivePartIndex(pIdx);
-                    }
-                  }}
-                  className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-xs font-bold transition-all flex items-center justify-center shrink-0 ${
-                    isCurrent
-                      ? 'ring-2 ring-indigo-600 ring-offset-1'
-                      : ''
-                  } ${
-                    isAns
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                  }`}
-                >
-                  {q.questionNumber}
-                  {isFlagged && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border border-white" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </footer>
+      {/* 4. PINNED BOTTOM QUESTION NAVIGATOR */}
+      <StudentNavigator
+        totalQuestions={totalQuestionsToCount}
+        answers={answers}
+        activeQuestionNumber={activeQuestionNumber}
+        onSelectQuestion={handleSelectQuestion}
+        onPreviousQuestion={handlePreviousQuestion}
+        onNextQuestion={handleNextQuestion}
+        onToggleFlag={(qNum) => {
+          const q = allFilteredQuestions.find((item) => item.questionNumber === qNum);
+          if (q) handleToggleFlag(qNum, q.id);
+        }}
+        onSubmitClick={() => setShowConfirmModal(true)}
+        sections={listeningSections}
+        activeSectionIndex={activePartIndex}
+        onSelectSection={(idx) => {
+          setActivePartIndex(idx);
+          const sec = listeningSections[idx];
+          if (sec && (activeQuestionNumber < sec.startQuestion || activeQuestionNumber > sec.endQuestion)) {
+            setActiveQuestionNumber(sec.startQuestion);
+          }
+        }}
+      />
 
       {/* AUDIO CHECK MODAL (Before test start) */}
       <AudioCheckModal
@@ -746,16 +692,42 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
         testTitle={attempt.testTitle}
       />
 
+      {/* EXIT TEST MODAL */}
+      {showExitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in">
+            <h3 className="text-base font-bold text-slate-900 mb-2">Exit Listening Test?</h3>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              Your test progress and answers have been auto-saved. You can resume this session anytime from your dashboard.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowExitModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Continue Test
+              </button>
+              <button
+                onClick={onExit}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-black hover:bg-slate-800 transition-colors"
+              >
+                Exit Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CONFIRM SUBMISSION MODAL */}
       {showConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in">
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Submit IELTS Listening Test?</h3>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in">
+            <h3 className="text-base font-bold text-slate-900 mb-2">Submit IELTS Listening Test?</h3>
             <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-              You have answered <strong>{answeredCount}</strong> out of <strong>{totalQuestions}</strong> questions.
-              {totalQuestions - answeredCount > 0 && (
+              You have answered <strong>{answeredCount}</strong> out of <strong>{totalQuestionsToCount}</strong> questions.
+              {totalQuestionsToCount - answeredCount > 0 && (
                 <span className="text-amber-600 font-semibold block mt-1">
-                  You have {totalQuestions - answeredCount} unanswered questions remaining.
+                  You have {totalQuestionsToCount - answeredCount} unanswered questions remaining.
                 </span>
               )}
             </p>
@@ -775,7 +747,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
               <button
                 onClick={handleConfirmSubmit}
                 disabled={isSubmitting}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 flex items-center gap-1.5"
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-black hover:bg-slate-800 flex items-center gap-1.5 transition-colors"
               >
                 {isSubmitting ? 'Evaluating...' : 'Confirm & Submit'}
               </button>
@@ -783,6 +755,23 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
           </div>
         </div>
       )}
+
+      {/* EXAM HELP MODAL */}
+      <ExamHelpModal
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+        skill="listening"
+      />
+
+      {/* EXAM SETTINGS MODAL */}
+      <ExamSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        textSize={textSize}
+        contrast={contrast}
+        onTextSizeChange={setTextSize}
+        onContrastChange={setContrast}
+      />
     </div>
   );
 };

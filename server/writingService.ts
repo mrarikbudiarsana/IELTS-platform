@@ -337,6 +337,7 @@ export function getWritingTaskById(taskId: string, userRole: 'student' | 'teache
     status: row.status,
     latestVersionId: latestVersion ? latestVersion.id : '',
     createdById: row.created_by_id,
+    isFreeTier: Boolean(row.is_free_tier),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     versions,

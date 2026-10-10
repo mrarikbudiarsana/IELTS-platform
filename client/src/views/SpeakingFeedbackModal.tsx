@@ -188,6 +188,99 @@ export const SpeakingFeedbackModal: React.FC<SpeakingFeedbackModalProps> = ({
             </div>
           )}
 
+          {/* AI Acoustic Observations (Speech Rate, Pause Ratio, Pronunciation Grounding) */}
+          {assessment.acousticObservations && (
+            <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🎙️ Direct Audio Acoustic Analysis</span>
+                  <span className="text-[10px] bg-purple-200 text-purple-900 font-semibold px-2 py-0.5 rounded">
+                    Audio Grounded
+                  </span>
+                </span>
+                <span className="text-[11px] text-purple-700 italic">
+                  Pronunciation assessed directly from candidate speech audio
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                {assessment.acousticObservations.speechRateWpm !== undefined && (
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Speech Rate</span>
+                    <span className="text-base font-extrabold text-purple-900">
+                      {assessment.acousticObservations.speechRateWpm} <span className="text-xs font-normal text-slate-500">WPM</span>
+                    </span>
+                    <span className="text-[10px] text-slate-500 block">Target: 110–150 WPM</span>
+                  </div>
+                )}
+                {assessment.acousticObservations.pauseRatio !== undefined && (
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Pause Ratio</span>
+                    <span className="text-base font-extrabold text-purple-900">
+                      {(assessment.acousticObservations.pauseRatio * 100).toFixed(0)}%
+                    </span>
+                    <span className="text-[10px] text-slate-500 block">Natural: 12%–22%</span>
+                  </div>
+                )}
+                {assessment.interruptionCount !== undefined && assessment.interruptionCount > 0 && (
+                  <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Interruptions</span>
+                    <span className="text-base font-extrabold text-amber-600">
+                      {assessment.interruptionCount} <span className="text-xs font-normal text-slate-500">recovered</span>
+                    </span>
+                    <span className="text-[10px] text-slate-500 block">Bounded Reconnection</span>
+                  </div>
+                )}
+              </div>
+              {assessment.acousticObservations.pronunciationNotes && (
+                <div className="text-xs text-purple-950 bg-white/80 p-2.5 rounded-lg border border-purple-100">
+                  <strong className="text-purple-900 font-semibold">Phonemic & Rhythm Observations: </strong>
+                  {assessment.acousticObservations.pronunciationNotes}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Timestamped Response Evidence Quotes */}
+          {assessment.evidenceQuotes && assessment.evidenceQuotes.length > 0 && (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                Timestamped Evidence & Performance Quotes
+              </span>
+              <div className="space-y-2 text-xs">
+                {assessment.evidenceQuotes.map((eq, idx) => (
+                  <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
+                    <div className="flex items-center justify-between text-slate-500 text-[11px]">
+                      <span className="font-bold text-indigo-700">{eq.criterion}</span>
+                      {eq.timestamp && (
+                        <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                          ⏱️ {eq.timestamp}
+                        </span>
+                      )}
+                    </div>
+                    <blockquote className="italic text-slate-700 border-l-2 border-indigo-400 pl-2 my-1">
+                      "{eq.quote}"
+                    </blockquote>
+                    <p className="text-slate-600 text-[11px]">{eq.comment}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Suggested Practice Tasks */}
+          {assessment.suggestedPractice && assessment.suggestedPractice.length > 0 && (
+            <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2">
+              <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider block">
+                🎯 Actionable Practice Recommendations
+              </span>
+              <ul className="list-disc list-inside space-y-1 text-xs text-emerald-950">
+                {assessment.suggestedPractice.map((item, idx) => (
+                  <li key={idx} className="leading-relaxed">{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Teacher Private Notes (ONLY shown if current user is teacher) */}
           {isTeacher && assessment.teacherPrivateNotes && (
             <div className="p-4 rounded-xl bg-amber-50/80 border border-amber-300">

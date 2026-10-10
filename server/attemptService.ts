@@ -16,6 +16,7 @@ import {
   markStudentAnswer,
   calculateEstimatedBandScore,
 } from '../shared/scoring';
+import { canUserAccessTest } from './commercialService';
 
 export function startOrResumeAttempt(params: {
   userId: string;
@@ -44,6 +45,23 @@ export function startOrResumeAttempt(params: {
   if (!test) throw new Error('Test not found');
   if (test.status !== 'published') {
     throw new Error('Test is not published');
+  }
+
+  // Commercial tier check: free tier vs paid plan vs assignment grant
+  if (!params.assignmentId && !test.isFreeTier) {
+    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(params.userId) as any;
+    const isStaff = user?.role === 'teacher' || user?.role === 'admin';
+    if (!isStaff) {
+      const accessCheck = canUserAccessTest({
+        userId: params.userId,
+        isTeacherOrAdmin: isStaff,
+        isFreeTier: Boolean(test.isFreeTier),
+        assignmentId: params.assignmentId,
+      });
+      if (!accessCheck.allowed) {
+        throw new Error(accessCheck.reason || 'This practice material requires an active Paid Practice Plan or Teacher Code.');
+      }
+    }
   }
 
   const latestVersion = getVersionById(test.latestVersionId);

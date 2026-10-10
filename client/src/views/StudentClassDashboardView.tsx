@@ -9,6 +9,7 @@ interface StudentClassDashboardViewProps {
   onStartReading: (testId: string, mode: 'practice' | 'mock', assignmentId?: string, packageAttemptId?: string) => void;
   onStartListening: (testId: string, mode: 'practice' | 'mock', assignmentId?: string, packageAttemptId?: string) => void;
   onStartWriting?: (attemptId: string) => void;
+  onStartSpeaking?: (setId?: string, assignmentId?: string, packageAttemptId?: string, mode?: 'practice' | 'mock') => void;
   onViewReadingResults: (attemptId: string) => void;
   onViewListeningResults: (attemptId: string) => void;
   onViewWritingFeedback?: (attemptId: string) => void;
@@ -18,6 +19,7 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
   onStartReading,
   onStartListening,
   onStartWriting,
+  onStartSpeaking,
   onViewReadingResults,
   onViewListeningResults,
   onViewWritingFeedback,
@@ -327,6 +329,28 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                         >
                           Take Writing Section
                         </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const pkgRes = await api.startPackageAttempt(preTestAssignment.id);
+                              if (pkgRes.testPackage.speakingSetId) {
+                                onStartSpeaking?.(
+                                  pkgRes.testPackage.speakingSetId,
+                                  preTestAssignment.id,
+                                  pkgRes.packageAttempt.id,
+                                  preTestAssignment.mode
+                                );
+                              } else {
+                                alert('Speaking set is not configured for this pre-test package.');
+                              }
+                            } catch (e: any) {
+                              alert(e.message);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-semibold hover:bg-purple-700 transition-colors"
+                        >
+                          Take Speaking Section (AI)
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -437,6 +461,28 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                             className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-colors"
                           >
                             Take Writing Post-Test
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const pkgRes = await api.startPackageAttempt(postTestAssignment.id);
+                                if (pkgRes.testPackage.speakingSetId) {
+                                  onStartSpeaking?.(
+                                    pkgRes.testPackage.speakingSetId,
+                                    postTestAssignment.id,
+                                    pkgRes.packageAttempt.id,
+                                    postTestAssignment.mode
+                                  );
+                                } else {
+                                  alert('Speaking set is not configured for this post-test package.');
+                                }
+                              } catch (e: any) {
+                                alert(e.message);
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs font-semibold hover:bg-purple-700 transition-colors"
+                          >
+                            Take Speaking Post-Test (AI)
                           </button>
                         </div>
                       ) : (
@@ -558,8 +604,17 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                             )
                           ) : a.studentStatus === 'submitted' ? (
                             <button
-                              onClick={() => {
-                                if (a.activeAttemptId) {
+                              onClick={async () => {
+                                if (a.skill === 'speaking') {
+                                  try {
+                                    const res = await api.getMySpeakingAssessments();
+                                    const match = res.assessments.find((ass) => ass.assignmentId === a.id);
+                                    if (match) setSpeakingModalAssessment(match);
+                                    else alert('Speaking assessment report is not yet released.');
+                                  } catch (err: any) {
+                                    alert(err.message);
+                                  }
+                                } else if (a.activeAttemptId) {
                                   if (a.skill === 'listening') {
                                     onViewListeningResults(a.activeAttemptId);
                                   } else {
@@ -574,7 +629,9 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                           ) : (
                             <button
                               onClick={() => {
-                                if (a.skill === 'listening' && a.testId) {
+                                if (a.skill === 'speaking') {
+                                  onStartSpeaking?.(a.testId, a.id, undefined, a.mode);
+                                } else if (a.skill === 'listening' && a.testId) {
                                   onStartListening(a.testId, a.mode, a.id);
                                 } else if (a.testId) {
                                   onStartReading(a.testId, a.mode, a.id);

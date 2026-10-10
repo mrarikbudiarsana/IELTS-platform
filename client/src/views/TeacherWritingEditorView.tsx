@@ -447,7 +447,7 @@ export const TeacherWritingEditorView: React.FC = () => {
                   value={formData.prompt}
                   onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
                   rows={4}
-                  className="w-full p-3 border border-slate-200 rounded-lg text-xs font-serif leading-relaxed"
+                  className="w-full p-3 border border-slate-200 rounded-lg text-xs leading-relaxed"
                   placeholder="Provide the complete instructions and essay question..."
                 />
               </div>
@@ -504,7 +504,7 @@ export const TeacherWritingEditorView: React.FC = () => {
                   value={formData.modelResponse}
                   onChange={(e) => setFormData({ ...formData, modelResponse: e.target.value })}
                   rows={4}
-                  className="w-full p-3 border border-slate-200 rounded-lg text-xs font-serif leading-relaxed"
+                  className="w-full p-3 border border-slate-200 rounded-lg text-xs leading-relaxed"
                   placeholder="High-scoring reference essay..."
                 />
               </div>

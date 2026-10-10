@@ -1,11 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
-import { BookOpen, Shield, LogOut, Award, UserCheck, Layers, Users, GraduationCap, PenTool, Sparkles } from 'lucide-react';
+import {
+  BookOpen,
+  LogOut,
+  Award,
+  GraduationCap,
+  Sparkles,
+  CreditCard,
+  Menu,
+  X,
+  ChevronDown,
+  User,
+  Layers,
+  Settings,
+  PenTool,
+  CheckCircle,
+  Clock
+} from 'lucide-react';
 
 interface NavbarProps {
   currentView: string;
-  onNavigate: (view: string) => void;
+  onNavigate: (view: string, skill?: 'reading' | 'listening' | 'writing' | 'speaking') => void;
   onOpenLogin: () => void;
   onOpenElevate: () => void;
 }
@@ -18,6 +34,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { user, logout, quickLoginAs } = useAuth();
   const [allowanceBalance, setAllowanceBalance] = useState<number | null>(null);
+  const [speakingBalance, setSpeakingBalance] = useState<number | null>(null);
+
+  // UI state
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
+
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const isTeacherOrAdmin = user?.role === 'teacher' || user?.role === 'admin';
   const isAdmin = user?.role === 'admin';
@@ -25,232 +49,413 @@ export const Navbar: React.FC<NavbarProps> = ({
   useEffect(() => {
     if (user?.role === 'student') {
       api.getMyAllowanceBalance()
-        .then((res: any) => setAllowanceBalance(res.balance.available))
+        .then((res: any) => setAllowanceBalance(res.balance?.available ?? 0))
+        .catch(() => {});
+      api.getSpeakingAllowanceBalance()
+        .then((res: any) => setSpeakingBalance(res.balance?.available ?? 0))
         .catch(() => {});
     } else {
       setAllowanceBalance(null);
+      setSpeakingBalance(null);
     }
   }, [user]);
 
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleNavClick = (view: string, skill?: 'reading' | 'listening' | 'writing' | 'speaking') => {
+    onNavigate(view, skill);
+    setMobileMenuOpen(false);
+    setProfileDropdownOpen(false);
+  };
+
   return (
-    <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40 border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo / Brand */}
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onNavigate('catalogue')}>
-            <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-xl text-white shadow-inner">
-              IE
-            </div>
-            <div>
-              <div className="font-bold text-lg tracking-tight leading-tight flex items-center gap-2">
-                IELTS Mastery
-                <span className="text-xs bg-indigo-500/30 text-indigo-300 font-semibold px-2 py-0.5 rounded border border-indigo-400/30">
-                  Full 4 Skills: R, L, W, S
-                </span>
+    <>
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Brand Logo */}
+            <div
+              className="flex items-center gap-3 cursor-pointer select-none"
+              onClick={() => handleNavClick('dashboard')}
+            >
+              <div className="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-base text-white shadow-xs">
+                IA
               </div>
-              <div className="text-xs text-slate-400 font-medium">Learn English With Arik</div>
+              <div>
+                <div className="font-bold text-base tracking-tight text-slate-900 leading-snug">
+                  IELTS with Arik
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium">
+                  Preparation & Practice
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
+              <button
+                onClick={() => handleNavClick('dashboard')}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  currentView === 'dashboard'
+                    ? 'text-indigo-600 bg-indigo-50/80 font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                Dashboard
+              </button>
+
+              <button
+                onClick={() => handleNavClick('practice')}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  currentView === 'practice' || (currentView === 'catalogue' && !currentView.includes('mock'))
+                    ? 'text-indigo-600 bg-indigo-50/80 font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                Practice
+              </button>
+
+              <button
+                onClick={() => handleNavClick('mock_tests')}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  currentView === 'mock_tests'
+                    ? 'text-indigo-600 bg-indigo-50/80 font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                Mock Tests
+              </button>
+
+              {user && !isTeacherOrAdmin && (
+                <button
+                  onClick={() => handleNavClick('student_classes')}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    currentView === 'student_classes'
+                      ? 'text-indigo-600 bg-indigo-50/80 font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  My Class
+                </button>
+              )}
+
+              {user && (
+                <button
+                  onClick={() => handleNavClick('history')}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    currentView === 'history'
+                      ? 'text-indigo-600 bg-indigo-50/80 font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  Progress
+                </button>
+              )}
+
+              {/* Teacher Shortcuts if logged in as staff */}
+              {isTeacherOrAdmin && (
+                <div className="pl-2 border-l border-slate-200 flex items-center space-x-1">
+                  <button
+                    onClick={() => handleNavClick('teacher_classes')}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                      currentView === 'teacher_classes'
+                        ? 'bg-amber-100 text-amber-900'
+                        : 'text-amber-800 hover:bg-amber-50'
+                    }`}
+                  >
+                    Classes
+                  </button>
+                  <button
+                    onClick={() => handleNavClick('teacher_speaking')}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                      currentView === 'teacher_speaking'
+                        ? 'bg-purple-100 text-purple-900'
+                        : 'text-purple-800 hover:bg-purple-50'
+                    }`}
+                  >
+                    Speaking
+                  </button>
+                  <button
+                    onClick={() => handleNavClick('teacher_editor')}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                      currentView === 'teacher_editor' || currentView === 'teacher_attempts'
+                        ? 'bg-slate-200 text-slate-900'
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Content Editor
+                  </button>
+                </div>
+              )}
+            </nav>
+
+            {/* Right Action / Profile Menu */}
+            <div className="flex items-center gap-3">
+              {user ? (
+                <div className="relative" ref={profileRef}>
+                  <button
+                    onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                    className="flex items-center gap-2 p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
+                      {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                    <span className="text-xs font-medium text-slate-800 hidden sm:inline max-w-[120px] truncate">
+                      {user.fullName.split(' ')[0]}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+
+                  {/* Profile Dropdown Menu */}
+                  {profileDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50 text-slate-800 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="px-4 py-2.5 border-b border-slate-100">
+                        <div className="font-semibold text-sm text-slate-900 truncate">{user.fullName}</div>
+                        <div className="text-xs text-slate-500 truncate">{user.email}</div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase ${
+                            user.role === 'admin'
+                              ? 'bg-purple-100 text-purple-800'
+                              : user.role === 'teacher'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-indigo-100 text-indigo-800'
+                          }`}>
+                            {user.role}
+                          </span>
+                          <span className="text-[11px] text-slate-500 capitalize">
+                            {user.testTypePreference === 'not_sure' ? 'Academic' : `${user.testTypePreference} Track`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Learner Allowances if student */}
+                      {user.role === 'student' && (
+                        <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50 text-xs space-y-1">
+                          <div className="flex items-center justify-between text-slate-600">
+                            <span>Speaking Credits</span>
+                            <span className="font-semibold text-slate-900">{speakingBalance ?? 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-slate-600">
+                            <span>Writing Assessments</span>
+                            <span className="font-semibold text-slate-900">{allowanceBalance ?? 0}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="py-1">
+                        <button
+                          onClick={() => handleNavClick('commercial_store')}
+                          className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5"
+                        >
+                          <CreditCard className="w-4 h-4 text-slate-400" />
+                          <span>Plans & Assessment Access</span>
+                        </button>
+
+                        {isTeacherOrAdmin && (
+                          <button
+                            onClick={() => handleNavClick('commercial_admin')}
+                            className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5"
+                          >
+                            <Settings className="w-4 h-4 text-slate-400" />
+                            <span>Commercial Administration</span>
+                          </button>
+                        )}
+
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleNavClick('admin_users')}
+                            className="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5"
+                          >
+                            <User className="w-4 h-4 text-slate-400" />
+                            <span>Manage Users</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="border-t border-slate-100 pt-1">
+                        <button
+                          onClick={() => {
+                            setProfileDropdownOpen(false);
+                            logout();
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2.5"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={onOpenLogin}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold transition-colors shadow-2xs"
+                  >
+                    Sign In
+                  </button>
+                </div>
+              )}
+
+              {/* Mobile Menu Button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                aria-label="Toggle Navigation Menu"
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
             </div>
           </div>
+        </div>
 
-          {/* Navigation Items */}
-          <nav className="hidden md:flex items-center space-x-2">
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-5 space-y-1 shadow-md animate-in slide-in-from-top-2">
             <button
-              onClick={() => onNavigate('catalogue')}
-              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                currentView === 'catalogue'
-                  ? 'bg-slate-800 text-white border-b-2 border-indigo-500'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              onClick={() => handleNavClick('dashboard')}
+              className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold ${
+                currentView === 'dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <BookOpen className="w-4 h-4" />
-              Practice & Mocks
+              Dashboard
             </button>
-
-            {user && !isTeacherOrAdmin && (
-              <button
-                onClick={() => onNavigate('student_classes')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                  currentView === 'student_classes'
-                    ? 'bg-slate-800 text-white border-b-2 border-indigo-500'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <GraduationCap className="w-4 h-4" />
-                My Classes
-              </button>
-            )}
-
+            <button
+              onClick={() => handleNavClick('practice')}
+              className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold ${
+                currentView === 'practice' || currentView === 'catalogue' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              Practice
+            </button>
+            <button
+              onClick={() => handleNavClick('mock_tests')}
+              className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold ${
+                currentView === 'mock_tests' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              Mock Tests
+            </button>
             {user && (
-              <button
-                onClick={() => onNavigate('history')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                  currentView === 'history'
-                    ? 'bg-slate-800 text-white border-b-2 border-indigo-500'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <Award className="w-4 h-4" />
-                My Attempts
-              </button>
-            )}
-
-            {isTeacherOrAdmin && (
               <>
                 <button
-                  onClick={() => onNavigate('teacher_classes')}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    currentView === 'teacher_classes'
-                      ? 'bg-amber-950 text-amber-200 border-b-2 border-amber-500'
-                      : 'text-amber-300 hover:text-white hover:bg-slate-800'
+                  onClick={() => handleNavClick('student_classes')}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold ${
+                    currentView === 'student_classes' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  <GraduationCap className="w-4 h-4" />
-                  Class Management
+                  My Class
                 </button>
                 <button
-                  onClick={() => onNavigate('teacher_speaking')}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    currentView === 'teacher_speaking'
-                      ? 'bg-purple-950 text-purple-200 border-b-2 border-purple-500'
-                      : 'text-purple-300 hover:text-white hover:bg-slate-800'
+                  onClick={() => handleNavClick('history')}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold ${
+                    currentView === 'history' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  <span className="w-4 h-4 text-center">🎙️</span>
-                  Speaking Assessments
-                </button>
-                <button
-                  onClick={() => onNavigate('teacher_writing')}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    currentView === 'teacher_writing'
-                      ? 'bg-emerald-950 text-emerald-200 border-b-2 border-emerald-500'
-                      : 'text-emerald-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  <PenTool className="w-4 h-4" />
-                  Writing Editor & AI
-                </button>
-                <button
-                  onClick={() => onNavigate('teacher_editor')}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    currentView === 'teacher_editor'
-                      ? 'bg-amber-950 text-amber-200 border-b-2 border-amber-500'
-                      : 'text-amber-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  <Layers className="w-4 h-4" />
-                  Test Editor & Versions
-                </button>
-
-                <button
-                  onClick={() => onNavigate('teacher_attempts')}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    currentView === 'teacher_attempts'
-                      ? 'bg-amber-950 text-amber-200 border-b-2 border-amber-500'
-                      : 'text-amber-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  <UserCheck className="w-4 h-4" />
-                  Student Submissions
+                  Progress
                 </button>
               </>
             )}
-
-            {isAdmin && (
-              <button
-                onClick={() => onNavigate('admin_users')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                  currentView === 'admin_users'
-                    ? 'bg-purple-950 text-purple-200 border-b-2 border-purple-500'
-                    : 'text-purple-300 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                Manage Users
-              </button>
-            )}
-          </nav>
-
-          {/* Right Action / Auth Profile */}
-          <div className="flex items-center space-x-3">
-            {user ? (
-              <div className="flex items-center space-x-3">
-                <div className="text-right hidden sm:block">
-                  <div className="text-sm font-medium text-slate-200">{user.fullName}</div>
-                  <div className="flex items-center justify-end gap-1">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-semibold uppercase ${
-                        user.role === 'admin'
-                          ? 'bg-purple-900/80 text-purple-200 border border-purple-600'
-                          : user.role === 'teacher'
-                          ? 'bg-amber-900/80 text-amber-200 border border-amber-600'
-                          : 'bg-indigo-900/80 text-indigo-200 border border-indigo-600'
-                      }`}
-                    >
-                      {user.role}
-                    </span>
-                    {user.testTypePreference !== 'not_sure' && (
-                      <span className="text-[10px] text-slate-400 capitalize">
-                        ({user.testTypePreference})
-                      </span>
-                    )}
-                  </div>
+            {isTeacherOrAdmin && (
+              <div className="pt-2 border-t border-slate-100">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-1">
+                  Teacher Area
                 </div>
-
-                {user.role === 'student' && allowanceBalance !== null && (
-                  <span
-                    title="Available AI Writing Assessments (1 assessment = 1 task evaluated)"
-                    className="text-xs bg-slate-800 text-blue-300 border border-blue-500/40 px-2.5 py-1.5 rounded-md flex items-center gap-1 font-medium"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                    <span>{allowanceBalance} AI Credits</span>
-                  </span>
-                )}
-
-                {user.role === 'student' && (
-                  <button
-                    onClick={onOpenElevate}
-                    title="Elevate to Teacher (Requires Secret Key)"
-                    className="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-600/50 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors"
-                  >
-                    <Shield className="w-3.5 h-3.5" />
-                    Teacher Access
-                  </button>
-                )}
-
                 <button
-                  onClick={logout}
-                  title="Sign out"
-                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+                  onClick={() => handleNavClick('teacher_classes')}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  <LogOut className="w-5 h-5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2">
-                {/* Demo Fast Logins for easy reviewer testing */}
-                <button
-                  onClick={() => quickLoginAs('student')}
-                  className="text-xs bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 border border-indigo-600/40 px-2.5 py-1.5 rounded-md font-medium"
-                >
-                  Demo Student
+                  Class Management
                 </button>
                 <button
-                  onClick={() => quickLoginAs('teacher')}
-                  className="text-xs bg-amber-900/60 hover:bg-amber-800 text-amber-200 border border-amber-600/40 px-2.5 py-1.5 rounded-md font-medium"
+                  onClick={() => handleNavClick('teacher_speaking')}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  Demo Teacher
+                  Speaking Assessment Queue
                 </button>
                 <button
-                  onClick={onOpenLogin}
-                  className="text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3.5 py-1.5 rounded-md shadow-sm transition-colors"
+                  onClick={() => handleNavClick('teacher_editor')}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  Sign In
+                  Content Editor & Submissions
                 </button>
               </div>
             )}
           </div>
+        )}
+      </header>
+
+      {/* DISCREET DEVELOPER / REVIEWER SWITCHER TOOLBAR (Keeps student UI clean) */}
+      <div className="fixed bottom-3 right-3 z-30">
+        <div className="relative">
+          {devToolsOpen ? (
+            <div className="bg-slate-900 text-white rounded-xl p-3 shadow-xl border border-slate-700 w-56 text-xs space-y-2 animate-in fade-in duration-100">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                <span className="font-semibold text-slate-300">Reviewer Test Switcher</span>
+                <button
+                  onClick={() => setDevToolsOpen(false)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Switch accounts quickly for testing:
+              </p>
+              <div className="flex flex-col gap-1.5 pt-1">
+                <button
+                  onClick={() => {
+                    quickLoginAs('student');
+                    setDevToolsOpen(false);
+                  }}
+                  className="px-2.5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 font-medium text-white text-left transition-colors"
+                >
+                  👤 Switch to Demo Student
+                </button>
+                <button
+                  onClick={() => {
+                    quickLoginAs('teacher');
+                    setDevToolsOpen(false);
+                  }}
+                  className="px-2.5 py-1.5 rounded bg-amber-600 hover:bg-amber-500 font-medium text-white text-left transition-colors"
+                >
+                  🎓 Switch to Demo Teacher
+                </button>
+                {user?.role === 'student' && (
+                  <button
+                    onClick={() => {
+                      onOpenElevate();
+                      setDevToolsOpen(false);
+                    }}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-left border border-slate-700 transition-colors"
+                  >
+                    🔑 Elevate via Secret Key
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setDevToolsOpen(true)}
+              className="bg-slate-900/80 hover:bg-slate-900 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-full text-[11px] font-medium shadow-md border border-slate-700 flex items-center gap-1.5 backdrop-blur-xs transition-colors"
+              title="Open Reviewer / Developer Testing Switcher"
+            >
+              <span>🛠️</span>
+              <span className="hidden sm:inline">Reviewer Switcher</span>
+            </button>
+          )}
         </div>
       </div>
-    </header>
+    </>
   );
 };
