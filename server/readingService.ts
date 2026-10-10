@@ -100,6 +100,11 @@ export function sanitizeQuestionsForStudent(questionGroups: QuestionGroup[]): Qu
       delete (sanitized as any).acceptedAlternatives;
       delete (sanitized as any).explanation;
       delete (sanitized as any).evidenceQuote;
+      delete (sanitized as any).whyCorrect;
+      delete (sanitized as any).whyIncorrect;
+      delete (sanitized as any).commonTrap;
+      delete (sanitized as any).keyParaphrases;
+      delete (sanitized as any).distractorAnalysis;
       return sanitized;
     }),
   }));

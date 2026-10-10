@@ -207,6 +207,13 @@ export function getCambridge21Test4Data(): {
           explanation: `In east Africa the plant arrived with Belgian colonists in Rwanda, who liked the look of its glossy leaves and delicate purple flowers floating in their ponds.`,
           evidenceQuote: `In east Africa the plant arrived with Belgian colonists in Rwanda, who liked the look of its glossy leaves and delicate purple flowers floating in their ponds.`,
           paragraphRef: '2',
+          whyCorrect: `The passage directly confirms that Belgian colonists brought the plant to Rwanda because they liked the look of its glossy leaves and delicate purple flowers floating in their ponds, which directly matches the definition of a decorative plant.`,
+          whyIncorrect: `Choosing FALSE contradicts the passage, which explicitly describes how its visual appeal attracted the colonists. Choosing NOT GIVEN ignores the detailed reason provided for its introduction.`,
+          commonTrap: `Paraphrasing Trap: The text never uses the word 'decorative'; instead, it describes the decorative purpose visually ('liked the look of its glossy leaves and delicate purple flowers floating in their ponds'). Recognizing this descriptive paraphrase is the key to identifying TRUE.`,
+          keyParaphrases: [
+            { questionTerm: 'decorative plant', passageTerm: 'liked the look of its glossy leaves and delicate purple flowers floating in their ponds' },
+            { questionTerm: 'introduced in east Africa', passageTerm: 'arrived with Belgian colonists in Rwanda' },
+          ],
         },
         {
           id: 'c21-t4-q2',
@@ -216,6 +223,13 @@ export function getCambridge21Test4Data(): {
           explanation: `It had ‘escaped’ out of the country via the Kagera river and made its way downstream to Lake Victoria, rather than being intentionally transported by fishermen.`,
           evidenceQuote: `it had 'escaped' out of the country via the Kagera river and made its way downstream to Lake Victoria.`,
           paragraphRef: '2',
+          whyCorrect: `The statement is FALSE because the passage explicitly states that the weed 'escaped' via the Kagera river and drifted downstream into Lake Victoria naturally, directly contradicting the claim that fishermen transported it there.`,
+          whyIncorrect: `Choosing TRUE contradicts the text: no fishermen transported it; it washed downstream via the river. Choosing NOT GIVEN overlooks the clear factual statement explaining the mechanism of its arrival in Lake Victoria.`,
+          commonTrap: `Agent Trap: IELTS tests whether you notice WHO performed an action. The statement credits human agency ('fishermen took'), whereas the passage credits natural water currents ('escaped... via the Kagera river'). Direct contradiction equals FALSE.`,
+          keyParaphrases: [
+            { questionTerm: 'Fishermen took some plants', passageTerm: 'it had escaped... via the Kagera river' },
+            { questionTerm: 'to Lake Victoria', passageTerm: 'made its way downstream to Lake Victoria' },
+          ],
         },
         {
           id: 'c21-t4-q3',
@@ -225,6 +239,13 @@ export function getCambridge21Test4Data(): {
           explanation: `The passage states that boats that once brought fish to shore by the hundreds struggle to navigate through the mass of plants.`,
           evidenceQuote: `as the boats that once brought the fish to shore by the hundreds struggle to navigate through the mass of plants.`,
           paragraphRef: '3',
+          whyCorrect: `The passage affirms that boats 'struggle to navigate through the mass of plants', which means it has become difficult to force boats through the thick vegetation.`,
+          whyIncorrect: `Choosing FALSE contradicts the explicit difficulty boats face ('struggle to navigate'). Choosing NOT GIVEN overlooks the direct mention of boats having severe mobility problems.`,
+          commonTrap: `Synonym Matching: 'Difficult to force boats through' corresponds directly to 'boats... struggle to navigate through', and 'thick water hyacinth' is paraphrased as 'the mass of plants'.`,
+          keyParaphrases: [
+            { questionTerm: 'difficult to force boats through', passageTerm: 'struggle to navigate through' },
+            { questionTerm: 'thick water hyacinth', passageTerm: 'mass of plants' },
+          ],
         },
         {
           id: 'c21-t4-q4',
@@ -234,6 +255,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The passage mentions that the weed spreads, blocks fishing routes, and creates a habitat for mosquitoes, but gives no information about chemicals produced by the plants affecting fish numbers.`,
           evidenceQuote: `There, with no natural predators and perfect temperature conditions, the plant began spreading in the open water, blocking fishing routes and providing a new habitat for disease-carrying mosquitoes.`,
           paragraphRef: '2',
+          whyCorrect: `Although the passage discusses ecological impacts—such as blocking fishing routes and harboring disease-carrying mosquitoes—it never mentions chemicals produced by the plant, nor does it link plant chemicals to fish populations. Because this specific causal claim is entirely absent, it is NOT GIVEN.`,
+          whyIncorrect: `Choosing FALSE is incorrect because the passage does not refute the chemical claim; it simply never mentions it. Choosing TRUE relies on outside assumptions about weed toxicity not found in the text.`,
+          commonTrap: `Unmentioned Cause Trap: When a familiar topic (weed harm to fishing) is mentioned, candidates often assume related claims about 'chemicals' must be true. In IELTS, if an essential element of the statement is missing from the passage, the answer must be NOT GIVEN.`,
+          keyParaphrases: [
+            { questionTerm: 'affecting fish numbers', passageTerm: 'blocking fishing routes (no chemicals mentioned in text)' },
+          ],
         },
         {
           id: 'c21-t4-q5',
@@ -243,6 +270,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The passage notes that three out of four families depend on wood or charcoal and that solid fuels increase indoor pollution, but does not compare charcoal to wood to claim one is worse than the other.`,
           evidenceQuote: `About three out of four families in Kenya depend on wood or charcoal to cook their daily meals, and the rate is even higher in rural areas... Using solid fuels like these for cooking increases indoor pollution.`,
           paragraphRef: '4',
+          whyCorrect: `Paragraph 4 mentions that families rely on 'wood or charcoal' and that both are solid fuels causing pollution. However, the author never compares charcoal against wood, and never claims one has been proved worse than the other. Without this comparative claim, the answer is NOT GIVEN.`,
+          whyIncorrect: `Choosing FALSE requires the passage to state wood is worse or that they are equal in harm. Choosing TRUE assumes external health facts not stated in the passage.`,
+          commonTrap: `Comparative Qualifier Trap: IELTS frequently inserts a comparison ('even worse... than') between two items mentioned in the text. Even if both wood and charcoal are discussed, if no relative comparison is made, the statement is NOT GIVEN.`,
+          keyParaphrases: [
+            { questionTerm: 'cooking with charcoal / wood', passageTerm: 'depend on wood or charcoal to cook their daily meals... using solid fuels like these' },
+          ],
         },
         {
           id: 'c21-t4-q6',
@@ -252,6 +285,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The text contradicts this by stating that huge piles of water hyacinth taken out of the water by villagers were a common sight on the shores.`,
           evidenceQuote: `huge piles of water hyacinth that villagers had taken out of the water in an attempt to clear it were a common sight.`,
           paragraphRef: '5',
+          whyCorrect: `The text directly contradicts the statement: Paragraph 5 describes 'huge piles of water hyacinth that villagers had taken out of the water... were a common sight on the shores'. Since villagers successfully removed vast quantities onto the shore, it was not impossible to remove much.`,
+          whyIncorrect: `Choosing TRUE contradicts the factual evidence of 'huge piles' removed. Choosing NOT GIVEN ignores the clear description of villagers' large-scale extraction efforts.`,
+          commonTrap: `Extreme Language Trap: Words like 'impossible' make a statement very vulnerable to contradiction. Even though the weed returned, the physical removal of large amounts was accomplished, directly disproving 'impossible to remove much'.`,
+          keyParaphrases: [
+            { questionTerm: 'impossible to remove much', passageTerm: 'huge piles... that villagers had taken out of the water were a common sight' },
+          ],
         },
         {
           id: 'c21-t4-q7',
@@ -261,6 +300,13 @@ export function getCambridge21Test4Data(): {
           explanation: `The passage confirms researchers began exploring its potential as a biofuel as early as the 1980s (which was in the 20th century).`,
           evidenceQuote: `captivated researchers' imaginations since as early as the 1980s when, across the world, they began to explore its potential as a biofuel.`,
           paragraphRef: '5',
+          whyCorrect: `The passage states researchers explored its potential as a biofuel 'since as early as the 1980s'. Because the 1980s was in the 20th century (the last century relative to the present day), the statement is factually confirmed as TRUE.`,
+          whyIncorrect: `Choosing FALSE contradicts the stated historical timeline (1980s). Choosing NOT GIVEN fails to match the 1980s with the phrase 'the last century'.`,
+          commonTrap: `Time Conversion Trap: In IELTS, 'in the last century' refers to the 1900s. Connecting 'the 1980s' to 'the last century' is the vital clue that validates this statement.`,
+          keyParaphrases: [
+            { questionTerm: 'in the last century', passageTerm: 'as early as the 1980s' },
+            { questionTerm: 'generate biogas', passageTerm: 'explore its potential as a biofuel' },
+          ],
         },
       ],
     },
@@ -312,6 +358,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The community received a pair of donated biogas digesters – machines that would transform a mix of water hyacinth and cow dung into biogas for cooking.`,
           evidenceQuote: `transform a mix of water hyacinth and cow dung into biogas for cooking.`,
           paragraphRef: '7',
+          whyCorrect: `Paragraph 7 specifies that the digesters 'transform a mix of water hyacinth and cow dung into biogas for cooking'. The substance mixed with water hyacinth is therefore 'cow dung'.`,
+          whyIncorrect: `Writing any other fuel or substance (e.g. 'wood', 'charcoal') is incorrect because the passage explicitly requires 'cow dung' as the input material.`,
+          commonTrap: `Word Limit Trap: The instruction allows NO MORE THAN TWO WORDS. Writing 'some cow dung' is grammatically redundant because 'some' is already in the prompt sentence. 'Cow dung' or 'dung' is concise and accurate.`,
+          keyParaphrases: [
+            { questionTerm: 'together with some [8]', passageTerm: 'a mix of water hyacinth and cow dung' },
+          ],
         },
         {
           id: 'c21-t4-q9',
@@ -322,6 +374,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The mixture goes in one end – think of it as a mouth – and over the next 20 to 30 days, it goes through a fermentation process and breaks down, giving off gas that comes out the other end.`,
           evidenceQuote: `over the next 20 to 30 days, it goes through a fermentation process and breaks down, giving off gas that comes out the other end.`,
           paragraphRef: '8',
+          whyCorrect: `Paragraph 8 explains that over 20 to 30 days, the mixture 'goes through a fermentation process and breaks down'. Thus, the process that must be completed is 'fermentation' (or 'fermentation process').`,
+          whyIncorrect: `Writing 'gas' or 'break down' violates the grammatical structure 'until the [noun] is completed'.`,
+          commonTrap: `Grammar and Part-of-Speech Matching: The definite article 'the' requires a noun. 'Fermentation' describes the biological process that takes place over the 20 to 30 days.`,
+          keyParaphrases: [
+            { questionTerm: 'until the [9] is completed', passageTerm: 'over the next 20 to 30 days, it goes through a fermentation process and breaks down' },
+          ],
         },
         {
           id: 'c21-t4-q10',
@@ -331,6 +389,12 @@ export function getCambridge21Test4Data(): {
           explanation: `From there, the clean-burning gas is passed through pipes to the point of use, just like traditional domestic gas.`,
           evidenceQuote: `From there, the clean-burning gas is passed through pipes to the point of use, just like traditional domestic gas.`,
           paragraphRef: '8',
+          whyCorrect: `Paragraph 8 states: 'From there, the clean-burning gas is passed through pipes to the point of use, just like traditional domestic gas.' The physical means used to transport the gas to homes is 'pipes'.`,
+          whyIncorrect: `Writing synonyms like 'tubes' or 'lines' is penalized in IELTS completion questions because answers must be copied directly from the text without alteration.`,
+          commonTrap: `Direct Text Extraction: Always copy the exact noun found in the text. 'Pipes' is the exact word used by the author.`,
+          keyParaphrases: [
+            { questionTerm: 'use [10] to transport it to individual homes', passageTerm: 'passed through pipes to the point of use, just like traditional domestic gas' },
+          ],
         },
       ],
     },
@@ -356,6 +420,12 @@ export function getCambridge21Test4Data(): {
           explanation: `Besides, they don’t have to devote a lot of time every day to gathering firewood, which is a great relief.`,
           evidenceQuote: `they don't have to devote a lot of time every day to gathering firewood`,
           paragraphRef: '9',
+          whyCorrect: `Paragraph 9 states: 'they don’t have to devote a lot of time every day to gathering firewood'. 'Devote a lot of time' directly paraphrases 'spend so much time'.`,
+          whyIncorrect: `Writing 'firewood' or 'effort' does not fit the sentence structure 'spend so much [noun] collecting fuel'.`,
+          commonTrap: `ONE WORD ONLY: Ensure you write strictly one word. 'Time' is the exact matching noun.`,
+          keyParaphrases: [
+            { questionTerm: 'spend so much time collecting fuel', passageTerm: 'devote a lot of time every day to gathering firewood' },
+          ],
         },
         {
           id: 'c21-t4-q12',
@@ -366,6 +436,12 @@ export function getCambridge21Test4Data(): {
           explanation: `As a result, they’re able to make more money for their families from other enterprises.`,
           evidenceQuote: `they're able to make more money for their families from other enterprises.`,
           paragraphRef: '9',
+          whyCorrect: `Paragraph 9 explains: 'they’re able to make more money for their families from other enterprises'. 'Make more money from other enterprises' matches 'tasks that bring in money'.`,
+          whyIncorrect: `Writing 'enterprises' or 'families' does not fit the meaning of generating earnings ('bring in [12]').`,
+          commonTrap: `Collocation Matching: 'Bring in money' = 'make money' / 'earn money'. Only ONE word is permitted.`,
+          keyParaphrases: [
+            { questionTerm: 'different tasks that bring in [12]', passageTerm: 'other enterprises... make more money for their families' },
+          ],
         },
         {
           id: 'c21-t4-q13',
@@ -376,6 +452,12 @@ export function getCambridge21Test4Data(): {
           explanation: `But unless the price of the machines drops, it’s pretty clear that most communities will never be able to afford any, since they sell for about $750.`,
           evidenceQuote: `unless the price of the machines drops, it's pretty clear that most communities will never be able to afford any`,
           paragraphRef: '11',
+          whyCorrect: `Paragraph 11 states: 'unless the price of the machines drops, it’s pretty clear that most communities will never be able to afford any'. 'Beyond the reach' means unaffordable, pointing directly to 'price'.`,
+          whyIncorrect: `Writing '$750' is wrong because the sentence requires a singular noun preceded by 'the': 'the price of the digesters'.`,
+          commonTrap: `Figurative Meaning: 'Beyond the reach of most villages' is an English idiom for being unaffordable. The factor causing unaffordability is the 'price' ($750).`,
+          keyParaphrases: [
+            { questionTerm: 'the [13] is beyond the reach of most villages', passageTerm: 'unless the price drops... most communities will never be able to afford any' },
+          ],
         },
       ],
     },
@@ -411,6 +493,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The crowded and bustling streets of Delhi teem with life... more than 20 million people go about their daily lives (dense population).`,
           evidenceQuote: `The crowded and bustling streets of Delhi teem with life... more than 20 million people go about their daily lives.`,
           paragraphRef: '1',
+          whyCorrect: `Paragraph 1 describes Delhi's streets as 'crowded and bustling' and states that 'more than 20 million people go about their daily lives'. This enormous concentration of people corresponds directly to Option I: 'dense population'.`,
+          whyIncorrect: `Options like G ('thriving economy') or A ('basic outlook') do not describe the crowded sheer number of people living in the city.`,
+          commonTrap: `Abstract Synthesis: The passage provides vivid descriptive imagery ('crowded and bustling', '20 million people'). In summary completion with options, candidates must match descriptions to higher-level concepts ('dense population').`,
+          keyParaphrases: [
+            { questionTerm: 'dense population (I)', passageTerm: 'crowded and bustling streets... more than 20 million people' },
+          ],
         },
         {
           id: 'c21-t4-q15',
@@ -420,6 +508,12 @@ export function getCambridge21Test4Data(): {
           explanation: `Many were born and raised here, and many millions more have recently made India’s capital their home, having moved from surrounding neighbourhoods, cities and states (new immigrants).`,
           evidenceQuote: `many millions more have recently made India's capital their home, having moved from surrounding neighbourhoods, cities and states or across the country`,
           paragraphRef: '1',
+          whyCorrect: `Paragraph 1 contrasts those 'born and raised here' with 'many millions more [who] have recently made India’s capital their home, having moved from surrounding neighbourhoods...'. People who have recently moved to live in the capital are 'new immigrants' (Option J).`,
+          whyIncorrect: `Option C ('wealthy visitors') contradicts the text, which explains they moved seeking better jobs and often live in slums.`,
+          commonTrap: `Antonym/Contrast Markers: 'Some have spent their entire life... while others are [15]'. The text mirrors this contrast with 'born and raised' vs 'recently made India's capital their home, having moved'.`,
+          keyParaphrases: [
+            { questionTerm: 'new immigrants (J)', passageTerm: 'recently made India\'s capital their home, having moved from surrounding neighbourhoods' },
+          ],
         },
         {
           id: 'c21-t4-q16',
@@ -429,6 +523,12 @@ export function getCambridge21Test4Data(): {
           explanation: `having moved from surrounding neighbourhoods, cities and states or across the country (nearby district).`,
           evidenceQuote: `having moved from surrounding neighbourhoods, cities and states or across the country`,
           paragraphRef: '1',
+          whyCorrect: `The summary contrasts local vs distant origin: 'come from a [16] or have travelled from the other side of India'. Paragraph 1 contrasts 'moved from surrounding neighbourhoods, cities and states' with 'or across the country'. 'Surrounding neighbourhoods' matches Option H: 'nearby district'.`,
+          whyIncorrect: `Option D ('distant country') is the exact opposite of a surrounding neighborhood.`,
+          commonTrap: `Parallel Balance: The summary sets up a near/far polarity: '[16]' vs 'the other side of India'. Recognizing that 'surrounding neighbourhoods' provides the near counterpart points unequivocally to 'nearby district'.`,
+          keyParaphrases: [
+            { questionTerm: 'nearby district (H)', passageTerm: 'surrounding neighbourhoods, cities and states' },
+          ],
         },
         {
           id: 'c21-t4-q17',
@@ -438,6 +538,12 @@ export function getCambridge21Test4Data(): {
           explanation: `often in the hope of gaining better jobs and a better life (employment opportunities).`,
           evidenceQuote: `often in the hope of gaining better jobs and a better life.`,
           paragraphRef: '1',
+          whyCorrect: `Paragraph 1 states migrants move 'often in the hope of gaining better jobs and a better life'. 'Better jobs' matches Option B: 'employment opportunities'.`,
+          whyIncorrect: `Options like G ('thriving economy') refer to macroeconomic conditions, not what individuals seek ('in search of things such as...').`,
+          commonTrap: `Direct Collocation: 'Gaining better jobs' is synonymous with seeking improved 'employment opportunities'.`,
+          keyParaphrases: [
+            { questionTerm: 'improved employment opportunities (B)', passageTerm: 'gaining better jobs and a better life' },
+          ],
         },
         {
           id: 'c21-t4-q18',
@@ -447,6 +553,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The overriding aim of the four-year project, called ‘Multilingualism and Multiliteracy’, is to find out why (primary objective).`,
           evidenceQuote: `The overriding aim of the four-year project, called 'Multilingualism and Multiliteracy', is to find out why`,
           paragraphRef: '2',
+          whyCorrect: `Paragraph 2 introduces the investigation: 'The overriding aim of the four-year project... is to find out why...'. 'Overriding aim' corresponds to Option E: 'primary objective'.`,
+          whyIncorrect: `Option A ('basic outlook') refers to a viewpoint or philosophy, not the central mission or goal of a research team.`,
+          commonTrap: `Academic Terminology: 'Overriding aim' is a standard academic paraphrase for 'primary objective'.`,
+          keyParaphrases: [
+            { questionTerm: 'primary objective (E)', passageTerm: 'overriding aim of the four-year project' },
+          ],
         },
         {
           id: 'c21-t4-q19',
@@ -456,6 +568,12 @@ export function getCambridge21Test4Data(): {
           explanation: `the many benefits of speaking more than one language, observed in schools in Europe for instance, do not apply to many of India’s schoolchildren (similar advantages).`,
           evidenceQuote: `the many benefits of speaking more than one language, observed in schools in Europe for instance, do not apply to many of India's schoolchildren.`,
           paragraphRef: '2',
+          whyCorrect: `Paragraph 2 states: 'the many benefits of speaking more than one language, observed in schools in Europe for instance, do not apply to many of India’s schoolchildren'. 'Benefits... observed in Europe' corresponds to Option F: 'similar advantages'.`,
+          whyIncorrect: `Options like B ('employment opportunities') or G ('thriving economy') do not fit the educational benefits being tested.`,
+          commonTrap: `Synonym Pairing: 'Benefits' in the passage corresponds to 'advantages' in the options list.`,
+          keyParaphrases: [
+            { questionTerm: 'similar advantages (F)', passageTerm: 'the many benefits of speaking more than one language, observed in schools in Europe' },
+          ],
         },
       ],
     },
@@ -478,6 +596,12 @@ export function getCambridge21Test4Data(): {
           explanation: `Over 50% cannot read fluently (literacy task failure) while just under 50% cannot solve subtraction (numeracy failure), meaning performance in literacy is not better.`,
           evidenceQuote: `over 50% of children in Standard 5 [ten-year-olds] cannot read a Standard 2 [seven-year-olds] task fluently, and just under 50% of them cannot solve a Standard 2 subtraction task`,
           paragraphRef: '3',
+          whyCorrect: `The author reports that 'over 50% of children in Standard 5 [ten-year-olds] cannot read a Standard 2 task fluently, and just under 50% of them cannot solve a Standard 2 subtraction task'. Since more students fail literacy (over 50%) than numeracy (under 50%), their performance in literacy is WORSE than numeracy. This directly contradicts the prompt claim, making the answer NO.`,
+          whyIncorrect: `Choosing YES inverts the statistics: a higher failure percentage in literacy means lower performance, not better. Choosing NOT GIVEN ignores the exact numerical comparison given.`,
+          commonTrap: `Failure Rate Inversion: The text quotes failure rates ('cannot read', 'cannot solve'). When a higher percentage of students CANNOT do literacy compared to numeracy, performance in literacy is inferior. Missing this negative phrasing leads students to pick YES.`,
+          keyParaphrases: [
+            { questionTerm: 'perform better in literacy than numeracy', passageTerm: 'over 50% cannot read [literacy] vs just under 50% cannot solve subtraction [numeracy]' },
+          ],
         },
         {
           id: 'c21-t4-q21',
@@ -487,6 +611,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The text states dropping out disproportionately affects female students, but does not claim Tsimpli faced problems convincing female students to participate in the study.`,
           evidenceQuote: `She explains that low educational achievement can lead to many of these students dropping out of school - a problem disproportionately affecting female students.`,
           paragraphRef: '3',
+          whyCorrect: `Paragraph 3 mentions that low educational achievement causes students to drop out, 'a problem disproportionately affecting female students'. However, the author never discusses whether Tsimpli faced reluctance or recruitment problems among female students for her study. Because this specific claim is unmentioned, it is NOT GIVEN.`,
+          whyIncorrect: `Choosing NO requires evidence that female recruitment was effortless. Choosing YES confuses the general problem of female school dropouts with recruitment challenges in the research project.`,
+          commonTrap: `Context Extension Trap: Candidates see 'female students' and 'problem' in the text and jump to YES. In IELTS, you must verify the EXACT statement: was there a problem 'convincing female students to take part in the study'? The text does not say.`,
+          keyParaphrases: [
+            { questionTerm: 'problems convincing female students to take part', passageTerm: 'dropping out of school - a problem disproportionately affecting female students (study recruitment not mentioned)' },
+          ],
         },
         {
           id: 'c21-t4-q22',
@@ -496,6 +626,13 @@ export function getCambridge21Test4Data(): {
           explanation: `Tsimpli and her colleagues are investigating whether these low learning outcomes could be caused by an Indian school system where the language that children are taught in often differs from the language used at home.`,
           evidenceQuote: `Tsimpli and her colleagues are investigating whether these low learning outcomes could be caused by an Indian school system where the language that children are taught in often differs from the language used at home.`,
           paragraphRef: '4',
+          whyCorrect: `Paragraph 4 explicitly confirms: 'Tsimpli and her colleagues are investigating whether these low learning outcomes could be caused by an Indian school system where the language that children are taught in often differs from the language used at home.' This matches the statement completely, confirming YES.`,
+          whyIncorrect: `Choosing NO directly contradicts the stated research inquiry. Choosing NOT GIVEN overlooks the clear statement of the research hypotheses.`,
+          commonTrap: `Academic Paraphrasing: 'Poor academic performance' = 'low learning outcomes'; 'unfamiliar language' = 'language that children are taught in differs from the language used at home'.`,
+          keyParaphrases: [
+            { questionTerm: 'poor academic performance', passageTerm: 'low learning outcomes' },
+            { questionTerm: 'taught in an unfamiliar language', passageTerm: 'language that children are taught in often differs from the language used at home' },
+          ],
         },
         {
           id: 'c21-t4-q23',
@@ -505,6 +642,13 @@ export function getCambridge21Test4Data(): {
           explanation: `The text explicitly contradicts this: 'They intend to look not only at test results, but also at variables such as the standard of schooling, the environment and the teaching practices themselves.'`,
           evidenceQuote: `They intend to look not only at test results, but also at variables such as the standard of schooling, the environment and the teaching practices themselves.`,
           paragraphRef: '5',
+          whyCorrect: `The statement asserts they decided against investigating teaching methodology, but Paragraph 5 states the direct opposite: 'They intend to look not only at test results, but also at variables such as... teaching practices themselves.' Intending to examine teaching practices contradicts deciding against it, making the answer NO.`,
+          whyIncorrect: `Choosing YES contradicts their stated intent. Choosing NOT GIVEN ignores the explicit research plan outlined in Paragraph 5.`,
+          commonTrap: `Negation Trap: The prompt asserts a negative decision ('decided against investigating'). Check whether the researchers actually plan to study it. 'They intend to look at... teaching practices' directly refutes 'decided against'.`,
+          keyParaphrases: [
+            { questionTerm: 'decided against investigating', passageTerm: 'intend to look not only at test results, but also at' },
+            { questionTerm: 'teaching methodology', passageTerm: 'teaching practices themselves' },
+          ],
         },
       ],
     },
@@ -533,6 +677,18 @@ export function getCambridge21Test4Data(): {
           explanation: `According to Tsimpli, English instruction for children from low socio-economic areas might not be the best way for them to learn, holding back those with little familiarity.`,
           evidenceQuote: `most of the evidence from this and other projects shows that English instruction for children from low socio-economic areas might not be the best way for them to learn`,
           paragraphRef: '6',
+          whyCorrect: `Paragraph 6 reports that English instruction 'may hold back those children who have little familiarity with, or exposure to, the language' and that 'English instruction for children from low socio-economic areas might not be the best way for them to learn'. This directly matches Option C.`,
+          whyIncorrect: `Options A, B, and D are incorrect distractors: outside exposure is rare, not useless (A); motivation is not evaluated (B); and consistency across schools is not evaluated (D).`,
+          distractorAnalysis: {
+            A: `Distractor: The text notes that poor children have 'little familiarity with, or exposure to, the language before starting school', but does not claim that outside exposure itself has limited benefit.`,
+            B: `Distractor: Student motivation is never mentioned or analyzed in Paragraph 6.`,
+            D: `Distractor: The passage discusses uniformity of teaching across India, but never claims there is 'little consistency across schools'.`,
+          },
+          commonTrap: `Distractor Word Association: Option A reuses the passage word 'exposure', but twists the meaning. Always evaluate the full claim rather than isolated keywords.`,
+          keyParaphrases: [
+            { questionTerm: 'Poor children disadvantaged further', passageTerm: 'English instruction for children from low socio-economic areas might not be the best way for them to learn' },
+            { questionTerm: 'instructed in English', passageTerm: 'medium of instruction used in schools, especially English' },
+          ],
         },
         {
           id: 'c21-t4-q25',
@@ -548,6 +704,17 @@ export function getCambridge21Test4Data(): {
           explanation: `Tsimpli clarifies: 'We are not suggesting that English be withdrawn - that ship has sailed - but we perhaps have to think more about learner needs.' This signifies it is too late to reverse or remove English completely.`,
           evidenceQuote: `We are not suggesting that English be withdrawn - that ship has sailed - but we perhaps have to think more about learner needs.`,
           paragraphRef: '7',
+          whyCorrect: `In Paragraph 7, Tsimpli says: 'We are not suggesting that English be withdrawn - that ship has sailed...'. The English idiom 'that ship has sailed' means a past opportunity is gone and an established reality cannot be reversed. In context, it means it is too late to withdraw English completely (Option D).`,
+          whyIncorrect: `Options A, B, and C fail to interpret the idiom: Option B is what she suggests AFTERwards, but does not define 'that ship has sailed'; Option C is inaccurate; Option A misattributes the idiom to the research report.`,
+          distractorAnalysis: {
+            A: `Distractor: The phrase refers to the permanent presence of English in Indian education, not the helpfulness of the researchers' report.`,
+            B: `Distractor: While adapting teaching is recommended later in the sentence, it describes the subsequent recommendation, not the meaning of the idiom itself.`,
+            C: `Distractor: The text suggests English could be taught as a subject alongside others, but does not claim schools had limited success doing so.`,
+          },
+          commonTrap: `Surrounding Clause Trap: Option B restates the clause immediately after the idiom ('think more about learner needs'). Make sure your answer targets the specific idiom ('that ship has sailed' refers to 'English be withdrawn').`,
+          keyParaphrases: [
+            { questionTerm: 'too late to remove English completely', passageTerm: 'not suggesting that English be withdrawn - that ship has sailed' },
+          ],
         },
         {
           id: 'c21-t4-q26',
@@ -563,6 +730,18 @@ export function getCambridge21Test4Data(): {
           explanation: `An unanticipated finding was that children from slum backgrounds do not lag behind children from other urban poor backgrounds and in some cases outperform them in numeracy and literacy.`,
           evidenceQuote: `an unanticipated finding has been that children from slum backgrounds do not seem to lag behind children from other urban poor backgrounds - and in some cases outperform them (e.g. in numeracy and literacy tasks).`,
           paragraphRef: '8',
+          whyCorrect: `Paragraph 8 highlights: 'an unanticipated finding has been that children from slum backgrounds do not seem to lag behind children from other urban poor backgrounds - and in some cases outperform them (e.g. in numeracy and literacy tasks)'. 'Unanticipated finding' = 'surprised researchers', directly validating Option D.`,
+          whyIncorrect: `Option A was expected ('preliminary results show'), not the surprise; Option B is never mentioned; Option C contradicts the text (slum children have unique survival life experiences).`,
+          distractorAnalysis: {
+            A: `Distractor: Equal general intelligence between boys and girls was a preliminary confirmation ('show there is no difference'), not the 'unanticipated finding'.`,
+            B: `Distractor: The age at which children move into slums is not discussed in Paragraph 8.`,
+            C: `Distractor: The passage argues slum children have distinctly different and tougher life experiences that force them to mature faster.`,
+          },
+          commonTrap: `Expected vs Unexpected Distinction: Option A mentions equal intelligence, which appears in the first half of the sentence, but the author introduces the surprise with 'an unanticipated finding has been...'. Pay attention to signpost words signaling surprise.`,
+          keyParaphrases: [
+            { questionTerm: 'surprised researchers', passageTerm: 'an unanticipated finding has been' },
+            { questionTerm: 'literacy and numeracy skills... not lower', passageTerm: 'do not seem to lag behind... (e.g. in numeracy and literacy tasks)' },
+          ],
         },
       ],
     },
@@ -598,6 +777,12 @@ export function getCambridge21Test4Data(): {
           explanation: `What seemed simple enough to start with triggered an almost obsessive, decade-long journey marked by obstacles (challenging task).`,
           evidenceQuote: `What seemed simple enough to start with triggered an almost obsessive, decade-long journey, marked by a series of obstacles`,
           paragraphRef: '1',
+          whyCorrect: `Paragraph 1 describes Bellerby's project: 'What seemed simple enough to start with triggered an almost obsessive, decade-long journey, marked by a series of obstacles that would have deterred anyone less determined.' A decade-long journey fraught with obstacles represents an unexpectedly 'challenging task' (Option G).`,
+          whyIncorrect: `Options like H ('memorable object') or J ('numerous problems') do not fit grammatically into 'an unexpectedly [27]' or match the decade-long endeavor.`,
+          commonTrap: `Syntactic and Semantic Fit: 'An unexpectedly [27]' requires a noun phrase starting with a consonant sound. 'Challenging task' fits both grammatically and contextually.`,
+          keyParaphrases: [
+            { questionTerm: 'unexpectedly challenging task (G)', passageTerm: 'What seemed simple enough... triggered an almost obsessive, decade-long journey, marked by a series of obstacles' },
+          ],
         },
         {
           id: 'c21-t4-q28',
@@ -607,6 +792,12 @@ export function getCambridge21Test4Data(): {
           explanation: `In the process, almost everything that could possibly go wrong did so (numerous problems).`,
           evidenceQuote: `In the process, almost everything that could possibly go wrong did so.`,
           paragraphRef: '4',
+          whyCorrect: `Paragraph 4 recounts that 'In the process, almost everything that could possibly go wrong did so.' To complete the project he had to face and solve this endless cascade of mishaps, matching Option J: 'numerous problems'.`,
+          whyIncorrect: `Options like B ('rare materials') or D ('product exchange markets') do not summarize the cascade of technical and logistical failures.`,
+          commonTrap: `Summary Synthesis: 'Almost everything that could possibly go wrong did so' is condensed in the summary as overcoming 'numerous problems'.`,
+          keyParaphrases: [
+            { questionTerm: 'overcome numerous problems (J)', passageTerm: 'marked by a series of obstacles... almost everything that could possibly go wrong did so' },
+          ],
         },
         {
           id: 'c21-t4-q29',
@@ -616,6 +807,12 @@ export function getCambridge21Test4Data(): {
           explanation: `obtaining such a globe was not simply a matter of a quick online order (internet purchase).`,
           evidenceQuote: `obtaining such a globe was not simply a matter of a quick online order`,
           paragraphRef: '2',
+          whyCorrect: `Paragraph 2 states: 'obtaining such a globe was not simply a matter of a quick online order and a repressed sigh at the shipping costs.' A 'quick online order' corresponds to Option I: 'internet purchase'.`,
+          whyIncorrect: `Option D ('product exchange markets') is irrelevant to ordering an item online.`,
+          commonTrap: `Everyday Modern Synonym: 'Quick online order' = 'internet purchase'.`,
+          keyParaphrases: [
+            { questionTerm: 'straightforward internet purchase (I)', passageTerm: 'not simply a matter of a quick online order' },
+          ],
         },
         {
           id: 'c21-t4-q30',
@@ -625,6 +822,12 @@ export function getCambridge21Test4Data(): {
           explanation: `Bellerby came across shoddy commercial versions (inferior makes).`,
           evidenceQuote: `Bellerby came across shoddy commercial versions designed for school classrooms`,
           paragraphRef: '3',
+          whyCorrect: `Paragraph 3 notes: 'Bellerby came across shoddy commercial versions designed for school classrooms'. 'Shoddy commercial versions' corresponds to Option C: 'inferior makes'.`,
+          whyIncorrect: `Option B ('rare materials') contradicts the mass-produced, low-grade quality ('shoddy').`,
+          commonTrap: `Vocabulary Definition: 'Shoddy' means badly made or of poor quality, which matches 'inferior makes'.`,
+          keyParaphrases: [
+            { questionTerm: 'inferior makes (C)', passageTerm: 'shoddy commercial versions' },
+          ],
         },
         {
           id: 'c21-t4-q31',
@@ -634,6 +837,12 @@ export function getCambridge21Test4Data(): {
           explanation: `designed for school classrooms (educational use).`,
           evidenceQuote: `designed for school classrooms`,
           paragraphRef: '3',
+          whyCorrect: `Paragraph 3 states those shoddy versions were 'designed for school classrooms'. Items designed for school classrooms are intended for Option A: 'educational use'.`,
+          whyIncorrect: `Options like F ('international') or D ('product exchange markets') do not match the classroom setting.`,
+          commonTrap: `Domain Categorization: 'School classrooms' represents the domain of 'educational use'.`,
+          keyParaphrases: [
+            { questionTerm: 'intended for educational use (A)', passageTerm: 'designed for school classrooms' },
+          ],
         },
         {
           id: 'c21-t4-q32',
@@ -643,6 +852,12 @@ export function getCambridge21Test4Data(): {
           explanation: `Even his trips to Morocco and India, where surely the knowledge of artisan cartographers had been preserved, drew a blank (necessary skills).`,
           evidenceQuote: `where surely the knowledge of artisan cartographers* had been preserved, drew a blank.`,
           paragraphRef: '3',
+          whyCorrect: `Paragraph 3 records: 'Even his trips to Morocco and India, where surely the knowledge of artisan cartographers had been preserved, drew a blank.' The craft knowledge of artisan cartographers matches Option E: 'necessary skills'.`,
+          whyIncorrect: `Option B ('rare materials') is incorrect because cartographers possess artisan craft knowledge and skills, not raw materials.`,
+          commonTrap: `Synonym Abstraction: 'Knowledge of artisan cartographers' is paraphrased as having the 'necessary skills'.`,
+          keyParaphrases: [
+            { questionTerm: 'have the necessary skills (E)', passageTerm: 'knowledge of artisan cartographers had been preserved' },
+          ],
         },
       ],
     },
@@ -665,6 +880,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The author contradicts this: 'After all, contrary to stubbornly held popular views of our ancestors' geographical ignorance, we have known that the world is spherical since at least the 6th century BCE.'`,
           evidenceQuote: `contrary to stubbornly held popular views of our ancestors' geographical ignorance, we have known that the world is spherical since at least the 6th century BCE.`,
           paragraphRef: '2',
+          whyCorrect: `The author explicitly refutes this assumption: 'After all, contrary to stubbornly held popular views of our ancestors' geographical ignorance, we have known that the world is spherical since at least the 6th century BCE.' Saying it is 'contrary to popular views of ignorance' means the assumption that ancestors were ignorant is false, directly contradicting the prompt statement that the assumption is 'correct'.`,
+          whyIncorrect: `Choosing YES accepts the popular misconception that the author explicitly rejects. Choosing NOT GIVEN ignores the strong phrase 'contrary to stubbornly held popular views...'.`,
+          commonTrap: `'Contrary to' Refutation: When a writer uses 'contrary to popular belief/view', they are introducing evidence that disproves that belief. A statement affirming that the belief is correct directly contradicts the writer's argument, making NO the correct answer.`,
+          keyParaphrases: [
+            { questionTerm: 'assumption today... is correct', passageTerm: 'contrary to stubbornly held popular views of our ancestors\' geographical ignorance' },
+          ],
         },
         {
           id: 'c21-t4-q34',
@@ -674,6 +895,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The passage states Plato likened it to a leather ball in Phaedo, but gives no indication that he was criticised for doing so.`,
           evidenceQuote: `The ancient Greek philosopher Plato in his work Phaedo likened it to a leather ball`,
           paragraphRef: '2',
+          whyCorrect: `Paragraph 2 mentions: 'The ancient Greek philosopher Plato in his work Phaedo likened it to a leather ball...'. While Plato's comparison is described, the passage never mentions how other people reacted to it, nor does it state that he was criticized. Since the claim of criticism is unmentioned, the answer is NOT GIVEN.`,
+          whyIncorrect: `Choosing NO requires evidence that Plato was praised or universally agreed with. Choosing YES assumes negative historical reactions not documented in the text.`,
+          commonTrap: `Absent Reaction Trap: Mentioning an ancient philosopher's idea does not imply criticism existed. In IELTS, if the evaluation or reaction ('was criticised') is omitted, the answer is NOT GIVEN.`,
+          keyParaphrases: [
+            { questionTerm: 'Plato was criticised', passageTerm: 'Plato in his work Phaedo likened it to a leather ball (no criticism mentioned)' },
+          ],
         },
         {
           id: 'c21-t4-q35',
@@ -683,6 +910,12 @@ export function getCambridge21Test4Data(): {
           explanation: `The passage notes Crates of Mallus has the accolade of producing the first recorded globe in around 150 BCE, but never remarks on whether it was accurate.`,
           evidenceQuote: `the accolade of producing the first recorded globe goes to the ancient Greek philosopher Crates of Mallus, who is said to have made one in around 150 BCE.`,
           paragraphRef: '2',
+          whyCorrect: `Paragraph 2 credits Crates with 'the accolade of producing the first recorded globe... in around 150 BCE'. However, the author never discusses the geographical precision or accuracy of this globe. Without any statement evaluating accuracy, the statement is NOT GIVEN.`,
+          whyIncorrect: `Choosing NO requires the author to call Crates' globe inaccurate. Choosing YES assumes that being first recorded makes it an accurate representation.`,
+          commonTrap: `Fact vs Quality: The text provides historical facts (who made the first globe and when), but omits any qualitative judgment of cartographic accuracy.`,
+          keyParaphrases: [
+            { questionTerm: 'accurate representation', passageTerm: 'first recorded globe... around 150 BCE (accuracy not discussed)' },
+          ],
         },
         {
           id: 'c21-t4-q36',
@@ -692,6 +925,13 @@ export function getCambridge21Test4Data(): {
           explanation: `The text explicitly says: 'Surely, Bellerby reasoned, a good-quality globe wouldn't be difficult to find.'`,
           evidenceQuote: `Surely, Bellerby reasoned, a good-quality globe wouldn't be difficult to find.`,
           paragraphRef: '2',
+          whyCorrect: `Paragraph 2 explicitly states: 'Surely, Bellerby reasoned, a good-quality globe wouldn't be difficult to find.' Reasoning that a good-quality globe would not be difficult to find directly agrees with assuming he would have few problems locating a well-made globe, confirming YES.`,
+          whyIncorrect: `Choosing NO contradicts his documented initial reasoning. Choosing NOT GIVEN ignores the explicit sentence at the end of Paragraph 2.`,
+          commonTrap: `Synonym Matching: 'Bellerby assumed' = 'Bellerby reasoned'; 'few problems locating' = 'wouldn\'t be difficult to find'; 'well-made globe' = 'good-quality globe'.`,
+          keyParaphrases: [
+            { questionTerm: 'assumed he would have few problems locating', passageTerm: 'Surely, Bellerby reasoned, ... wouldn\'t be difficult to find' },
+            { questionTerm: 'well-made globe', passageTerm: 'good-quality globe' },
+          ],
         },
       ],
     },
@@ -720,6 +960,17 @@ export function getCambridge21Test4Data(): {
           explanation: `Right at the end of attaching the gores, he learnt that the paper had stretched slightly and so the final one overlapped the first by a centimetre (an unexpected issue).`,
           evidenceQuote: `Right at the end of the process, he learnt that the paper had stretched slightly and so the final one overlapped the first by a centimetre`,
           paragraphRef: '5',
+          whyCorrect: `Paragraph 5 recounts that 'Right at the end of the process, he learnt that the paper had stretched slightly and so the final one overlapped the first by a centimetre.' Discovering an unforeseen 1 cm overlap caused by stretched paper right at the end of attaching gores is an 'unexpected issue' (Option B).`,
+          whyIncorrect: `Options A, C, and D are incorrect distractors: he did not rush (A); he didn't doubt material quality in advance (C); and he did not abandon the project at this point (D).`,
+          distractorAnalysis: {
+            A: `Distractor: The text emphasizes tedious and painstaking labor, not a decision to work quickly.`,
+            C: `Distractor: The problem was the physical behavior of stretched wet paper discovered at the end, not a prior worry about material quality.`,
+            D: `Distractor: Although frustrating, the passage shows his obsessive determination rather than nearly giving up at this stage.`,
+          },
+          commonTrap: `Specific-to-General Generalization: The text describes a very concrete problem (paper stretching leading to a 1 cm overlap). The correct option generalizes this as an 'unexpected issue'.`,
+          keyParaphrases: [
+            { questionTerm: 'unexpected issue', passageTerm: 'learnt that the paper had stretched slightly and so the final one overlapped the first by a centimetre' },
+          ],
         },
         {
           id: 'c21-t4-q38',
@@ -735,6 +986,17 @@ export function getCambridge21Test4Data(): {
           explanation: `Bellerby found a kindred spirit in Martin Behaim, and something of his ambition is reflected in the heroic efforts of Vincenzo Coronelli (shared traits/parallels).`,
           evidenceQuote: `Bellerby clearly found a kindred spirit in Martin Behaim... Something of Bellerby's unflinching ambition is reflected in the even more heroic efforts of the Italian cartographer Vincenzo Coronelli`,
           paragraphRef: '6',
+          whyCorrect: `Paragraph 6 establishes parallels between Bellerby and historical globemakers: 'Bellerby clearly found a kindred spirit in Martin Behaim...' and 'Something of Bellerby's unflinching ambition is reflected in the even more heroic efforts of the Italian cartographer Vincenzo Coronelli'. Sharing a kindred spirit and reflected ambition means Bellerby had traits and drive in common with each of them (Option C).`,
+          whyIncorrect: `Option A is a distractor because Coronelli was noted for parallel ambition rather than direct personal inspiration; Option B is wrong because their works are famous; Option D is never mentioned.`,
+          distractorAnalysis: {
+            A: `Distractor: Behaim was seen as a kindred spirit, but Coronelli was cited for parallel ambition rather than Bellerby being directly inspired by him.`,
+            B: `Distractor: The passage describes their historical masterpieces (e.g. Coronelli's globes for Louis XIV), not that they were unknown.`,
+            D: `Distractor: The reviewer never suggests past difficulties were avoidable.`,
+          },
+          commonTrap: `Author's Purpose / Comparison: Phrases like 'kindred spirit' and 'reflected in' signal common characteristics between subjects. Look for options emphasizing common ground ('something in common').`,
+          keyParaphrases: [
+            { questionTerm: 'something in common with each of them', passageTerm: 'found a kindred spirit in Martin Behaim... Something of Bellerby\'s ambition is reflected in the efforts of Coronelli' },
+          ],
         },
         {
           id: 'c21-t4-q39',
@@ -750,6 +1012,17 @@ export function getCambridge21Test4Data(): {
           explanation: `The book is 'also a lament for the fading away of centuries-old traditions... many of these have now retired or passed away' (regrets the loss of skills).`,
           evidenceQuote: `Bellerby's book is also a lament for the fading away of centuries-old traditions. When he embarked on his globemaking odyssey, he struggled to find artisans with the skills`,
           paragraphRef: '7',
+          whyCorrect: `Paragraph 7 states: 'Bellerby's book is also a lament for the fading away of centuries-old traditions. When he embarked on his globemaking odyssey, he struggled to find artisans with the skills... many of these have now retired or passed away.' A 'lament' for the fading away of craft traditions directly conveys his regret over the disappearance of globe-making skills (Option D).`,
+          whyIncorrect: `Option A is contradicted because artisans were dying out and unavailable; Option B misrepresents his desire to revitalize traditional craft; Option C is not discussed in Paragraph 7.`,
+          distractorAnalysis: {
+            A: `Distractor: He struggled to find craftsmen and found few surviving artisans, contradicting long relationships with numerous craftsmen.`,
+            B: `Distractor: The passage highlights disappearing artisan knowledge, not justifying consumer disinterest.`,
+            C: `Distractor: Careful planning is not mentioned as a key theme in Paragraph 7.`,
+          },
+          commonTrap: `Tone/Emotion Words: The noun 'lament' means a passionate expression of grief or sorrow. Recognizing 'lament' leads directly to 'regrets the loss of'.`,
+          keyParaphrases: [
+            { questionTerm: 'regrets the loss of many globe-making skills', passageTerm: 'a lament for the fading away of centuries-old traditions... struggled to find artisans with the skills' },
+          ],
         },
         {
           id: 'c21-t4-q40',
@@ -765,6 +1038,17 @@ export function getCambridge21Test4Data(): {
           explanation: `The reviewer states the book 'is hardly a blueprint for commercial success' (it does not tell you how to create a profitable business).`,
           evidenceQuote: `is hardly a blueprint for commercial success.`,
           paragraphRef: '8',
+          whyCorrect: `Paragraph 8 concludes that the book 'is hardly a blueprint for commercial success.' In business English, a 'blueprint for commercial success' is a guide on how to build a profitable enterprise; stating it is 'hardly' that means it does not tell readers how to create a profitable business (Option A).`,
+          whyIncorrect: `Options B, C, and D are unsupported: no omissions of cartographers are cited (B); the future is referenced through his workshop (C); and customer detail omission is not criticized (D).`,
+          distractorAnalysis: {
+            B: `Distractor: The reviewer does not claim historical figures were left out.`,
+            C: `Distractor: The ongoing workshop shows future continuation rather than a failure to discuss the future.`,
+            D: `Distractor: Customer names are mentioned in passing, but the reviewer does not criticize a lack of customer details.`,
+          },
+          commonTrap: `Idiomatic Phrase Interpretation: 'Hardly a blueprint for commercial success' = does not teach the reader how to establish a financially lucrative business.`,
+          keyParaphrases: [
+            { questionTerm: 'does not tell you how to create a profitable business', passageTerm: 'is hardly a blueprint for commercial success' },
+          ],
         },
       ],
     },
@@ -817,38 +1101,50 @@ export function ingestCambridge21Test4(authorId?: string): {
 
   if (existing) {
     testId = existing.id;
-    versionId = uuidv4();
 
-    // Get current version number
-    const maxVer = db
-      .prepare(`SELECT MAX(version_number) as max_v FROM reading_test_versions WHERE test_id = ?`)
+    // Find latest version and update it in place
+    const latestVerRow = db
+      .prepare(`SELECT id, version_number FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1`)
       .get(testId) as any;
-    const nextVer = (maxVer?.max_v || 0) + 1;
 
-    db.prepare(`
-      INSERT INTO reading_test_versions (
-        id, test_id, version_number, status, passages_json,
-        question_groups_json, total_questions, validation_errors_json, published_at, created_at
-      ) VALUES (?, ?, ?, 'published', ?, ?, ?, '[]', ?, ?)
-    `).run(
-      versionId,
-      testId,
-      nextVer,
-      JSON.stringify(data.passages),
-      JSON.stringify(data.questionGroups),
-      40,
-      now,
-      now
-    );
+    if (latestVerRow) {
+      versionId = latestVerRow.id;
+      db.prepare(`
+        UPDATE reading_test_versions
+        SET passages_json = ?,
+            question_groups_json = ?,
+            total_questions = 40,
+            status = 'published'
+        WHERE id = ?
+      `).run(
+        JSON.stringify(data.passages),
+        JSON.stringify(data.questionGroups),
+        versionId
+      );
+    } else {
+      versionId = uuidv4();
+      db.prepare(`
+        INSERT INTO reading_test_versions (
+          id, test_id, version_number, status, passages_json,
+          question_groups_json, total_questions, validation_errors_json, published_at, created_at
+        ) VALUES (?, ?, 1, 'published', ?, ?, 40, '[]', ?, ?)
+      `).run(
+        versionId,
+        testId,
+        JSON.stringify(data.passages),
+        JSON.stringify(data.questionGroups),
+        now,
+        now
+      );
+    }
 
     db.prepare(`
       UPDATE reading_tests
-      SET current_version_number = ?,
-          status = 'published',
+      SET status = 'published',
           is_free_tier = 1,
           updated_at = ?
       WHERE id = ?
-    `).run(nextVer, now, testId);
+    `).run(now, testId);
   } else {
     testId = uuidv4();
     versionId = uuidv4();

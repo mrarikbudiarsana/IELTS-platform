@@ -11,6 +11,14 @@ This document tracks implementation status across the stages outlined in the Pro
 - [x] Phase 4: Student Experience & Test Runner (Highlighter, split pane, autosave)
 - [x] Phase 5: Marking Engine & Results Analytics (Non-fuzzy, Academic & GT band thresholds)
 - [x] Phase 6: Demonstration Content & Automated Verification (9/9 checks passed)
+- [x] Phase 7: Deep Pedagogical Explanations & Interactive Passage Grounding (`ResultsView.tsx`):
+  - Why correct vs. why incorrect breakdown for every question
+  - Distractor analysis for Multiple Choice questions (A, B, C, D)
+  - Official IELTS trap analysis (True/False/Not Given, Yes/No/Not Given, and word count traps)
+  - Key vocabulary & paraphrasing mapping tables (`[Question Keyword]` ➔ `[Passage Equivalent]`)
+  - Grounding evidence quote with paragraph reference (`Paragraph 2`)
+  - Interactive Passage Reference Drawer: opens passage context with the target paragraph and highlighted quote
+  - Security sanitization: explanation data strictly scrubbed for active in-progress attempts
 
 ---
 

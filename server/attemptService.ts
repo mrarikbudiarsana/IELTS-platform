@@ -326,6 +326,15 @@ export function submitAttempt(params: {
         explanation: question.explanation,
         evidenceQuote: question.evidenceQuote,
         paragraphRef: question.paragraphRef,
+        whyCorrect: question.whyCorrect,
+        whyIncorrect: question.whyIncorrect,
+        commonTrap: question.commonTrap,
+        keyParaphrases: question.keyParaphrases,
+        distractorAnalysis: question.distractorAnalysis,
+        questionType: group.questionType,
+        prompt: question.prompt,
+        stem: question.stem,
+        options: question.options,
       });
     }
 
@@ -387,17 +396,18 @@ export function getAttemptById(attemptId: string, userId: string): ReadingAttemp
   if (attemptRow.status === 'submitted' || attemptRow.status === 'expired') {
     const version = getVersionById(attemptRow.version_id);
     if (version) {
-      const questionMap = new Map<number, QuestionItem>();
+      const questionMap = new Map<number, { question: QuestionItem; group: QuestionGroup }>();
       for (const g of version.questionGroups) {
         for (const q of g.questions) {
-          questionMap.set(q.questionNumber, q);
+          questionMap.set(q.questionNumber, { question: q, group: g });
         }
       }
 
       results = [];
       for (const row of answerRows) {
-        const q = questionMap.get(row.question_number);
-        if (q) {
+        const item = questionMap.get(row.question_number);
+        if (item) {
+          const { question: q, group: g } = item;
           results.push({
             questionId: q.id,
             questionNumber: row.question_number,
@@ -409,6 +419,15 @@ export function getAttemptById(attemptId: string, userId: string): ReadingAttemp
             explanation: q.explanation,
             evidenceQuote: q.evidenceQuote,
             paragraphRef: q.paragraphRef,
+            whyCorrect: q.whyCorrect,
+            whyIncorrect: q.whyIncorrect,
+            commonTrap: q.commonTrap,
+            keyParaphrases: q.keyParaphrases,
+            distractorAnalysis: q.distractorAnalysis,
+            questionType: g.questionType,
+            prompt: q.prompt,
+            stem: q.stem,
+            options: q.options,
           });
         }
       }

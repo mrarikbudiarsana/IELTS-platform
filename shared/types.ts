@@ -117,6 +117,11 @@ export interface FormFieldItem {
   placeholder?: string;
 }
 
+export interface ParaphraseItem {
+  questionTerm: string;
+  passageTerm: string;
+}
+
 export interface QuestionItem {
   id: string;
   questionNumber: number;
@@ -129,6 +134,12 @@ export interface QuestionItem {
   explanation?: string;
   evidenceQuote?: string;
   paragraphRef?: string;
+  // Enhanced pedagogical review fields:
+  whyCorrect?: string;
+  whyIncorrect?: string;
+  commonTrap?: string;
+  keyParaphrases?: ParaphraseItem[];
+  distractorAnalysis?: Record<string, string>;
   // Listening specific review fields:
   transcriptExcerpt?: string;
   audioTimestampSeconds?: number;
@@ -302,11 +313,21 @@ export interface AttemptItemResult {
   explanation?: string;
   evidenceQuote?: string;
   paragraphRef?: string;
+  // Enhanced pedagogical review fields:
+  whyCorrect?: string;
+  whyIncorrect?: string;
+  commonTrap?: string;
+  keyParaphrases?: ParaphraseItem[];
+  distractorAnalysis?: Record<string, string>;
+  // Additional question context for rich review rendering:
+  questionType?: string;
+  prompt?: string;
+  stem?: string;
+  options?: OptionChoice[];
   // Listening review additions:
   partNumber?: number;
   transcriptExcerpt?: string;
   audioTimestampSeconds?: number;
-  questionType?: string;
 }
 
 export interface ReadingAttempt {
