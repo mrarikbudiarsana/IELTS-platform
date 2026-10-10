@@ -763,6 +763,17 @@ export function getWritingAttemptById(attemptId: string): WritingAttempt | null 
 }
 
 /**
+ * Retrieves all Writing attempts for a specific student.
+ */
+export function listUserWritingAttempts(userId: string): WritingAttempt[] {
+  const rows = db
+    .prepare('SELECT id FROM writing_attempts WHERE user_id = ? ORDER BY started_at DESC')
+    .all(userId) as any[];
+
+  return rows.map((r) => getWritingAttemptById(r.id)!).filter(Boolean);
+}
+
+/**
  * Retrieves a response by ID.
  */
 export function getWritingResponseById(responseId: string): WritingResponse | null {

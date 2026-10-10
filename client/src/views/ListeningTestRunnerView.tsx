@@ -20,6 +20,7 @@ import {
   Flag,
   Headphones,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 
 interface ListeningTestRunnerViewProps {
@@ -83,6 +84,15 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
   // Confirmation modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Highlighter context menu state (appears on right click)
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    savedRange?: Range;
+    targetMark?: HTMLElement | null;
+  } | null>(null);
+  const questionsContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Start or resume test
   useEffect(() => {
@@ -394,6 +404,18 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
     return `${mins}:${remSecs.toString().padStart(2, '0')}`;
   };
 
+  // Close context menu on outside click or scroll
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClose = () => setContextMenu(null);
+    window.addEventListener('click', handleClose);
+    window.addEventListener('scroll', handleClose, true);
+    return () => {
+      window.removeEventListener('click', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+    };
+  }, [contextMenu]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white p-4">
@@ -531,6 +553,73 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
     }
   };
 
+  // Right-click context menu handler for text highlighting
+  const handleQuestionsContextMenu = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const isMark = target.tagName.toLowerCase() === 'mark' || Boolean(target.closest('mark'));
+    const markElement = isMark ? (target.tagName.toLowerCase() === 'mark' ? target : target.closest('mark')) : null;
+
+    const selection = window.getSelection();
+    const hasSelection = Boolean(selection && !selection.isCollapsed && selection.toString().trim().length > 0);
+
+    if (hasSelection || markElement) {
+      e.preventDefault();
+      const range = hasSelection && selection ? selection.getRangeAt(0).cloneRange() : undefined;
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        savedRange: range,
+        targetMark: markElement as HTMLElement | null,
+      });
+    } else {
+      setContextMenu(null);
+    }
+  };
+
+  // Apply highlight from right-click context menu
+  const handleApplyHighlight = (color: 'yellow' | 'green' = 'yellow') => {
+    if (!contextMenu?.savedRange) {
+      setContextMenu(null);
+      return;
+    }
+    try {
+      const range = contextMenu.savedRange;
+      const span = document.createElement('mark');
+      span.className = color === 'yellow' ? 'ielts-highlight-yellow' : 'ielts-highlight-green';
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      window.getSelection()?.removeAllRanges();
+    } catch (e) {
+      console.warn('Highlight extraction error', e);
+    }
+    setContextMenu(null);
+  };
+
+  // Clear highlight from right-click context menu
+  const handleClearHighlight = () => {
+    if (contextMenu?.targetMark) {
+      const mark = contextMenu.targetMark;
+      const parent = mark.parentNode;
+      while (mark.firstChild) {
+        parent?.insertBefore(mark.firstChild, mark);
+      }
+      parent?.removeChild(mark);
+    } else if (contextMenu?.savedRange) {
+      const range = contextMenu.savedRange;
+      const marks = Array.from(document.querySelectorAll('mark'));
+      marks.forEach((mark) => {
+        if (range.intersectsNode(mark)) {
+          const parent = mark.parentNode;
+          while (mark.firstChild) {
+            parent?.insertBefore(mark.firstChild, mark);
+          }
+          parent?.removeChild(mark);
+        }
+      });
+    }
+    setContextMenu(null);
+  };
+
   return (
     <div className={`h-screen flex flex-col font-sans select-text overflow-hidden ${getThemeClass()} ${getTextSizeClass()}`}>
       {/* Hidden native HTML audio element */}
@@ -639,7 +728,11 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
       )}
 
       {/* 3. MAIN SCROLLABLE CONTENT AREA (Pure white, matching Images 1-5) */}
-      <main className="flex-1 overflow-y-auto px-6 sm:px-12 py-8 bg-white select-text custom-scrollbar">
+      <main
+        ref={questionsContainerRef}
+        onContextMenu={handleQuestionsContextMenu}
+        className="flex-1 overflow-y-auto px-6 sm:px-12 py-8 bg-white select-text custom-scrollbar"
+      >
         <div className="max-w-5xl mx-auto">
           {currentPartGroups.length === 0 ? (
             <div className="text-slate-400 text-sm py-12 text-center">
@@ -658,6 +751,41 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
             ))
           )}
         </div>
+
+        {/* RIGHT-CLICK HIGHLIGHTER CONTEXT MENU */}
+        {contextMenu && (
+          <div
+            style={{
+              top: Math.min(contextMenu.y, window.innerHeight - 130),
+              left: Math.min(contextMenu.x, window.innerWidth - 180),
+            }}
+            className="fixed z-50 bg-white rounded shadow-lg border border-slate-200 py-1 min-w-[150px] text-xs font-medium animate-in fade-in duration-75 select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {contextMenu.savedRange && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleApplyHighlight('yellow')}
+                  className="w-full px-3 py-1.5 text-left hover:bg-slate-100 flex items-center gap-2 text-slate-800 transition-colors cursor-pointer"
+                >
+                  <span className="w-3.5 h-3.5 rounded-xs bg-yellow-300 border border-yellow-400"></span>
+                  <span>Highlight</span>
+                </button>
+              </>
+            )}
+            {(contextMenu.targetMark || contextMenu.savedRange) && (
+              <button
+                type="button"
+                onClick={handleClearHighlight}
+                className="w-full px-3 py-1.5 text-left hover:bg-rose-50 text-rose-600 flex items-center gap-2 transition-colors border-t border-slate-100 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear Highlight</span>
+              </button>
+            )}
+          </div>
+        )}
       </main>
 
       {/* 4. PINNED BOTTOM QUESTION NAVIGATOR */}

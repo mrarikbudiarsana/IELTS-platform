@@ -47,7 +47,9 @@ async function runListeningTests() {
   console.log(`  ✔ Content visibility filtered: Students see ${studentTests.length} published listening tests.`);
 
   // Find 40-question listening mock
-  const publishedMock = studentTests.find((t) => t.category === 'mock' && t.totalQuestions === 40);
+  const publishedMock =
+    studentTests.find((t) => t.title.includes('Cambridge IELTS 21 Academic Listening Test 1')) ||
+    studentTests.find((t) => t.category === 'mock' && t.totalQuestions === 40);
   assert.ok(publishedMock, '40-question Listening mock must exist');
 
   // ---------------------------------------------------------------
@@ -258,13 +260,15 @@ async function runListeningTests() {
   // ---------------------------------------------------------------
   // TEST 5: Autosave & State Recovery on Refresh
   // ---------------------------------------------------------------
-  console.log('TEST 5: Real-time Autosave & State Recovery');
+  const isC21 = publishedMock.title.includes('Cambridge') || publishedMock.title.includes('21');
+  const testQ1Answer = isC21 ? '10' : 'Campbell';
+
   saveListeningAnswer({
     attemptId: attempt.id,
     userId: testStudentId,
     questionNumber: 1,
     questionId: sanitizedTest.questionGroups[0].questions[0].id,
-    userAnswer: 'Campbell',
+    userAnswer: testQ1Answer,
     isFlagged: false,
   });
 
@@ -285,7 +289,7 @@ async function runListeningTests() {
   });
 
   assert.strictEqual(resumed.attempt.id, attempt.id, 'Resumed attempt must match ID');
-  assert.strictEqual(resumed.attempt.answers[1].userAnswer, 'Campbell', 'Q1 restored');
+  assert.strictEqual(resumed.attempt.answers[1].userAnswer, testQ1Answer, 'Q1 restored');
   assert.strictEqual(resumed.attempt.answers[11].userAnswer, 'A', 'Q11 restored');
   assert.strictEqual(resumed.attempt.answers[11].isFlagged, true, 'Q11 flag restored');
   console.log('  ✔ Answers and flag state restored seamlessly upon session reload.');
@@ -326,8 +330,13 @@ async function runListeningTests() {
 
   const q1 = submitted.results!.find((r) => r.questionNumber === 1)!;
   assert.strictEqual(q1.isCorrect, true);
-  assert.strictEqual(q1.transcriptExcerpt, 'Yes, it is Campbell, that is C-A-M-P-B-E-L-L.');
-  assert.strictEqual(q1.audioTimestampSeconds, 15);
+  if (isC21) {
+    assert.strictEqual(q1.audioTimestampSeconds, 25);
+    assert.ok(q1.transcriptExcerpt && q1.transcriptExcerpt.includes('ten'));
+  } else {
+    assert.strictEqual(q1.transcriptExcerpt, 'Yes, it is Campbell, that is C-A-M-P-B-E-L-L.');
+    assert.strictEqual(q1.audioTimestampSeconds, 15);
+  }
 
   assert.ok(submitted.performanceByType, 'performanceByType breakdown must exist');
   console.log('  ✔ Submission evaluated, transcript excerpts linked, and question type breakdown computed.');

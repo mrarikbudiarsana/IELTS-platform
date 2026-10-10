@@ -454,14 +454,21 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
       )}
 
       {/* 5. MULTIPLE CHOICE MULTI-SELECT (Choose TWO letters, Image 4) */}
-      {isMultiSelect && (
-        <div className="mb-8 space-y-2 max-w-3xl">
-          {multiGroupQuestions[0]?.prompt && (
-            <h4 className="font-medium text-sm sm:text-base text-slate-900 mb-3 leading-relaxed">
-              {multiGroupQuestions[0].prompt}
-            </h4>
-          )}
-          <div className="space-y-1.5">
+      {isMultiSelect && (() => {
+        const rawPrompt = multiGroupQuestions[0]?.prompt || '';
+        const cleanPrompt = rawPrompt.replace(/\s*\((?:First|Second|1st|2nd)\s+choice\)/i, '').trim();
+        const normPrompt = cleanPrompt.toLowerCase().replace(/[^\w\s]/g, '');
+        const normInstructions = (group.instructions || '').toLowerCase().replace(/[^\w\s]/g, '');
+        const isDuplicate = normPrompt.length > 0 && normInstructions.includes(normPrompt);
+
+        return (
+          <div className="mb-8 space-y-2 max-w-3xl">
+            {cleanPrompt && !isDuplicate && (
+              <h4 className="font-medium text-sm sm:text-base text-slate-900 mb-3 leading-relaxed">
+                {cleanPrompt}
+              </h4>
+            )}
+            <div className="space-y-1.5">
             {multiGroupQuestions[0]?.options?.map((opt) => {
               const isSelected = multiSelectedKeys.includes(opt.key);
 
@@ -480,9 +487,10 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                 </div>
               );
             })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 6. GAPPED CONTENT / SUMMARY / NOTES (Image 5) */}
       {group.contentWithGaps && (

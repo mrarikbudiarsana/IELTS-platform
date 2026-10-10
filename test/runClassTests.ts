@@ -598,3 +598,19 @@ console.log('  ✔ Pre/Post comparison report and pedagogical guard rails verifi
 console.log('\n======================================================');
 console.log('  ALL 9 CLASS & JOURNEY CHECKS PASSED (100%)!       ');
 console.log('======================================================\n');
+
+// Clean up ephemeral tests created for this test run
+const testIdsToClean = [preReadingRes.test.id, postReadingRes.test.id];
+const listeningIdsToClean = [preListeningRes.test.id, postListeningRes.test.id];
+
+db.pragma('foreign_keys = OFF');
+db.prepare(`DELETE FROM reading_answers WHERE attempt_id IN (SELECT id FROM reading_attempts WHERE test_id IN (?, ?))`).run(...testIdsToClean);
+db.prepare(`DELETE FROM reading_attempts WHERE test_id IN (?, ?)`).run(...testIdsToClean);
+db.prepare(`DELETE FROM reading_test_versions WHERE test_id IN (?, ?)`).run(...testIdsToClean);
+db.prepare(`DELETE FROM reading_tests WHERE id IN (?, ?)`).run(...testIdsToClean);
+
+db.prepare(`DELETE FROM listening_answers WHERE attempt_id IN (SELECT id FROM listening_attempts WHERE test_id IN (?, ?))`).run(...listeningIdsToClean);
+db.prepare(`DELETE FROM listening_attempts WHERE test_id IN (?, ?)`).run(...listeningIdsToClean);
+db.prepare(`DELETE FROM listening_test_versions WHERE test_id IN (?, ?)`).run(...listeningIdsToClean);
+db.prepare(`DELETE FROM listening_tests WHERE id IN (?, ?)`).run(...listeningIdsToClean);
+db.pragma('foreign_keys = ON');

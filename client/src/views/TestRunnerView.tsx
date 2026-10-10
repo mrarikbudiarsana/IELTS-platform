@@ -383,8 +383,8 @@ export const TestRunnerView: React.FC<TestRunnerViewProps> = ({
         parent?.insertBefore(mark.firstChild, mark);
       }
       parent?.removeChild(mark);
-    } else if (contextMenu?.savedRange && passageContainerRef.current) {
-      const marks = passageContainerRef.current.querySelectorAll('mark');
+    } else if (contextMenu?.savedRange) {
+      const marks = Array.from(document.querySelectorAll('mark'));
       marks.forEach((m) => {
         if (contextMenu.savedRange?.intersectsNode(m)) {
           const parent = m.parentNode;
@@ -624,6 +624,7 @@ export const TestRunnerView: React.FC<TestRunnerViewProps> = ({
 
         {/* RIGHT PANE: LINKED QUESTIONS */}
         <div
+          onContextMenu={handlePassageContextMenu}
           style={{ width: window.innerWidth >= 1024 ? `${100 - passageWidthPercent}%` : '100%' }}
           className="h-full overflow-y-auto px-6 sm:px-10 py-8 custom-scrollbar bg-white select-text"
         >

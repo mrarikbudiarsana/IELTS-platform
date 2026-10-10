@@ -483,6 +483,10 @@ export async function runCommercialTestSuite() {
   });
   assert.strictEqual(freeTierAccess.allowed, true, 'Free tier test accessible by any registered learner');
 
+  // Clean up temporary mock test
+  db.prepare('DELETE FROM assignments WHERE test_id = ?').run(testId);
+  db.prepare('DELETE FROM reading_tests WHERE id = ?').run(testId);
+
   console.log('✓ Passed: Class assignments and free-tier items strictly separated from commercial plan rules.');
 
   // ---------------------------------------------------------------------

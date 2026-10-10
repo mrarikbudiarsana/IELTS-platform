@@ -140,13 +140,16 @@ export function normalizeAnswerText(text: string): string {
 /**
  * Counts words in a string according to IELTS standard:
  * Hyphenated words (e.g. "well-known") count as one word in IELTS.
+ * Pure numbers or dates (e.g. "13", "13th", "2024") count as numbers, not words.
  */
 export function countWords(text: string): number {
   if (!text) return 0;
   const cleaned = text.trim();
   if (!cleaned) return 0;
   const tokens = cleaned.split(/\s+/).filter(Boolean);
-  return tokens.length;
+  // Filter out pure numbers or ordinal numbers like "13", "13th" so "13 January" is 1 number and 1 word
+  const wordsOnly = tokens.filter((token) => !/^\d+(?:st|nd|rd|th)?$/i.test(token));
+  return wordsOnly.length;
 }
 
 /**
@@ -234,12 +237,19 @@ export function markStudentAnswer(params: {
           .split(/[,;\s]+/)
           .filter(Boolean);
 
+    const correctSet = new Set(correctChoices);
+
+    // If student provided 1 choice for a sub-question with multi-allowed keys (e.g. Q21 out of Q21-22 in either order):
+    if (studentChoices.length === 1 && correctChoices.length > 1) {
+      const isMatch = correctSet.has(studentChoices[0]);
+      return { isCorrect: isMatch, mark: isMatch ? 1 : 0 };
+    }
+
     // Exact set comparison:
     if (studentChoices.length !== correctChoices.length) {
       return { isCorrect: false, mark: 0 };
     }
 
-    const correctSet = new Set(correctChoices);
     const allMatch = studentChoices.every((choice) => correctSet.has(choice));
 
     return { isCorrect: allMatch, mark: allMatch ? 1 : 0 };

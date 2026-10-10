@@ -43,6 +43,16 @@ if (res8.status !== 0) {
   process.exit(res8.status || 1);
 }
 
+const res9 = spawnSync('npx', ['tsx', 'test/testCambridge21ReadingTest1Ingestion.ts'], { stdio: 'inherit', shell: true });
+if (res9.status !== 0) {
+  process.exit(res9.status || 1);
+}
+
+const res10 = spawnSync('npx', ['tsx', 'test/testCambridge21ListeningTest2Ingestion.ts'], { stdio: 'inherit', shell: true });
+if (res10.status !== 0) {
+  process.exit(res10.status || 1);
+}
+
 console.log('\n========================================================================');
 console.log('  ALL PLATFORM MODULE TESTS (M1-M7 & REAL CAMBRIDGE IELTS 21 INGESTION) PASSED! ');
 console.log('========================================================================\n');

@@ -230,10 +230,27 @@ async function runWritingTestSuite() {
   // 4. Student Workspace, Autosave & 60-Minute Shared Mock Timer
   console.log('\n4. Student Workspace, Autosave & Shared Mock Timer:');
 
-  // Find a task 1 and a task 2
-  const tasks = listWritingTasks({ status: 'published', userRole: 'student' });
-  const task1 = tasks.find((t) => t.taskNumber === 1);
-  const task2 = tasks.find((t) => t.taskNumber === 2);
+  // Find a task 1 and a task 2 (or create one for test execution)
+  let tasks = listWritingTasks({ status: 'published', userRole: 'student' });
+  let task1 = tasks.find((t) => t.taskNumber === 1);
+  let task2 = tasks.find((t) => t.taskNumber === 2);
+
+  if (!task2) {
+    const createdT2 = createWritingTask({
+      createdById: teacher.id,
+      title: 'Test Essay Task 2',
+      taskType: 'task_2',
+      taskNumber: 2,
+      testType: 'academic',
+      prompt: 'Some people think that universities should provide graduates with the knowledge and skills needed in the workplace.',
+      instructions: 'Give reasons for your answer and include any relevant examples from your own knowledge or experience. Write at least 250 words.',
+      minWords: 250,
+      teacherAssessmentGuidance: 'Assess argument coherence and paragraph balance.',
+    });
+    publishWritingTask(createdT2.id);
+    tasks = listWritingTasks({ status: 'published', userRole: 'student' });
+    task2 = tasks.find((t) => t.taskNumber === 2);
+  }
 
   assert(task1 !== undefined && task2 !== undefined, 'Found published Task 1 and Task 2 for mock test');
 
@@ -389,6 +406,16 @@ async function runWritingTestSuite() {
   assert(retrievedPkg.writingTask2Id === task2!.id, 'TestPackage retains writingTask2Id');
 
   console.log(`\nWriting Tests Completed: ${passed} passed, ${failed} failed.`);
+
+  // Clean up created scratch tasks and test packages so seeds remain authentic C21 only
+  try {
+    db.prepare('DELETE FROM test_packages WHERE id = ?').run(testPkg.id);
+    db.prepare('DELETE FROM writing_task_versions WHERE task_id IN (?, ?)').run(task1!.id, task2!.id);
+    db.prepare('DELETE FROM writing_tasks WHERE id IN (?, ?)').run(task1!.id, task2!.id);
+  } catch (cleanErr) {
+    // Ignore cleanup error
+  }
+
   if (failed > 0) {
     process.exit(1);
   }

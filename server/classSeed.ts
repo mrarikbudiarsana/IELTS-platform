@@ -1,8 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import { hashPassword } from './auth';
-import { createReadingTest, publishTestVersion } from './readingService';
-import { createListeningTest, publishListeningTestVersion } from './listeningService';
 import { createClass, enrolStudentInClass } from './classService';
 import { createTestPackage, createAssignment } from './assignmentService';
 
@@ -45,131 +43,7 @@ export function seedClassDatabase() {
     return;
   }
 
-  // 3. Create distinct POST-TEST materials (reading & listening) so pre-test and post-test have different content!
-  console.log('Creating distinct post-test evaluation materials...');
-
-  // Distinct Post-Test Reading Test
-  const postReadingRes = createReadingTest({
-    title: 'Academic Reading Post-Test: Autonomous Marine Exploration',
-    testType: 'academic',
-    category: 'mock',
-    timeLimitMinutes: 60,
-    createdById: teacherUser.id,
-    passages: [
-      {
-        id: 'post_p1',
-        passageNumber: 1,
-        title: 'Autonomous Marine Exploration Platforms',
-        subtitle: 'Robotic oceanic gliders and seafloor acoustics',
-        paragraphs: [
-          {
-            id: 'post_para_a',
-            label: 'A',
-            content: 'Oceanographic research vessels are costly to operate. In response, maritime engineering institutions developed underwater buoyancy gliders. These torpedo-shaped vessels navigate ocean depths without engine propellers by periodically altering their internal volume using an oil-filled external bladder.'
-          },
-          {
-            id: 'post_para_b',
-            label: 'B',
-            content: 'Deep ocean acoustic tomography monitors temperature fluctuations across vast ocean basins. High-frequency sonar sensors map seismic activity along oceanic rifts with unprecedented spatial accuracy.'
-          }
-        ]
-      }
-    ],
-    questionGroups: [
-      {
-        id: 'post_qg1',
-        passageId: 'post_p1',
-        questionType: 'true_false_not_given',
-        title: 'Questions 1–3',
-        instructions: 'Do the following statements agree with the information in Passage 1?\nWrite TRUE, FALSE, or NOT GIVEN.',
-        startQuestionNumber: 1,
-        endQuestionNumber: 3,
-        questions: [
-          {
-            id: 'post_q1',
-            questionNumber: 1,
-            prompt: 'Underwater buoyancy gliders rely on conventional engine propellers to navigate ocean depths.',
-            answerKey: 'FALSE',
-            explanation: 'Paragraph A states they navigate without engine propellers by altering internal volume.',
-            paragraphRef: 'A'
-          },
-          {
-            id: 'post_q2',
-            questionNumber: 2,
-            prompt: 'Oil-filled bladders assist gliders in adjusting their buoyancy.',
-            answerKey: 'TRUE',
-            explanation: 'Paragraph A mentions periodically altering internal volume using an oil-filled external bladder.',
-            paragraphRef: 'A'
-          },
-          {
-            id: 'post_q3',
-            questionNumber: 3,
-            prompt: 'Acoustic tomography was originally invented for military submarine communications.',
-            answerKey: 'NOT GIVEN',
-            explanation: 'Paragraph B mentions acoustic tomography for temperature, but not its military invention origin.',
-            paragraphRef: 'B'
-          }
-        ]
-      }
-    ]
-  });
-  publishTestVersion(postReadingRes.test.id, postReadingRes.version.id);
-
-  // Distinct Post-Test Listening Test
-  const postListeningRes = createListeningTest({
-    title: 'IELTS Listening Post-Test: Harbor Environmental Assessment',
-    category: 'mock',
-    timeLimitMinutes: 35,
-    createdById: teacherUser.id,
-    parts: [
-      {
-        id: 'post_lpart1',
-        partNumber: 1,
-        title: 'Harbor Research Station Induction',
-        context: 'An induction briefing for new research volunteers at the harbor marine station.',
-        audioUrl: '/audio/listening_part3_student_project.wav',
-        containsIntroPauses: true,
-        introPauseSeconds: 30,
-        checkPauseSeconds: 30,
-        transcript: 'Welcome to the Harbor Marine Station. Safety badges must be worn at all times in the wet laboratory. Water samples are catalogued every weekday at nine in the morning.'
-      }
-    ],
-    questionGroups: [
-      {
-        id: 'post_lqg1',
-        partNumber: 1,
-        questionType: 'form_completion',
-        title: 'Questions 1–2',
-        instructions: 'Complete the notes below.\nWrite NO MORE THAN TWO WORDS for each answer.',
-        wordLimitRule: 'NO MORE THAN TWO WORDS',
-        startQuestionNumber: 1,
-        endQuestionNumber: 2,
-        questions: [
-          {
-            id: 'post_lq1',
-            questionNumber: 1,
-            prompt: 'Identification required in wet laboratory',
-            answerKey: 'SAFETY BADGES',
-            acceptedAlternatives: ['safety badge', 'safety badges'],
-            explanation: 'Speaker states safety badges must be worn at all times in the wet laboratory.',
-            audioTimestampSeconds: 15
-          },
-          {
-            id: 'post_lq2',
-            questionNumber: 2,
-            prompt: 'Routine water collection time',
-            answerKey: 'NINE',
-            acceptedAlternatives: ['9', 'nine am', '9 am'],
-            explanation: 'Speaker confirms water samples are catalogued every weekday at nine in the morning.',
-            audioTimestampSeconds: 30
-          }
-        ]
-      }
-    ]
-  });
-  publishListeningTestVersion(postListeningRes.test.id, postListeningRes.version.id);
-
-  // 4. Create Pre-Test Package and Post-Test Package
+  // 4. Create Pre-Test Package and Post-Test Package using official Cambridge 21 tests
   const preTestPackage = createTestPackage(teacherUser.id, {
     title: 'Diagnostic Pre-Test Package (Academic Cohort)',
     packageType: 'pre_test',
@@ -182,8 +56,8 @@ export function seedClassDatabase() {
     title: 'Protected Post-Test Package (Academic Cohort)',
     packageType: 'post_test',
     testType: 'academic',
-    readingTestId: postReadingRes.test.id,
-    listeningTestId: postListeningRes.test.id,
+    readingTestId: preReadingTest.id,
+    listeningTestId: preListeningTest.id,
   });
 
   // 5. Create Demonstration Class

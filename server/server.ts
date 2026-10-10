@@ -55,7 +55,10 @@ import {
 import { seedDatabase } from './seed';
 import { seedListeningDatabase } from './listeningSeed';
 import { seedClassDatabase } from './classSeed';
+import { ingestCambridge21Test1 } from './ingestCambridge21Test1';
 import { ingestCambridge21Test4 } from './ingestCambridge21Test4';
+import { ingestCambridge21ListeningTest1 } from './ingestCambridge21ListeningTest1';
+import { ingestCambridge21ListeningTest2 } from './ingestCambridge21ListeningTest2';
 import {
   createClass,
   updateClass,
@@ -127,6 +130,7 @@ import {
   submitWritingAttempt,
   createResponseRevision,
   getWritingAttemptById,
+  listUserWritingAttempts,
   getWritingResponseById,
 } from './writingService';
 import { requestAiWritingAssessment } from './aiWritingService';
@@ -1524,6 +1528,16 @@ app.get('/api/writing/attempts/:id', authMiddleware, (req: AuthenticatedRequest,
   }
 });
 
+// GET /api/writing/attempts - get current student's writing attempts
+app.get('/api/writing/attempts', authMiddleware, (req: AuthenticatedRequest, res) => {
+  try {
+    const attempts = listUserWritingAttempts(req.user!.id);
+    res.json({ attempts });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // POST /api/writing/attempts/:id/save - autosave draft response
 app.post('/api/writing/attempts/:id/save', authMiddleware, (req: AuthenticatedRequest, res) => {
   try {
@@ -1962,7 +1976,10 @@ seedClassDatabase();
 seedSpeakingDatabase();
 seedWritingData();
 seedCommercialProductsAndCodes();
+ingestCambridge21Test1();
 ingestCambridge21Test4();
+ingestCambridge21ListeningTest1();
+ingestCambridge21ListeningTest2();
 
 app.listen(PORT, () => {
   console.log(`IELTS Platform API server listening on http://localhost:${PORT}`);
