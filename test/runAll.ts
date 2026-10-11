@@ -68,9 +68,14 @@ if (res13.status !== 0) {
   process.exit(res13.status || 1);
 }
 
-const res14 = spawnSync('npx', ['tsx', 'test/testChronologicalOrder.ts'], { stdio: 'inherit', shell: true });
+const res14 = spawnSync('npx', ['tsx', 'test/testCambridge21ListeningTest4Ingestion.ts'], { stdio: 'inherit', shell: true });
 if (res14.status !== 0) {
   process.exit(res14.status || 1);
+}
+
+const res15 = spawnSync('npx', ['tsx', 'test/testChronologicalOrder.ts'], { stdio: 'inherit', shell: true });
+if (res15.status !== 0) {
+  process.exit(res15.status || 1);
 }
 
 console.log('\n========================================================================');

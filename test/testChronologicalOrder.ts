@@ -69,10 +69,11 @@ const c21ListeningTitles = listeningTests
   .filter((title) => title.includes('Cambridge'));
 
 console.log('Actual Listening catalogue order:', c21ListeningTitles);
-assert(c21ListeningTitles[0].includes('Test 3'), 'First listening test must be Test 3 (latest)');
-assert(c21ListeningTitles[1].includes('Test 2'), 'Second listening test must be Test 2');
-assert(c21ListeningTitles[2].includes('Test 1'), 'Third listening test must be Test 1 (earliest)');
-console.log('   ✓ Actual Listening catalogue order is strictly Test 3 -> Test 2 -> Test 1');
+assert(c21ListeningTitles[0].includes('Test 4'), 'First listening test must be Test 4 (latest)');
+assert(c21ListeningTitles[1].includes('Test 3'), 'Second listening test must be Test 3');
+assert(c21ListeningTitles[2].includes('Test 2'), 'Third listening test must be Test 2');
+assert(c21ListeningTitles[3].includes('Test 1'), 'Fourth listening test must be Test 1 (earliest)');
+console.log('   ✓ Actual Listening catalogue order is strictly Test 4 -> Test 3 -> Test 2 -> Test 1');
 
 console.log('\n======================================================');
 console.log('🎉 ALL CHRONOLOGICAL TEST ORDER VERIFICATIONS PASSED! 🎉');
