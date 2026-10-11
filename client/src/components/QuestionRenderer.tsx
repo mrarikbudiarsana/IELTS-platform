@@ -266,22 +266,29 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         </div>
       )}
 
-      {/* 2. MATCHING CLASSIFICATION / LIST OF PEOPLE (Matching Image 5) */}
-      {group.questionType === 'matching_features' && group.optionsList && (
-        <div className="border border-slate-300 rounded-[2px] p-4 mb-5 bg-white max-w-md">
-          <h4 className="font-bold text-sm text-slate-900 mb-2">
-            List of people
-          </h4>
-          <div className="space-y-1.5 text-sm text-slate-800">
-            {group.optionsList.map((opt) => (
-              <div key={opt.key} className="flex items-center gap-4">
-                <span className="font-bold min-w-4">{opt.key}</span>
-                <span>{opt.text}</span>
-              </div>
-            ))}
+      {/* 2. MATCHING CLASSIFICATION / LIST OF PEOPLE / SENTENCE ENDINGS (Matching Image 5) */}
+      {(group.questionType === 'matching_features' ||
+        group.questionType === 'matching_sentence_endings' ||
+        group.questionType === 'matching_headings') &&
+        group.optionsList && (
+          <div className="border border-slate-300 rounded-[2px] p-4 mb-5 bg-white max-w-xl">
+            <h4 className="font-bold text-sm text-slate-900 mb-2">
+              {group.questionType === 'matching_sentence_endings'
+                ? 'Options'
+                : group.questionType === 'matching_headings'
+                ? 'List of Headings'
+                : 'List of people'}
+            </h4>
+            <div className="space-y-1.5 text-sm text-slate-800">
+              {group.optionsList.map((opt) => (
+                <div key={opt.key} className="flex items-start gap-3">
+                  <span className="font-bold min-w-5">{opt.key}</span>
+                  <span>{opt.text}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* 3. MATCHING MATRIX / TABLE (Matching Image 3: Sections A-G Columns) */}
       {isMatchingMatrix && group.optionsList && (
@@ -597,23 +604,32 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                   </div>
                 )}
 
-                {/* MATCHING PEOPLE / CLASSIFICATION SELECTION (Matching Image 5) */}
-                {group.questionType === 'matching_features' && group.optionsList && (
-                  <div className="pl-8 pt-1">
-                    <select
-                      value={(currentAnswer as string) || ''}
-                      onChange={(e) => onAnswerChange(q.questionNumber, q.id, e.target.value)}
-                      className="px-3 py-1.5 border border-slate-300 rounded-[2px] text-sm bg-white font-medium text-slate-800 focus:border-slate-800"
-                    >
-                      <option value="">Select person (A, B, C...)</option>
-                      {group.optionsList.map((opt) => (
-                        <option key={opt.key} value={opt.key}>
-                          {opt.key}: {opt.text}
+                {/* MATCHING PEOPLE / CLASSIFICATION / SENTENCE ENDINGS SELECTION (Matching Image 5) */}
+                {(group.questionType === 'matching_features' ||
+                  group.questionType === 'matching_sentence_endings' ||
+                  group.questionType === 'matching_headings') &&
+                  group.optionsList && (
+                    <div className="pl-8 pt-1">
+                      <select
+                        value={(currentAnswer as string) || ''}
+                        onChange={(e) => onAnswerChange(q.questionNumber, q.id, e.target.value)}
+                        className="px-3 py-1.5 border border-slate-300 rounded-[2px] text-sm bg-white font-medium text-slate-800 focus:border-slate-800 max-w-md"
+                      >
+                        <option value="">
+                          {group.questionType === 'matching_sentence_endings'
+                            ? 'Select ending (A, B, C...)'
+                            : group.questionType === 'matching_headings'
+                            ? 'Select heading (i, ii, iii...)'
+                            : 'Select person (A, B, C...)'}
                         </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                        {group.optionsList.map((opt) => (
+                          <option key={opt.key} value={opt.key}>
+                            {opt.key}: {opt.text}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                 {/* STANDALONE FILL-IN TEXT GAP (if prompt doesn't already have an inline input gap) */}
                 {(group.questionType === 'sentence_completion' ||

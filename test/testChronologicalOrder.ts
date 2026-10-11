@@ -56,9 +56,10 @@ const c21ReadingTitles = readingTests
 
 console.log('Actual Reading catalogue order:', c21ReadingTitles);
 assert(c21ReadingTitles[0].includes('Test 4'), 'First test must be Test 4');
-assert(c21ReadingTitles[1].includes('Test 2'), 'Second test must be Test 2');
-assert(c21ReadingTitles[2].includes('Test 1'), 'Third test must be Test 1');
-console.log('   ✓ Actual Reading catalogue order is strictly Test 4 -> Test 2 -> Test 1');
+assert(c21ReadingTitles[1].includes('Test 3'), 'Second test must be Test 3');
+assert(c21ReadingTitles[2].includes('Test 2'), 'Third test must be Test 2');
+assert(c21ReadingTitles[3].includes('Test 1'), 'Fourth test must be Test 1');
+console.log('   ✓ Actual Reading catalogue order is strictly Test 4 -> Test 3 -> Test 2 -> Test 1');
 
 // 4. Verify actual listening service output
 console.log('\n4. Verifying actual Listening catalogue order from server listeningService...');
