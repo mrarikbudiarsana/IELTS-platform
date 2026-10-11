@@ -18,6 +18,8 @@ import {
   Music,
   ListOrdered,
 } from 'lucide-react';
+import { CloudinaryMediaUploader } from '../components/CloudinaryMediaUploader';
+
 
 interface ListeningEditorViewProps {
   testId?: string;
@@ -492,18 +494,23 @@ export const ListeningEditorView: React.FC<ListeningEditorViewProps> = ({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Audio Recording URL / Path</label>
-              <input
-                type="text"
-                value={activePart.audioUrl || ''}
-                onChange={(e) => {
+            <div className="col-span-1 md:col-span-2">
+              <CloudinaryMediaUploader
+                mediaType="audio"
+                label={`Part ${activePart.partNumber} Audio Track (Cloudinary)`}
+                helperText="Upload official MP3 or WAV audio track directly to Cloudinary"
+                currentUrl={activePart.audioUrl}
+                folder="ielts/listening/audio"
+                onUploadSuccess={(url) => {
                   const updated = [...parts];
-                  updated[activePartIdx].audioUrl = e.target.value;
+                  updated[activePartIdx].audioUrl = url;
                   setParts(updated);
                 }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden font-mono text-xs"
-                placeholder="/audio/listening_part1_car_rental.wav"
+                onClear={() => {
+                  const updated = [...parts];
+                  updated[activePartIdx].audioUrl = '';
+                  setParts(updated);
+                }}
               />
             </div>
           </div>
@@ -629,6 +636,40 @@ export const ListeningEditorView: React.FC<ListeningEditorViewProps> = ({
                       className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-hidden"
                     />
                   </div>
+
+                  {/* Map / Diagram Image Uploader for Labelling Question Groups */}
+                  {group.questionType === 'plan_map_diagram_labelling' && (
+                    <div className="mb-4 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-2">
+                      <CloudinaryMediaUploader
+                        mediaType="image"
+                        label="Map / Plan / Diagram Picture (Cloudinary)"
+                        helperText="Upload map or diagram image (PNG, JPG, SVG) for questions"
+                        currentUrl={group.mapData?.imageUrl || group.diagramData?.imageUrl}
+                        folder="ielts/listening/diagrams"
+                        onUploadSuccess={(url) => {
+                          const updated = questionGroups.map((g) =>
+                            g.id === group.id
+                              ? {
+                                  ...g,
+                                  mapData: {
+                                    imageUrl: url,
+                                    caption: g.mapData?.caption || g.title,
+                                    locations: g.mapData?.locations || [],
+                                  },
+                                }
+                              : g
+                          );
+                          setQuestionGroups(updated);
+                        }}
+                        onClear={() => {
+                          const updated = questionGroups.map((g) =>
+                            g.id === group.id ? { ...g, mapData: undefined } : g
+                          );
+                          setQuestionGroups(updated);
+                        }}
+                      />
+                    </div>
+                  )}
 
                   {/* Questions inside Group */}
                   <div className="space-y-3 mt-4">

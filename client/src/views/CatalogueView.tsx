@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ReadingTest, ListeningTest, WritingTask, WritingAttempt, WritingAllowanceBalance, QuestionGroupSummary } from '../types';
 import { api } from '../api';
+import { sortTestsChronological } from '../testOrder';
 import {
   BookOpen,
   Headphones,
@@ -260,28 +261,32 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
     return Array.from(typesSet);
   }, [selectedSkill, readingTests, listeningTests]);
 
-  const filteredReadingTests = readingTests.filter((t) => {
-    if (filterType !== 'all' && t.testType !== filterType) return false;
-    if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (
-      selectedQuestionTypeFilter !== 'all' &&
-      !t.questionGroupsSummary?.some((g) => g.questionType === selectedQuestionTypeFilter)
-    ) {
-      return false;
-    }
-    return true;
-  });
+  const filteredReadingTests = sortTestsChronological(
+    readingTests.filter((t) => {
+      if (filterType !== 'all' && t.testType !== filterType) return false;
+      if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (
+        selectedQuestionTypeFilter !== 'all' &&
+        !t.questionGroupsSummary?.some((g) => g.questionType === selectedQuestionTypeFilter)
+      ) {
+        return false;
+      }
+      return true;
+    })
+  );
 
-  const filteredListeningTests = listeningTests.filter((t) => {
-    if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (
-      selectedQuestionTypeFilter !== 'all' &&
-      !t.questionGroupsSummary?.some((g) => g.questionType === selectedQuestionTypeFilter)
-    ) {
-      return false;
-    }
-    return true;
-  });
+  const filteredListeningTests = sortTestsChronological(
+    listeningTests.filter((t) => {
+      if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (
+        selectedQuestionTypeFilter !== 'all' &&
+        !t.questionGroupsSummary?.some((g) => g.questionType === selectedQuestionTypeFilter)
+      ) {
+        return false;
+      }
+      return true;
+    })
+  );
 
   const filteredWritingTasks = writingTasks.filter((t) => {
     if (filterType !== 'all' && t.testType !== filterType) return false;

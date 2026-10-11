@@ -1,6 +1,10 @@
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { db, initDatabase } from './db';
@@ -56,9 +60,11 @@ import { seedDatabase } from './seed';
 import { seedListeningDatabase } from './listeningSeed';
 import { seedClassDatabase } from './classSeed';
 import { ingestCambridge21Test1 } from './ingestCambridge21Test1';
+import { ingestCambridge21Test2 } from './ingestCambridge21Test2';
 import { ingestCambridge21Test4 } from './ingestCambridge21Test4';
 import { ingestCambridge21ListeningTest1 } from './ingestCambridge21ListeningTest1';
 import { ingestCambridge21ListeningTest2 } from './ingestCambridge21ListeningTest2';
+import { ingestCambridge21ListeningTest3 } from './ingestCambridge21ListeningTest3';
 import {
   createClass,
   updateClass,
@@ -1972,14 +1978,16 @@ if (fs.existsSync(clientDistPath)) {
 initDatabase();
 seedDatabase();
 seedListeningDatabase();
-seedClassDatabase();
+// seedClassDatabase(); // Disabled to keep classes clean for user creation
 seedSpeakingDatabase();
 seedWritingData();
 seedCommercialProductsAndCodes();
 ingestCambridge21Test1();
+ingestCambridge21Test2();
 ingestCambridge21Test4();
 ingestCambridge21ListeningTest1();
 ingestCambridge21ListeningTest2();
+ingestCambridge21ListeningTest3();
 
 app.listen(PORT, () => {
   console.log(`IELTS Platform API server listening on http://localhost:${PORT}`);

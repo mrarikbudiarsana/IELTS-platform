@@ -21,6 +21,8 @@ import {
   ListOrdered,
   Sparkles,
 } from 'lucide-react';
+import { CloudinaryMediaUploader } from '../components/CloudinaryMediaUploader';
+
 
 interface TestEditorViewProps {
   testId?: string;
@@ -588,6 +590,39 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
                 className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white"
               />
             </div>
+
+            {/* Diagram Image Uploader for Diagram Label Completion */}
+            {group.questionType === 'diagram_completion' && (
+              <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg">
+                <CloudinaryMediaUploader
+                  mediaType="image"
+                  label="Diagram Image (Cloudinary)"
+                  helperText="Upload diagram or technical illustration (PNG, JPG, SVG) for label completion"
+                  currentUrl={group.diagramData?.imageUrl}
+                  folder="ielts/reading/diagrams"
+                  onUploadSuccess={(url) => {
+                    const updated = [...questionGroups];
+                    updated[gIdx] = {
+                      ...updated[gIdx],
+                      diagramData: {
+                        imageUrl: url,
+                        caption: updated[gIdx].diagramData?.caption || updated[gIdx].title,
+                        labels: updated[gIdx].diagramData?.labels || [],
+                      },
+                    };
+                    setQuestionGroups(updated);
+                  }}
+                  onClear={() => {
+                    const updated = [...questionGroups];
+                    updated[gIdx] = {
+                      ...updated[gIdx],
+                      diagramData: undefined,
+                    };
+                    setQuestionGroups(updated);
+                  }}
+                />
+              </div>
+            )}
 
             {/* Questions list */}
             <div className="space-y-3 pt-2">

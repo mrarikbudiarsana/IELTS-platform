@@ -250,6 +250,22 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         )}
       </div>
 
+      {/* DIAGRAM DISPLAY (for diagram_completion / diagramData) */}
+      {group.diagramData?.imageUrl && (
+        <div className="mb-6 p-4 bg-white border border-slate-200 rounded-lg shadow-xs max-w-2xl">
+          {group.diagramData.caption && (
+            <div className="text-sm font-semibold text-slate-800 mb-2">
+              {group.diagramData.caption}
+            </div>
+          )}
+          <img
+            src={group.diagramData.imageUrl}
+            alt={group.diagramData.caption || 'Diagram'}
+            className="max-h-96 mx-auto rounded object-contain border border-slate-100"
+          />
+        </div>
+      )}
+
       {/* 2. MATCHING CLASSIFICATION / LIST OF PEOPLE (Matching Image 5) */}
       {group.questionType === 'matching_features' && group.optionsList && (
         <div className="border border-slate-300 rounded-[2px] p-4 mb-5 bg-white max-w-md">

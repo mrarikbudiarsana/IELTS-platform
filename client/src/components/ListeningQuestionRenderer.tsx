@@ -601,13 +601,55 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
 
       {/* 9. REMAINING STANDARD QUESTIONS (MCQ Single Image 2, Map Dropdowns, Short Answer) */}
       {!isMultiSelect && group.questionType !== 'matching' && (
-        <div className="space-y-6 pt-1 max-w-3xl">
+        <div
+          className={`${
+            group.questionType === 'plan_map_diagram_labelling' ? 'space-y-2' : 'space-y-6'
+          } pt-1 max-w-3xl`}
+        >
           {group.questions.map((q) => {
             // Skip questions already rendered inline inside tables, forms, or contentWithGaps
             if (inlineQuestionNumbers.has(q.questionNumber)) return null;
 
             const currentAnswer = answers[q.questionNumber]?.userAnswer;
             const isActive = activeQuestionNumber === q.questionNumber;
+
+            {/* Plan, Map & Diagram Labelling (Dropdown placed next to each question) */}
+            if (group.questionType === 'plan_map_diagram_labelling') {
+              return (
+                <div
+                  key={q.id}
+                  id={`listening-q-box-${q.questionNumber}`}
+                  className={`transition-colors py-2 px-2.5 rounded-[2px] flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-6 ${
+                    isActive ? 'bg-slate-50/80 ring-1 ring-slate-200' : 'hover:bg-slate-50/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-[160px] sm:min-w-[220px]">
+                    <span className="font-bold text-sm sm:text-base text-slate-900 min-w-5">
+                      {q.questionNumber}
+                    </span>
+                    <span className="text-sm sm:text-base text-slate-900 font-normal leading-relaxed">
+                      {renderTextWithGaps(q.prompt)}
+                    </span>
+                  </div>
+
+                  {group.optionsList && (
+                    <select
+                      id={`question-input-${q.questionNumber}`}
+                      value={(currentAnswer as string) || ''}
+                      onChange={(e) => onAnswerChange(q.questionNumber, q.id, e.target.value)}
+                      className="px-3 py-1.5 border border-slate-300 rounded-[2px] text-sm bg-white font-medium text-slate-800 focus:border-[#0066cc] focus:ring-1 focus:ring-[#0066cc] focus:outline-none cursor-pointer"
+                    >
+                      <option value="">Select location (A, B, C...)</option>
+                      {group.optionsList.map((opt) => (
+                        <option key={opt.key} value={opt.key}>
+                          {opt.key}: {opt.text}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              );
+            }
 
             return (
               <div
@@ -647,24 +689,6 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                         </span>
                       </label>
                     ))}
-                  </div>
-                )}
-
-                {/* Map Labelling Dropdown */}
-                {group.questionType === 'plan_map_diagram_labelling' && group.optionsList && (
-                  <div className="pl-8 pt-1">
-                    <select
-                      value={(currentAnswer as string) || ''}
-                      onChange={(e) => onAnswerChange(q.questionNumber, q.id, e.target.value)}
-                      className="px-3 py-1.5 border border-slate-300 rounded-[2px] text-sm bg-white font-medium text-slate-800 focus:border-[#0066cc]"
-                    >
-                      <option value="">Select location (A, B, C...)</option>
-                      {group.optionsList.map((opt) => (
-                        <option key={opt.key} value={opt.key}>
-                          {opt.key}: {opt.text}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 )}
 

@@ -7,6 +7,7 @@ import {
   WritingTaskNumber,
   WritingTaskSubtype,
 } from '../types';
+import { CloudinaryMediaUploader } from '../components/CloudinaryMediaUploader';
 
 export const TeacherWritingEditorView: React.FC = () => {
   const [tasks, setTasks] = useState<WritingTask[]>([]);
@@ -30,6 +31,7 @@ export const TeacherWritingEditorView: React.FC = () => {
     teacherVisualDescription: string;
     teacherAssessmentGuidance: string;
     modelResponse: string;
+    images?: string[];
   }>({
     title: '',
     taskType: 'academic_task_1',
@@ -43,6 +45,7 @@ export const TeacherWritingEditorView: React.FC = () => {
     teacherVisualDescription: '',
     teacherAssessmentGuidance: '',
     modelResponse: '',
+    images: [],
   });
 
   // Allowance grant state
@@ -90,6 +93,7 @@ export const TeacherWritingEditorView: React.FC = () => {
         teacherVisualDescription: latestVersion.teacherVisualDescription || '',
         teacherAssessmentGuidance: latestVersion.teacherAssessmentGuidance || '',
         modelResponse: latestVersion.modelResponse || '',
+        images: latestVersion.images || [],
       });
     }
   }
@@ -110,6 +114,7 @@ export const TeacherWritingEditorView: React.FC = () => {
       teacherVisualDescription: '',
       teacherAssessmentGuidance: '',
       modelResponse: '',
+      images: [],
     });
   }
 
@@ -451,6 +456,25 @@ export const TeacherWritingEditorView: React.FC = () => {
                   placeholder="Provide the complete instructions and essay question..."
                 />
               </div>
+
+              {/* Task 1 Visual Prompt Image (Cloudinary) */}
+              {formData.taskNumber === 1 && (
+                <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-4 space-y-2">
+                  <CloudinaryMediaUploader
+                    mediaType="image"
+                    label="Task 1 Visual Material / Chart Image (Cloudinary)"
+                    helperText="Upload official chart, graph, diagram or map (PNG, JPG, WebP) for candidates"
+                    currentUrl={formData.images?.[0] || ''}
+                    folder="ielts/writing/task1"
+                    onUploadSuccess={(url) => {
+                      setFormData({ ...formData, images: url ? [url] : [] });
+                    }}
+                    onClear={() => {
+                      setFormData({ ...formData, images: [] });
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Verified Visual Description (CRITICAL FOR TASK 1) */}
               <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4">

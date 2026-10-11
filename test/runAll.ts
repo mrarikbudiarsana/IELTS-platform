@@ -53,6 +53,21 @@ if (res10.status !== 0) {
   process.exit(res10.status || 1);
 }
 
+const res11 = spawnSync('npx', ['tsx', 'test/testCambridge21ReadingTest2Ingestion.ts'], { stdio: 'inherit', shell: true });
+if (res11.status !== 0) {
+  process.exit(res11.status || 1);
+}
+
+const res12 = spawnSync('npx', ['tsx', 'test/testCambridge21ListeningTest3Ingestion.ts'], { stdio: 'inherit', shell: true });
+if (res12.status !== 0) {
+  process.exit(res12.status || 1);
+}
+
+const res13 = spawnSync('npx', ['tsx', 'test/testChronologicalOrder.ts'], { stdio: 'inherit', shell: true });
+if (res13.status !== 0) {
+  process.exit(res13.status || 1);
+}
+
 console.log('\n========================================================================');
 console.log('  ALL PLATFORM MODULE TESTS (M1-M7 & REAL CAMBRIDGE IELTS 21 INGESTION) PASSED! ');
 console.log('========================================================================\n');

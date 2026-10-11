@@ -9,6 +9,8 @@ import {
 } from '../types';
 import { calculateIeltsSpeakingBand } from '../../../shared/scoring';
 import { SpeakingFeedbackModal } from './SpeakingFeedbackModal';
+import { CloudinaryMediaUploader } from '../components/CloudinaryMediaUploader';
+
 
 const CRITERION_OPTIONS = [
   1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0,
@@ -833,17 +835,21 @@ export const TeacherSpeakingAssessmentView: React.FC = () => {
                 />
               </div>
 
-              {/* Audio Recording (Optional) */}
+              {/* Audio Recording (Optional Cloudinary Upload) */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Audio Recording URL (Optional — scores can be entered without audio)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. /audio/speaking_marcus_20261010.mp3"
-                  value={formRecordingUrl}
-                  onChange={(e) => setFormRecordingUrl(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                <CloudinaryMediaUploader
+                  mediaType="audio"
+                  label="Candidate Audio Recording (Cloudinary)"
+                  helperText="Upload candidate mock speaking recording (MP3, WAV, WebM) to Cloudinary"
+                  currentUrl={formRecordingUrl}
+                  folder="ielts/speaking/assessments"
+                  onUploadSuccess={(url) => {
+                    setFormRecordingUrl(url);
+                    if (url) setFormRetentionAck(true);
+                  }}
+                  onClear={() => {
+                    setFormRecordingUrl('');
+                  }}
                 />
                 {formRecordingUrl && (
                   <label className="flex items-center space-x-2 text-xs text-slate-600 mt-1 cursor-pointer">

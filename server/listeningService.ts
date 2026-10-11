@@ -9,6 +9,7 @@ import {
   PublicationStatus,
   TestMode,
 } from '../shared/types';
+import { sortTestsChronological } from '../shared/testOrder';
 
 export function validateListeningTestVersion(
   parts: ListeningPart[],
@@ -483,7 +484,7 @@ export function listListeningTests(params: {
 
   const rows = db.prepare(query).all(...args) as any[];
 
-  return rows
+  const tests = rows
     .filter((row) => {
       if (params.isTeacherOrAdmin) return true;
       // Filter out scratch automated test titles with epoch timestamps
@@ -542,6 +543,8 @@ export function listListeningTests(params: {
         updatedAt: row.updated_at,
       };
     });
+
+  return sortTestsChronological(tests);
 }
 
 export function getListeningVersionById(versionId: string): ListeningTestVersion | null {
