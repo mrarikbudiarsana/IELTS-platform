@@ -4,6 +4,7 @@
   "description": "IELTS Preparation Platform - Reading Milestone",
   "main": "server/server.ts",
   "scripts": {
+    "start": "tsx server/server.ts",
     "server": "tsx server/server.ts",
     "client": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
