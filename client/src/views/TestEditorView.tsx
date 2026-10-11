@@ -445,49 +445,92 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
 
             {/* Paragraphs */}
             <div className="space-y-3">
-              <div className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-                Paragraphs (with labels):
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                  Paragraphs ({p.paragraphs?.length || 0}):
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = [...passages];
+                    const count = updated[pIdx].paragraphs?.length || 0;
+                    const nextChar = count < 26 ? String.fromCharCode(65 + count) : String(count + 1);
+                    if (!updated[pIdx].paragraphs) updated[pIdx].paragraphs = [];
+                    updated[pIdx].paragraphs.push({
+                      id: `para_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+                      label: nextChar,
+                      content: '',
+                    });
+                    setPassages(updated);
+                  }}
+                  className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-2.5 py-1 rounded-md flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Paragraph
+                </button>
               </div>
+
               {p.paragraphs?.map((para, paraIdx) => (
-                <div key={para.id} className="flex gap-2 items-start">
-                  <input
-                    type="text"
-                    value={para.label}
-                    placeholder="A"
-                    onChange={(e) => {
-                      const updated = [...passages];
-                      updated[pIdx].paragraphs[paraIdx].label = e.target.value;
-                      setPassages(updated);
-                    }}
-                    className="w-12 px-2 py-1.5 border border-slate-300 rounded-md text-sm text-center font-bold bg-white"
-                  />
-                  <textarea
-                    rows={2}
-                    value={para.content}
-                    onChange={(e) => {
-                      const updated = [...passages];
-                      updated[pIdx].paragraphs[paraIdx].content = e.target.value;
-                      setPassages(updated);
-                    }}
-                    className="flex-1 px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white"
-                  />
+                <div key={para.id || paraIdx} className="flex gap-2 items-start bg-white p-2 rounded-lg border border-slate-200">
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Label</span>
+                    <input
+                      type="text"
+                      value={para.label}
+                      placeholder={String.fromCharCode(65 + paraIdx)}
+                      onChange={(e) => {
+                        const updated = [...passages];
+                        updated[pIdx].paragraphs[paraIdx].label = e.target.value;
+                        setPassages(updated);
+                      }}
+                      className="w-12 px-2 py-1.5 border border-slate-300 rounded-md text-sm text-center font-bold bg-slate-50 focus:bg-white"
+                      title="Paragraph Label (e.g. A, B, 1, 2)"
+                    />
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Paragraph Text</div>
+                    <textarea
+                      rows={2}
+                      value={para.content}
+                      placeholder="Enter paragraph content..."
+                      onChange={(e) => {
+                        const updated = [...passages];
+                        updated[pIdx].paragraphs[paraIdx].content = e.target.value;
+                        setPassages(updated);
+                      }}
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="pt-5">
+                    <button
+                      type="button"
+                      disabled={p.paragraphs.length <= 1}
+                      onClick={() => {
+                        if (p.paragraphs.length <= 1) return;
+                        const updated = [...passages];
+                        updated[pIdx].paragraphs = updated[pIdx].paragraphs.filter((_, idx) => idx !== paraIdx);
+                        setPassages(updated);
+                      }}
+                      className={`p-1.5 rounded-md transition-colors ${
+                        p.paragraphs.length <= 1
+                          ? 'text-slate-200 cursor-not-allowed'
+                          : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                      }`}
+                      title={p.paragraphs.length <= 1 ? 'Passage must have at least one paragraph' : 'Remove this paragraph'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
-              <button
-                onClick={() => {
-                  const updated = [...passages];
-                  const nextChar = String.fromCharCode(65 + updated[pIdx].paragraphs.length);
-                  updated[pIdx].paragraphs.push({
-                    id: `para_${Date.now()}`,
-                    label: nextChar,
-                    content: '',
-                  });
-                  setPassages(updated);
-                }}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
-              >
-                + Add Paragraph
-              </button>
+
+              {(!p.paragraphs || p.paragraphs.length === 0) && (
+                <div className="text-center py-4 text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                  No paragraphs in this passage. Click "+ Add Paragraph" above to add one.
+                </div>
+              )}
             </div>
           </div>
         ))}

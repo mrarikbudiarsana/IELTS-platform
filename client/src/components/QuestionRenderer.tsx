@@ -227,6 +227,57 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
 
   const remainingQuestions = group.questions.filter((q) => !inlineQuestionNumbers.has(q.questionNumber));
 
+  // Multi-select handler for Choose TWO (or more) letters (e.g. Questions 20 & 21, 22 & 23)
+  const isMultiSelect = group.questionType === 'multiple_choice_multi';
+  const multiGroupQuestions = group.questions;
+  const multiRequiredCount = group.requiredSelectionCount || group.questions.length || 2;
+
+  // Options can be on group.optionsList or on question.options
+  const multiOptions: { key: string; text: string }[] =
+    group.optionsList && group.optionsList.length > 0
+      ? group.optionsList.map((opt: any) =>
+          typeof opt === 'string'
+            ? { key: opt.trim().charAt(0), text: opt.trim() }
+            : { key: opt.key, text: opt.text || opt.key }
+        )
+      : multiGroupQuestions[0]?.options?.map((opt) => ({
+          key: opt.key,
+          text: opt.text,
+        })) || [];
+
+  // Collect all currently selected keys across the paired questions
+  const multiSelectedKeys: string[] = [];
+  multiGroupQuestions.forEach((q) => {
+    const val = answers[q.questionNumber]?.userAnswer;
+    if (typeof val === 'string' && val.trim()) {
+      if (!multiSelectedKeys.includes(val.trim())) multiSelectedKeys.push(val.trim());
+    } else if (Array.isArray(val)) {
+      val.forEach((k) => {
+        if (k && !multiSelectedKeys.includes(k)) multiSelectedKeys.push(k);
+      });
+    }
+  });
+
+  const handleToggleMultiOption = (optKey: string) => {
+    let updated: string[];
+    if (multiSelectedKeys.includes(optKey)) {
+      updated = multiSelectedKeys.filter((k) => k !== optKey);
+    } else {
+      if (multiSelectedKeys.length >= multiRequiredCount) {
+        // Replace oldest
+        updated = [...multiSelectedKeys.slice(1), optKey];
+      } else {
+        updated = [...multiSelectedKeys, optKey];
+      }
+    }
+
+    // Assign each selected key to one of the questions in the group
+    multiGroupQuestions.forEach((q, idx) => {
+      const assignedVal = updated[idx] || '';
+      onAnswerChange(q.questionNumber, q.id, assignedVal);
+    });
+  };
+
   // Check if matching matrix format (e.g. text has sections A-G, Image 3)
   const isMatchingMatrix =
     group.questionType === 'matching_information' &&
@@ -507,8 +558,51 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         </div>
       )}
 
+      {/* 4.5 MULTIPLE CHOICE MULTI-SELECT (Choose TWO letters) */}
+      {isMultiSelect && (() => {
+        const rawPrompt = multiGroupQuestions[0]?.prompt || '';
+        const cleanPrompt = rawPrompt.replace(/\s*\((?:Choose\s+TWO|First|Second|1st|2nd)[^)]*\)/gi, '').trim();
+        const normPrompt = cleanPrompt.toLowerCase().replace(/[^\w\s]/g, '');
+        const normInstructions = (group.instructions || '').toLowerCase().replace(/[^\w\s]/g, '');
+        const isDuplicate = normPrompt.length > 0 && normInstructions.includes(normPrompt);
+
+        return (
+          <div className="mb-8 space-y-3 max-w-3xl">
+            {cleanPrompt && !isDuplicate && (
+              <h4 className="font-medium text-sm sm:text-base text-slate-900 mb-2 leading-relaxed">
+                {cleanPrompt}
+              </h4>
+            )}
+            <div className="space-y-2 pt-1 pl-2">
+              {multiOptions.map((opt) => {
+                const isSelected = multiSelectedKeys.includes(opt.key);
+
+                return (
+                  <label
+                    key={opt.key}
+                    onClick={() => handleToggleMultiOption(opt.key)}
+                    className="flex items-start gap-4 cursor-pointer py-1.5 select-none group"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}}
+                      className="w-4 h-4 mt-0.5 rounded-[2px] border-slate-400 text-slate-900 focus:ring-0 cursor-pointer accent-slate-900"
+                    />
+                    <div className="flex items-start gap-3 text-sm text-slate-900 leading-snug">
+                      <strong className="font-bold min-w-4 text-slate-950">{opt.key}</strong>
+                      <span className="text-slate-800">{opt.text.replace(/^[A-Z]\s+/, '')}</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 5. REMAINING QUESTIONS LIST (Matching Images 2, 5, 7) */}
-      {!isMatchingMatrix && remainingQuestions.length > 0 && (
+      {!isMatchingMatrix && !isMultiSelect && remainingQuestions.length > 0 && (
         <div className="space-y-6 pt-2">
           {remainingQuestions.map((q) => {
             const currentAnswer = answers[q.questionNumber]?.userAnswer;
