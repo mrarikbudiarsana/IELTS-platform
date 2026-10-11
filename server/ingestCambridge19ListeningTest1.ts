@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+﻿import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import { ListeningPart, QuestionGroup, ListeningAudioConfig, QuestionItem } from '../shared/types';
 import { validateListeningTestVersion } from './listeningService';
@@ -59,7 +59,7 @@ SALLY: Of course. Altogether the park covers 170 acres, that's 69 hectares. Ther
 JOHN: Right.
 SALLY: The wetland is quite varied, too. The original farmland was dug up around 40 years ago to extract gravel. Once this work was completed, the gravel pits filled with water, forming the two large lakes. There are also several smaller ones, ponds and a stream that flows through the park.
 JOHN: OK, so I suppose with these different habitats there's quite a variety of wildlife.
-SALLY: There certainly is – a lot of different species of birds and insects, and also animals like deer and rabbits.
+SALLY: There certainly is â€“ a lot of different species of birds and insects, and also animals like deer and rabbits.
 JOHN: And I understand you organise educational visits for school parties.
 SALLY: That's right. We can organise a wide range of activities and adapt them to suit all ages.
 JOHN: Can you give me some examples of the activities?
@@ -75,7 +75,7 @@ SALLY: Most children really enjoy it. And of course, all the activities are educ
 JOHN: I would imagine they get a sense of freedom that might not be a normal part of their lives.
 SALLY: That's right. And very often the children discover that they can do things they didn't know they could do, and they develop new skills. This gives them greater self-confidence.
 JOHN: It sounds great. So, what about the practical side of it? How much does it cost for a full-day visit? We would expect to bring between 30 and 40 children.
-SALLY: If there are over 30, it costs £4.95 for each child who attends on the day. We invoice you afterwards, so you don't pay for children who can't come because of sickness, for example. There's no charge for leaders and other adults – as many as you want to bring.
+SALLY: If there are over 30, it costs Â£4.95 for each child who attends on the day. We invoice you afterwards, so you don't pay for children who can't come because of sickness, for example. There's no charge for leaders and other adults â€“ as many as you want to bring.
 JOHN: That sounds very fair. Well, thanks for all the information. I'll need to discuss it with my colleagues, and I hope to get back to you soon to make a booking.
 SALLY: We'll look forward to hearing from you. Goodbye.
 JOHN: Goodbye, and thank you.`,
@@ -88,7 +88,7 @@ JOHN: Goodbye, and thank you.`,
         { questionNumber: 6, timestampSeconds: 170, quote: "the children experiment with natural materials to create sounds and explore rhythm and tempo." },
         { questionNumber: 7, timestampSeconds: 195, quote: "they get a sense of freedom that might not be a normal part of their lives." },
         { questionNumber: 8, timestampSeconds: 205, quote: "they develop new skills. This gives them greater self-confidence." },
-        { questionNumber: 9, timestampSeconds: 235, quote: "it costs £4.95 for each child who attends on the day." },
+        { questionNumber: 9, timestampSeconds: 235, quote: "it costs Â£4.95 for each child who attends on the day." },
         { questionNumber: 10, timestampSeconds: 250, quote: "There's no charge for leaders and other adults" },
       ],
     },
@@ -103,7 +103,7 @@ JOHN: Goodbye, and thank you.`,
       checkPauseSeconds: 30,
       transcript: `It's great to see so many members of the Twinning Association here tonight. Since the twinning link between our two towns, Stanthorpe here in England and Malatte in France, was established, the relationship between the towns has gone from strength to strength.
 
-Last month, 25 members of the association from Stanthorpe spent a weekend in Malatte. Our hosts had arranged a great programme. We learned how cheese is produced in the region and had the chance to taste the products. The theme park trip had to be cancelled, but we all had a great time on the final boat trip down the river – that was the real highlight.
+Last month, 25 members of the association from Stanthorpe spent a weekend in Malatte. Our hosts had arranged a great programme. We learned how cheese is produced in the region and had the chance to taste the products. The theme park trip had to be cancelled, but we all had a great time on the final boat trip down the river â€“ that was the real highlight.
 
 This is a special year for the Association because it's 25 years since we were founded. In Malatte, they're planning to mark this by building a footbridge in the municipal park. We've been discussing what to do here and we've decided to plant a poplar tree in the museum gardens. We considered buying a garden seat to put there, but the authorities weren't happy with that idea.
 
@@ -113,7 +113,7 @@ We're looking forward to welcoming our French visitors here next week, and I kno
 
 On Saturday evening, we'll all meet up at the football club, where once again we'll have Toby Sharp and his band performing English and Scottish country songs. Toby will already be well known to many of you as last year he organised our special quiz night and presented the prizes.
 
-Now on Sunday, we'll be taking our visitors to Farley House. You may not all be familiar with it, so here's a map to help you. You can see the car park at the bottom of the map. There's an excellent farm shop in the grounds where our visitors can buy local produce – it's in the old stables, which is the first building you come to. They're built round a courtyard, and the shop's in the far corner on the left. There's also a small café on the right as you go in.
+Now on Sunday, we'll be taking our visitors to Farley House. You may not all be familiar with it, so here's a map to help you. You can see the car park at the bottom of the map. There's an excellent farm shop in the grounds where our visitors can buy local produce â€“ it's in the old stables, which is the first building you come to. They're built round a courtyard, and the shop's in the far corner on the left. There's also a small cafÃ© on the right as you go in.
 
 I know that one or two of our visitors may not be all that mobile. The main entrance to the house has a lot of steps so you might want to use the disabled entry. This is on the far side of the house from the car park.
 
@@ -121,11 +121,11 @@ Children will probably be most interested in the adventure playground. That's at
 
 There are a number of lovely gardens near the house. The kitchen gardens are rectangular and surrounded by a wall. They're to the north-east of the house, quite near the smaller lake. They're still in use and have a great collection of fruit and vegetables.
 
-The Temple of the Four Winds is a bit more of a walk – but it's worth it. Take the path from the car park and go past the western sides of the stables and the house. Then when the path forks, take the right-hand path. Go up there with the woods on your left and the temple is right at the end. There are great views over the whole area.
+The Temple of the Four Winds is a bit more of a walk â€“ but it's worth it. Take the path from the car park and go past the western sides of the stables and the house. Then when the path forks, take the right-hand path. Go up there with the woods on your left and the temple is right at the end. There are great views over the whole area.
 
 OK, so that's . . .`,
       transcriptTimestamps: [
-        { questionNumber: 11, timestampSeconds: 40, quote: "the final boat trip down the river – that was the real highlight." },
+        { questionNumber: 11, timestampSeconds: 40, quote: "the final boat trip down the river â€“ that was the real highlight." },
         { questionNumber: 12, timestampSeconds: 65, quote: "we've decided to plant a poplar tree in the museum gardens." },
         { questionNumber: 13, timestampSeconds: 90, quote: "Our pancake evening was well attended and made record profits." },
         { questionNumber: 14, timestampSeconds: 125, quote: "have dinner in the house or garden rather than eating out." },
@@ -151,8 +151,8 @@ MARIE: No. I've been busy with my project.
 COLIN: You're making a vegan alternative to eggs, aren't you? Something that doesn't use animal products?
 MARIE: Yes. I'm using chickpeas. I had two main aims when I first started looking for an alternative to eggs, but actually I've found chickpeas have got more advantages.
 COLIN: Right.
-MARIE: But how about your project on reusing waste food – you were looking at bread, weren't you?
-COLIN: Yes. It's been hard work, but I've enjoyed it. The basic process was quite straightforward – breaking the stale bread down to a paste then reforming it.
+MARIE: But how about your project on reusing waste food â€“ you were looking at bread, weren't you?
+COLIN: Yes. It's been hard work, but I've enjoyed it. The basic process was quite straightforward â€“ breaking the stale bread down to a paste then reforming it.
 MARIE: But you were using 3-D printing, weren't you, to make the paste into biscuits?
 COLIN: Yeah, I'd used that before, but in this project, I had time to play around with different patterns for the biscuits and finding how I could add fruit and vegetables to make them a more appetising colour, and I was really pleased with what I managed to produce.
 MARIE: It must've been a great feeling to make something appetising out of bits of old bread that would've been thrown away otherwise.
@@ -165,19 +165,19 @@ MARIE: No, things like milk and juice as well. But actually, I thought it might 
 COLIN: Right. And coming back to food, maybe it'd be possible to use it for other things besides freshness. Like how many kilograms a joint of meat is, for example.
 MARIE: Yes, there's all sorts of possibilities.
 COLIN: I was reading an article about food trends predicting how eating habits might change in the next few years.
-MARIE: Oh – things like more focus on local products? That seems so obvious, but the shops are still full of imported foods.
+MARIE: Oh â€“ things like more focus on local products? That seems so obvious, but the shops are still full of imported foods.
 COLIN: Yes, they need to be more proactive to address that.
 MARIE: And somehow motivate consumers to change, yes.
-COLIN: One thing everyone's aware of is the need for a reduction in unnecessary packaging – but just about everything you buy in supermarkets is still covered in plastic. The government needs to do something about it.
+COLIN: One thing everyone's aware of is the need for a reduction in unnecessary packaging â€“ but just about everything you buy in supermarkets is still covered in plastic. The government needs to do something about it.
 MARIE: Absolutely. It's got to change.
 COLIN: Do you think there'll be more interest in gluten- and lactose-free food?
 MARIE: For people with allergies or food intolerances? I don't know. Lots of people I know have been buying that type of food for years now.
 COLIN: Yes, even if they haven't been diagnosed with an allergy.
-MARIE: That's right. One thing I've noticed is the number of branded products related to celebrity chefs – people watch them cooking on TV and then buy things like spice mixes or frozen foods with the chef's name on . . . I bought something like that once, but I won't again.
-COLIN: Yeah – I bought a ready-made spice mix for chicken which was supposed to be used by a chef I'd seen on television, and it didn't actually taste of anything.
+MARIE: That's right. One thing I've noticed is the number of branded products related to celebrity chefs â€“ people watch them cooking on TV and then buy things like spice mixes or frozen foods with the chef's name on . . . I bought something like that once, but I won't again.
+COLIN: Yeah â€“ I bought a ready-made spice mix for chicken which was supposed to be used by a chef I'd seen on television, and it didn't actually taste of anything.
 MARIE: Mm. Did the article mention 'ghost kitchens' used to produce takeaway food?
 COLIN: No. What are they?
-MARIE: Well, they might have the name of a restaurant, but actually they're a cooking facility just for delivery meals – the public don't ever go there. But people aren't aware of that – it's all kept very quiet.
+MARIE: Well, they might have the name of a restaurant, but actually they're a cooking facility just for delivery meals â€“ the public don't ever go there. But people aren't aware of that â€“ it's all kept very quiet.
 COLIN: So people don't realise the food's not actually from the restaurant?
 MARIE: Right.
 COLIN: Did you know more and more people are using all sorts of different mushrooms now, to treat different health concerns? Things like heart problems?
@@ -192,32 +192,32 @@ COLIN: Yes, it's hard to know which varieties are safe to eat. Anyway maybe now 
         { questionNumber: 26, timestampSeconds: 205, quote: "the need for a reduction in unnecessary packaging ... The government needs to do something about it." },
         { questionNumber: 27, timestampSeconds: 230, quote: "Lots of people I know have been buying that type of food for years now." },
         { questionNumber: 28, timestampSeconds: 255, quote: "I bought something like that once, but I won't again." },
-        { questionNumber: 29, timestampSeconds: 285, quote: "people aren't aware of that – it's all kept very quiet." },
+        { questionNumber: 29, timestampSeconds: 285, quote: "people aren't aware of that â€“ it's all kept very quiet." },
         { questionNumber: 30, timestampSeconds: 315, quote: "They might be taking a big risk there. Yes, it's hard to know which varieties are safe to eat." },
       ],
     },
     {
       id: 'c19-l1-p4',
       partNumber: 4,
-      title: 'Part 4: The Céide Fields',
-      context: 'A student presentation about the Céide Fields, a Neolithic archaeological site in the northwest of Ireland.',
+      title: 'Part 4: The CÃ©ide Fields',
+      context: 'A student presentation about the CÃ©ide Fields, a Neolithic archaeological site in the northwest of Ireland.',
       audioUrl: '/audio/listening/c19_test1_part4.mp3',
       containsIntroPauses: false,
       introPauseSeconds: 45,
       checkPauseSeconds: 30,
-      transcript: `For my presentation today, I'm going to talk about the Céide Fields in the northwest of Ireland, one of the largest Neolithic sites in the world. I recently visited this site and observed the work that is currently being done by a team of archaeologists there.
+      transcript: `For my presentation today, I'm going to talk about the CÃ©ide Fields in the northwest of Ireland, one of the largest Neolithic sites in the world. I recently visited this site and observed the work that is currently being done by a team of archaeologists there.
 
 The site was first discovered in the 1930s by a local teacher, Patrick Caulfield. He noticed that when local people were digging in the bog, they were constantly hitting against what seemed to be rows of stones. He realised that these must be walls and that they must be thousands of years old for them to predate the bog which subsequently grew over them.
 
 He wrote to the National Museum in Dublin to ask them to investigate, but no one took him seriously. It wasn't until 40 years later, when Patrick Caulfield's son Seamus, who had become an archaeologist by then, began to explore further. He inserted iron probes into the bog to map the formation of the stones, a traditional method which local people had always used for finding fuel buried in the bog for thousands of years. Carbon dating later proved that the site was over 5,000 years old and was the largest Neolithic site in Ireland.
 
-Thanks to the bog which covers the area, the remains of the settlement at Céide Fields, which is over 5,000 years old, are extremely well-preserved. A bog is 90 percent water; its soil is so saturated that when the grasses and heathers that grow on its surface die, they don't fully decay but accumulate in layers. Objects remain so well preserved in these conditions because of the acidity of the peat and the deficiency of oxygen. At least 175 days of rain a year are required for this to happen; this part of Ireland gets an average of 225 days.
+Thanks to the bog which covers the area, the remains of the settlement at CÃ©ide Fields, which is over 5,000 years old, are extremely well-preserved. A bog is 90 percent water; its soil is so saturated that when the grasses and heathers that grow on its surface die, they don't fully decay but accumulate in layers. Objects remain so well preserved in these conditions because of the acidity of the peat and the deficiency of oxygen. At least 175 days of rain a year are required for this to happen; this part of Ireland gets an average of 225 days.
 
-The Neolithic farmers at Céide would have enjoyed several centuries of relative peace and stability. Neolithic farmers generally lived in larger communities than their predecessors, with a number of houses built around a community building. As they lived in permanent settlements, Neolithic farmers were able to build bigger houses. These weren't round as people often assume, but rectangular with a small hole in the roof that allowed smoke to escape. This is one of many innovations and indicates that the Neolithic farmers were the first people to cook indoors. Another new technology that Neolithic settlers brought to Ireland was pottery. Fragments of Neolithic pots have been found in Céide and elsewhere in Ireland. The pots were used for many things; as well as for storing food, pots were filled with a small amount of fat and when this was set alight, they served as lamps.
+The Neolithic farmers at CÃ©ide would have enjoyed several centuries of relative peace and stability. Neolithic farmers generally lived in larger communities than their predecessors, with a number of houses built around a community building. As they lived in permanent settlements, Neolithic farmers were able to build bigger houses. These weren't round as people often assume, but rectangular with a small hole in the roof that allowed smoke to escape. This is one of many innovations and indicates that the Neolithic farmers were the first people to cook indoors. Another new technology that Neolithic settlers brought to Ireland was pottery. Fragments of Neolithic pots have been found in CÃ©ide and elsewhere in Ireland. The pots were used for many things; as well as for storing food, pots were filled with a small amount of fat and when this was set alight, they served as lamps.
 
-It's thought that the Céide Fields were mainly used as paddocks for animals to graze in. Evidence from the Céide Fields suggests that each plot of land was of a suitable size to sustain an extended family. They may have used a system of rotational grazing in order to prevent over-grazing and to allow for plant recovery and regrowth. This must have been a year-round activity as no structures have been found which would have been used to shelter animals in the winter.
+It's thought that the CÃ©ide Fields were mainly used as paddocks for animals to graze in. Evidence from the CÃ©ide Fields suggests that each plot of land was of a suitable size to sustain an extended family. They may have used a system of rotational grazing in order to prevent over-grazing and to allow for plant recovery and regrowth. This must have been a year-round activity as no structures have been found which would have been used to shelter animals in the winter.
 
-However, archaeologists believe that this way of life at Céide ceased abruptly. Why was this? Well, several factors may have contributed to the changing circumstances. The soil would have become less productive and led to the abandonment of farming. The crop rotation system was partly responsible for this as it would have been very intensive and was not sustainable. But there were also climatic pressures too. The farmers at Céide would have enjoyed a relatively dry period, but this began to change and the conditions became wetter as there was a lot more rain. It was these conditions that encouraged the bog to form over the area which survives today.
+However, archaeologists believe that this way of life at CÃ©ide ceased abruptly. Why was this? Well, several factors may have contributed to the changing circumstances. The soil would have become less productive and led to the abandonment of farming. The crop rotation system was partly responsible for this as it would have been very intensive and was not sustainable. But there were also climatic pressures too. The farmers at CÃ©ide would have enjoyed a relatively dry period, but this began to change and the conditions became wetter as there was a lot more rain. It was these conditions that encouraged the bog to form over the area which survives today.
 
 So now I'd like to show you some . . .`,
       transcriptTimestamps: [
@@ -258,7 +258,7 @@ So now I'd like to show you some . . .`,
       id: 'c19-l1-g1',
       partNumber: 1,
       questionType: 'note_completion',
-      title: 'Questions 1–10',
+      title: 'Questions 1â€“10',
       instructions: 'Complete the notes below.\nWrite ONE WORD AND/OR A NUMBER for each answer.',
       startQuestionNumber: 1,
       endQuestionNumber: 10,
@@ -268,25 +268,25 @@ So now I'd like to show you some . . .`,
       contentWithGaps: `Hinchingbrooke Country Park
 
 The park
-• Area: [[1]] hectares
-• Habitats: wetland, grassland and woodland
-• Wetland: lakes, ponds and a [[2]]
-• Wildlife includes birds, insects and animals
+â€¢ Area: [[1]] hectares
+â€¢ Habitats: wetland, grassland and woodland
+â€¢ Wetland: lakes, ponds and a [[2]]
+â€¢ Wildlife includes birds, insects and animals
 
 Subjects studied in educational visits include
-• Science: Children look at [[3]] about plants, etc.
-• Geography: includes learning to use a [[4]] and compass
-• History: changes in land use
-• Leisure and tourism: mostly concentrates on the park's [[5]]
-• Music: Children make [[6]] with natural materials, and experiment with rhythm and speed.
+â€¢ Science: Children look at [[3]] about plants, etc.
+â€¢ Geography: includes learning to use a [[4]] and compass
+â€¢ History: changes in land use
+â€¢ Leisure and tourism: mostly concentrates on the park's [[5]]
+â€¢ Music: Children make [[6]] with natural materials, and experiment with rhythm and speed.
 
 Benefits of outdoor educational visits
-• They give children a feeling of [[7]] that they may not have elsewhere.
-• Children learn new [[8]] and gain self-confidence.
+â€¢ They give children a feeling of [[7]] that they may not have elsewhere.
+â€¢ Children learn new [[8]] and gain self-confidence.
 
 Practical issues
-• Cost per child: £ [[9]]
-• Adults, such as [[10]], free`,
+â€¢ Cost per child: Â£ [[9]]
+â€¢ Adults, such as [[10]], free`,
       questions: [
         {
           id: 'c19-l1-q1',
@@ -371,11 +371,11 @@ Practical issues
         {
           id: 'c19-l1-q9',
           questionNumber: 9,
-          prompt: 'Cost per child: £ ________',
+          prompt: 'Cost per child: Â£ ________',
           answerKey: '4.95',
-          acceptedAlternatives: ['4.95', '£4.95'],
-          explanation: "Sally states: 'If there are over 30, it costs £4.95 for each child who attends on the day'.",
-          transcriptExcerpt: 'If there are over 30, it costs £4.95 for each child who attends on the day.',
+          acceptedAlternatives: ['4.95', 'Â£4.95'],
+          explanation: "Sally states: 'If there are over 30, it costs Â£4.95 for each child who attends on the day'.",
+          transcriptExcerpt: 'If there are over 30, it costs Â£4.95 for each child who attends on the day.',
           audioTimestampSeconds: 235,
         },
         {
@@ -385,7 +385,7 @@ Practical issues
           answerKey: 'leaders',
           acceptedAlternatives: ['leaders', 'leader'],
           explanation: "Sally says: 'There's no charge for leaders and other adults'.",
-          transcriptExcerpt: "There's no charge for leaders and other adults – as many as you want to bring.",
+          transcriptExcerpt: "There's no charge for leaders and other adults â€“ as many as you want to bring.",
           audioTimestampSeconds: 250,
         },
       ],
@@ -396,7 +396,7 @@ Practical issues
       id: 'c19-l1-g2',
       partNumber: 2,
       questionType: 'listening_multiple_choice_single',
-      title: 'Questions 11–15',
+      title: 'Questions 11â€“15',
       instructions: 'Choose the correct letter, A, B or C.\nStanthorpe Twinning Association',
       startQuestionNumber: 11,
       endQuestionNumber: 15,
@@ -407,8 +407,8 @@ Practical issues
           prompt: 'During the visit to Malatte, in France, members especially enjoyed',
           options: mc15Options('going to a theme park.', 'experiencing a river trip.', 'visiting a cheese factory.'),
           answerKey: 'B',
-          explanation: "The speaker says the theme park trip was cancelled, and cheese production was just something they learned about, but 'the final boat trip down the river – that was the real highlight'.",
-          transcriptExcerpt: 'The theme park trip had to be cancelled, but we all had a great time on the final boat trip down the river – that was the real highlight.',
+          explanation: "The speaker says the theme park trip was cancelled, and cheese production was just something they learned about, but 'the final boat trip down the river â€“ that was the real highlight'.",
+          transcriptExcerpt: 'The theme park trip had to be cancelled, but we all had a great time on the final boat trip down the river â€“ that was the real highlight.',
           audioTimestampSeconds: 40,
         },
         {
@@ -459,12 +459,12 @@ Practical issues
       id: 'c19-l1-g3',
       partNumber: 2,
       questionType: 'plan_map_diagram_labelling',
-      title: 'Questions 16–20',
-      instructions: 'Label the map below.\nWrite the correct letter, A–H, next to Questions 16–20.',
+      title: 'Questions 16â€“20',
+      instructions: 'Label the map below.\nWrite the correct letter, Aâ€“H, next to Questions 16â€“20.',
       startQuestionNumber: 16,
       endQuestionNumber: 20,
       mapData: {
-        imageUrl: '/diagrams/c19_l1_map_farley_house.jpeg',
+        imageUrl: 'https://res.cloudinary.com/pkwpxicd/image/upload/v1791708683/Screenshot_2026-10-11_161204.png',
         caption: 'Farley House',
       },
       optionsList: mapOptions,
@@ -523,7 +523,7 @@ Practical issues
       partNumber: 3,
       questionType: 'listening_multiple_choice_multi',
       title: 'Questions 21 and 22',
-      instructions: 'Choose TWO letters, A–E.',
+      instructions: 'Choose TWO letters, Aâ€“E.',
       startQuestionNumber: 21,
       endQuestionNumber: 22,
       requiredSelectionCount: 2,
@@ -555,7 +555,7 @@ Practical issues
       partNumber: 3,
       questionType: 'listening_multiple_choice_multi',
       title: 'Questions 23 and 24',
-      instructions: 'Choose TWO letters, A–E.',
+      instructions: 'Choose TWO letters, Aâ€“E.',
       startQuestionNumber: 23,
       endQuestionNumber: 24,
       requiredSelectionCount: 2,
@@ -586,8 +586,8 @@ Practical issues
       id: 'c19-l1-g6',
       partNumber: 3,
       questionType: 'matching',
-      title: 'Questions 25–30',
-      instructions: "What is the students' opinion about each of the following food trends?\nChoose SIX answers from the box and write the correct letter, A–H, next to Questions 25–30.",
+      title: 'Questions 25â€“30',
+      instructions: "What is the students' opinion about each of the following food trends?\nChoose SIX answers from the box and write the correct letter, Aâ€“H, next to Questions 25â€“30.",
       startQuestionNumber: 25,
       endQuestionNumber: 30,
       optionsList: [
@@ -624,7 +624,7 @@ Practical issues
           questionNumber: 27,
           prompt: 'Gluten-free and lactose-free food',
           answerKey: 'C',
-          explanation: "Marie: 'Lots of people I know have been buying that type of food for years now' – Colin agrees, even without allergy diagnoses (already widespread, C).",
+          explanation: "Marie: 'Lots of people I know have been buying that type of food for years now' â€“ Colin agrees, even without allergy diagnoses (already widespread, C).",
           transcriptExcerpt: "Lots of people I know have been buying that type of food for years now. COLIN: Yes, even if they haven't been diagnosed with an allergy.",
           audioTimestampSeconds: 230,
         },
@@ -634,7 +634,7 @@ Practical issues
           prompt: 'Use of branded products related to celebrity chefs',
           answerKey: 'B',
           explanation: "Both students bought such products and were let down: 'I won't again' and 'it didn't actually taste of anything' (disappointing results, B).",
-          transcriptExcerpt: "I bought something like that once, but I won't again. COLIN: Yeah – I bought a ready-made spice mix for chicken... and it didn't actually taste of anything.",
+          transcriptExcerpt: "I bought something like that once, but I won't again. COLIN: Yeah â€“ I bought a ready-made spice mix for chicken... and it didn't actually taste of anything.",
           audioTimestampSeconds: 255,
         },
         {
@@ -642,8 +642,8 @@ Practical issues
           questionNumber: 29,
           prompt: "Development of 'ghost kitchens' for takeaway food",
           answerKey: 'F',
-          explanation: "Marie says 'people aren't aware of that – it's all kept very quiet', and Colin: 'people don't realise' (most people know little about this, F).",
-          transcriptExcerpt: "But people aren't aware of that – it's all kept very quiet. COLIN: So people don't realise the food's not actually from the restaurant?",
+          explanation: "Marie says 'people aren't aware of that â€“ it's all kept very quiet', and Colin: 'people don't realise' (most people know little about this, F).",
+          transcriptExcerpt: "But people aren't aware of that â€“ it's all kept very quiet. COLIN: So people don't realise the food's not actually from the restaurant?",
           audioTimestampSeconds: 285,
         },
         {
@@ -663,33 +663,33 @@ Practical issues
       id: 'c19-l1-g7',
       partNumber: 4,
       questionType: 'note_completion',
-      title: 'Questions 31–40',
+      title: 'Questions 31â€“40',
       instructions: 'Complete the notes below.\nWrite ONE WORD ONLY for each answer.',
       startQuestionNumber: 31,
       endQuestionNumber: 40,
       wordLimitRule: 'ONE WORD ONLY',
       maxWords: 1,
-      contentWithGaps: `Céide Fields
-• an important Neolithic archaeological site in the northwest of Ireland
+      contentWithGaps: `CÃ©ide Fields
+â€¢ an important Neolithic archaeological site in the northwest of Ireland
 
 Discovery
-• In the 1930s, a local teacher realised that stones beneath the bog surface were once [[31]]
-• His [[32]] became an archaeologist and undertook an investigation of the site:
+â€¢ In the 1930s, a local teacher realised that stones beneath the bog surface were once [[31]]
+â€¢ His [[32]] became an archaeologist and undertook an investigation of the site:
   - a traditional method used by local people to dig for [[33]] was used to identify where stones were located
   - carbon dating later proved the site was Neolithic.
-• Items are well preserved in the bog because of a lack of [[34]]
+â€¢ Items are well preserved in the bog because of a lack of [[34]]
 
 Neolithic farmers
-• Houses were [[35]] in shape and had a hole in the roof.
-• Neolithic innovations include:
+â€¢ Houses were [[35]] in shape and had a hole in the roof.
+â€¢ Neolithic innovations include:
   - cooking indoors
   - pots used for storage and to make [[36]]
-• Each field at Céide was large enough to support a big [[37]]
-• The fields were probably used to restrict the grazing of animals – no evidence of structures to house them during [[38]]
+â€¢ Each field at CÃ©ide was large enough to support a big [[37]]
+â€¢ The fields were probably used to restrict the grazing of animals â€“ no evidence of structures to house them during [[38]]
 
 Reasons for the decline in farming
-• a decline in [[39]] quality
-• an increase in [[40]]`,
+â€¢ a decline in [[39]] quality
+â€¢ an increase in [[40]]`,
       questions: [
         {
           id: 'c19-l1-q31',
@@ -754,7 +754,7 @@ Reasons for the decline in farming
         {
           id: 'c19-l1-q37',
           questionNumber: 37,
-          prompt: 'Each field at Céide was large enough to support a big ________',
+          prompt: 'Each field at CÃ©ide was large enough to support a big ________',
           answerKey: 'family',
           acceptedAlternatives: ['family'],
           explanation: "'each plot of land was of a suitable size to sustain an extended family'.",
@@ -931,3 +931,4 @@ export function ingestCambridge19ListeningTest1(authorId?: string): {
     totalQuestions: 40,
   };
 }
+
