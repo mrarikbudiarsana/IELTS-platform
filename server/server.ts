@@ -67,6 +67,7 @@ import { ingestCambridge21ListeningTest1 } from './ingestCambridge21ListeningTes
 import { ingestCambridge21ListeningTest2 } from './ingestCambridge21ListeningTest2';
 import { ingestCambridge21ListeningTest3 } from './ingestCambridge21ListeningTest3';
 import { ingestCambridge21ListeningTest4 } from './ingestCambridge21ListeningTest4';
+import { ingestCambridge19ListeningTest1 } from './ingestCambridge19ListeningTest1';
 import {
   createClass,
   updateClass,
@@ -1992,6 +1993,7 @@ ingestCambridge21ListeningTest1();
 ingestCambridge21ListeningTest2();
 ingestCambridge21ListeningTest3();
 ingestCambridge21ListeningTest4();
+ingestCambridge19ListeningTest1();
 
 app.listen(PORT, () => {
   console.log(`IELTS Platform API server listening on http://localhost:${PORT}`);

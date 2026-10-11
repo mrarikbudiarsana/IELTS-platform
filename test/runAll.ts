@@ -73,6 +73,11 @@ if (res14.status !== 0) {
   process.exit(res14.status || 1);
 }
 
+const res14b = spawnSync('npx', ['tsx', 'test/testCambridge19ListeningTest1Ingestion.ts'], { stdio: 'inherit', shell: true });
+if (res14b.status !== 0) {
+  process.exit(res14b.status || 1);
+}
+
 const res15 = spawnSync('npx', ['tsx', 'test/testChronologicalOrder.ts'], { stdio: 'inherit', shell: true });
 if (res15.status !== 0) {
   process.exit(res15.status || 1);
