@@ -17,7 +17,9 @@
     "test:postgres": "tsx test/runPostgresIntegration.ts && tsx test/runPostgresSuite.ts",
     "db:initialize": "tsx scripts/initializeHostedDatabase.ts",
     "test:netlify": "tsx test/runNetlifyIntegration.ts",
-    "db:verify": "tsx scripts/verifyHostedDatabase.ts"
+    "db:verify": "tsx scripts/verifyHostedDatabase.ts",
+    "test:performance": "tsx test/performanceProfiles.ts --assert-limits",
+    "benchmark:platform": "tsx scripts/benchmarkPlatform.ts"
   },
   "keywords": [
     "ielts",

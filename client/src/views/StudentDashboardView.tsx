@@ -72,11 +72,12 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
     setLoading(true);
     try {
       if (user) {
-        const [rAttRes, lAttRes, wAttRes, sAttRes] = await Promise.all([
+        const [rAttRes, lAttRes, wAttRes, sAttRes, classRes] = await Promise.all([
           api.getAttempts().catch(() => ({ attempts: [] })),
           api.getListeningAttempts().catch(() => ({ attempts: [] })),
           api.getWritingAttempts().catch(() => ({ attempts: [] })),
           api.getMySpeakingAssessments().catch(() => ({ assessments: [] })),
+          api.getClasses().catch(() => ({ classes: [] })),
         ]);
 
         setReadingAttempts(rAttRes.attempts || []);
@@ -84,25 +85,13 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
         setWritingAttempts(wAttRes.attempts || []);
         setSpeakingAssessments(sAttRes.assessments || []);
 
-        const classRes = await api.getClasses().catch(() => ({ classes: [] }));
         setClasses(classRes.classes || []);
 
-        if (classRes.classes && classRes.classes.length > 0) {
-          const allAss: any[] = [];
-          for (const c of classRes.classes) {
-            try {
-              const assRes = await api.getClassAssignments(c.id);
-              if (assRes.assignments) {
-                for (const a of assRes.assignments) {
-                  allAss.push({ ...a, className: c.title });
-                }
-              }
-            } catch {
-              // ignore
-            }
-          }
-          setAssignments(allAss);
-        }
+        const assignmentGroups = await Promise.all((classRes.classes || []).map(async c => {
+          const res = await api.getClassAssignments(c.id).catch(() => ({ assignments: [] }));
+          return (res.assignments || []).map(a => ({ ...a, className: c.title }));
+        }));
+        setAssignments(assignmentGroups.flat());
       }
     } catch (err) {
       console.error('Error loading dashboard data:', err);

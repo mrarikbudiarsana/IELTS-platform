@@ -4,6 +4,9 @@ import type { Pool } from 'pg';
 
 export async function startPostgres() {
   process.env.NODE_ENV = 'test';
+  process.env.OPENAI_API_KEY = '';
+  process.env.MIDTRANS_SERVER_KEY = '';
+  process.env.MIDTRANS_CLIENT_KEY = '';
   process.env.DATABASE_PROVIDER = 'postgres';
   process.env.DATABASE_URL = 'postgresql://test:test@localhost/test';
   const pg = new PGlite();

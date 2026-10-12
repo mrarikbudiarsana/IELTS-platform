@@ -216,29 +216,23 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
         setListeningTests(res.tests);
         setListeningAttempts(attRes.attempts);
       } else if (selectedSkill === 'writing') {
-        const res = await api.getWritingTasks();
+        const [res, attRes, balRes] = await Promise.all([
+          api.getWritingTasks(),
+          isLoggedIn ? api.getWritingAttempts() : Promise.resolve({ attempts: [] }),
+          isLoggedIn ? api.getWritingAllowanceBalance() : Promise.resolve({ balance: null }),
+        ]);
         setWritingTasks(res.tasks);
-
-        if (isLoggedIn) {
-          const [attRes, balRes] = await Promise.all([
-            api.getWritingAttempts(),
-            api.getWritingAllowanceBalance(),
-          ]);
-          setWritingAttempts(attRes.attempts);
-          setAllowanceBalance(balRes.balance);
-        }
+        setWritingAttempts(attRes.attempts);
+        setAllowanceBalance(balRes.balance);
       } else {
-        const res = await api.getSpeakingSets({ status: 'published' });
+        const [res, assRes, balRes] = await Promise.all([
+          api.getSpeakingSets({ status: 'published' }),
+          isLoggedIn ? api.getMySpeakingAssessments() : Promise.resolve({ assessments: [] }),
+          isLoggedIn ? api.getSpeakingAllowanceBalance() : Promise.resolve({ balance: null }),
+        ]);
         setSpeakingSets(res.sets);
-
-        if (isLoggedIn) {
-          const [assRes, balRes] = await Promise.all([
-            api.getMySpeakingAssessments(),
-            api.getSpeakingAllowanceBalance(),
-          ]);
-          setSpeakingAssessments(assRes.assessments);
-          setSpeakingAllowanceBalance(balRes.balance?.available ?? 0);
-        }
+        setSpeakingAssessments(assRes.assessments);
+        setSpeakingAllowanceBalance(balRes.balance?.available ?? 0);
       }
     } catch (err) {
       console.error('Failed to load catalogue tests', err);

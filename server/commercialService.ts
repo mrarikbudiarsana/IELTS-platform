@@ -343,8 +343,8 @@ export async function getOrderById(orderId: string): Promise<CommercialOrder | n
   return mapOrderRow(row);
 }
 
-export async function listUserOrders(userId: string): Promise<CommercialOrder[]> {
-  const rows = (await db.prepare('SELECT * FROM commercial_orders WHERE user_id = ? ORDER BY created_at DESC').all(userId)) as any[];
+export async function listUserOrders(userId: string, limit?: number): Promise<CommercialOrder[]> {
+  const rows = await db.prepare('SELECT * FROM commercial_orders WHERE user_id = ? ORDER BY created_at DESC' + (limit ? ' LIMIT ?' : '')).all(...(limit ? [userId,limit] : [userId]));
   return rows.map(mapOrderRow);
 }
 
@@ -1208,40 +1208,25 @@ export async function redeemTeacherCode(
 // -------------------------------------------------------------
 
 export async function getUserCommercialSummary(userId: string): Promise<LearnerCommercialSummary> {
-  const user = (await db.prepare('SELECT plan_type, plan_expires_at FROM users WHERE id = ?').get(userId)) as any;
+  const [user, writingBal, speakingBal, subs, orders, grants] = await Promise.all([
+    db.prepare(`SELECT u.plan_type, u.plan_expires_at,
+      (SELECT COALESCE(SUM(amount), 0) FROM commercial_entitlement_grants
+        WHERE user_id = u.id AND grant_type = 'protected_prepost' AND status = 'active') AS protected_count
+      FROM users u WHERE u.id = ?`).get(userId),
+    getUserAllowanceBalance(userId),
+    getUserSpeakingAllowanceBalance(userId),
+    db.prepare('SELECT * FROM user_subscriptions WHERE user_id = ? ORDER BY created_at DESC').all(userId),
+    listUserOrders(userId, 10),
+    db.prepare('SELECT * FROM commercial_entitlement_grants WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').all(userId),
+  ]);
   const isPaidActive = Boolean(user?.plan_expires_at && new Date(user.plan_expires_at) > new Date());
   const planType: PlanType = isPaidActive ? 'paid_plan' : 'free';
 
-  const writingBal = (await getUserAllowanceBalance(userId));
-  const speakingBal = (await getUserSpeakingAllowanceBalance(userId));
-
-  // Protected allowances query
-  const protectedGrants = (await db
-    .prepare(
-      `SELECT SUM(amount) AS total 
-       FROM commercial_entitlement_grants 
-       WHERE user_id = ? AND grant_type = 'protected_prepost' AND status = 'active'`
-    )
-    .get(userId)) as any;
-
-  const protectedCount = protectedGrants?.total || 0;
+  const protectedCount = user?.protected_count || 0;
 
   // Discretionary = total available minus protected
   const discretionaryWriting = Math.max(0, writingBal.available - protectedCount);
   const discretionarySpeaking = Math.max(0, speakingBal.available - protectedCount);
-
-  // Subscriptions
-  const subs = (await db
-    .prepare('SELECT * FROM user_subscriptions WHERE user_id = ? ORDER BY created_at DESC')
-    .all(userId)) as any[];
-
-  // Orders
-  const orders = (await listUserOrders(userId)).slice(0, 10);
-
-  // Active Grants
-  const grants = (await db
-    .prepare('SELECT * FROM commercial_entitlement_grants WHERE user_id = ? ORDER BY created_at DESC LIMIT 20')
-    .all(userId)) as any[];
 
   return {
     planType,

@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
+import { AnswerMark, saveAnswerMarks } from './answerMarks';
 import {
   ListeningAttempt,
   StudentAnswer,
@@ -333,11 +334,7 @@ export async function submitListeningAttempt(params: {
   const itemResults: AttemptItemResult[] = [];
   const performanceByType: Record<string, { correct: number; total: number }> = {};
 
-  const updateAnswerMark = db.prepare(`
-    UPDATE listening_answers
-    SET is_correct = ?, mark = ?
-    WHERE attempt_id = ? AND question_number = ?
-  `);
+  const answerMarks: AnswerMark[] = [];
 
   const tx = db.transaction(async () => {
     for (const [qNum, { question, group }] of questionMap.entries()) {
@@ -354,21 +351,13 @@ export async function submitListeningAttempt(params: {
         allowAnyOrder: group.allowAnyOrder,
       });
 
-      if (studentAnsRow) {
-        (await updateAnswerMark.run(
-          markResult.isCorrect ? 1 : 0,
-          markResult.mark,
-          params.attemptId,
-          qNum
-        ));
-      } else {
-        (await db.prepare(`
-          INSERT INTO listening_answers (
-            id, attempt_id, question_id, question_number, user_answer_json,
-            is_flagged, is_correct, mark, saved_at
-          ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, datetime('now'))
-        `).run(uuidv4(), params.attemptId, question.id, qNum, JSON.stringify('')));
-      }
+      answerMarks.push({
+        id: studentAnsRow?.id || uuidv4(), attemptId: params.attemptId,
+        questionId: question.id, questionNumber: qNum,
+        answerJson: studentAnsRow?.user_answer_json || JSON.stringify(''),
+        isCorrect: studentAnsRow && markResult.isCorrect ? 1 : 0,
+        mark: studentAnsRow ? markResult.mark : 0,
+      });
 
       totalRawScore += markResult.mark;
 
@@ -398,6 +387,7 @@ export async function submitListeningAttempt(params: {
       });
     }
 
+    await saveAnswerMarks('listening_answers', answerMarks);
     const finalStatus = params.forceExpired ? 'expired' : 'submitted';
     const estimatedBand = calculateEstimatedListeningBandScore(
       totalRawScore,

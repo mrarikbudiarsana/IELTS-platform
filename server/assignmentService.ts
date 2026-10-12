@@ -468,6 +468,8 @@ export async function listClassAssignments(
       a.created_at ASC
   `).all(classId)) as any[];
 
+  const statusRecords = isTeacherOrAdmin ? undefined : await loadStudentAssignmentRecords(
+    rows.map(row=>({id:row.id,packageId:row.package_id,skill:row.skill})), [userId]);
   return (await Promise.all(rows.map(async (row) => {
     const a: Assignment = {
       id: row.id,
@@ -494,20 +496,55 @@ export async function listClassAssignments(
     };
 
     if (!isTeacherOrAdmin) {
-      (await populateStudentAssignmentStatus(a, userId));
+      (await populateStudentAssignmentStatus(a, userId, statusRecords));
     }
     return a;
   })));
 }
 
-async function populateStudentAssignmentStatus(a: Assignment, studentId: string): Promise<void> {
+type AssignmentStatusRecords = Map<string, any[]>;
+function assignmentRecordKey(table: string, assignmentId: string, studentId: string) {
+  return JSON.stringify([table,assignmentId,studentId]);
+}
+function assignmentSource(a: {packageId?: string; skill?: string}) {
+  if (a.packageId) return {table:'package_attempts',userColumn:'user_id',orderColumn:'started_at'};
+  if (a.skill === 'speaking') return {table:'speaking_assessments',userColumn:'student_id',orderColumn:'updated_at'};
+  return {table:a.skill === 'writing' ? 'writing_attempts' : a.skill === 'listening' ? 'listening_attempts' : 'reading_attempts',userColumn:'user_id',orderColumn:'started_at'};
+}
+async function loadStudentAssignmentRecords(assignments: {id:string;packageId?:string;skill?:string}[], students: string[]): Promise<AssignmentStatusRecords> {
+  const records: AssignmentStatusRecords = new Map();
+  if (!assignments.length || !students.length) return records;
+  const sources = new Map<string, {ids:string[];userColumn:string;orderColumn:string}>();
+  for (const assignment of assignments) {
+    const source = assignmentSource(assignment);
+    const group = sources.get(source.table) || {...source,ids:[]};
+    group.ids.push(assignment.id);
+    sources.set(source.table,group);
+  }
+  await Promise.all([...sources].map(async ([table,source]) => {
+    const rows = await db.prepare(`SELECT * FROM ${table}
+      WHERE assignment_id IN (${source.ids.map(()=>'?').join(',')})
+        AND ${source.userColumn} IN (${students.map(()=>'?').join(',')})
+      ORDER BY ${source.orderColumn} DESC
+    `).all(...source.ids,...students);
+    for (const row of rows) {
+      const key = assignmentRecordKey(table,row.assignment_id,row[source.userColumn]);
+      const group = records.get(key) || [];
+      group.push(row);
+      records.set(key,group);
+    }
+  }));
+  return records;
+}
+async function studentAssignmentRecords(a: Assignment, studentId: string, records?: AssignmentStatusRecords): Promise<any[]> {
+  const source = assignmentSource(a);
+  if (records) return records.get(assignmentRecordKey(source.table,a.id,studentId)) || [];
+  return db.prepare(`SELECT * FROM ${source.table} WHERE assignment_id = ? AND ${source.userColumn} = ? ORDER BY ${source.orderColumn} DESC`).all(a.id,studentId);
+}
+async function populateStudentAssignmentStatus(a: Assignment, studentId: string, records?: AssignmentStatusRecords): Promise<void> {
   // If package assignment
   if (a.packageId) {
-    const pkgAttempts = (await db.prepare(`
-      SELECT * FROM package_attempts
-      WHERE assignment_id = ? AND user_id = ?
-      ORDER BY started_at DESC
-    `).all(a.id, studentId)) as any[];
+    const pkgAttempts = await studentAssignmentRecords(a,studentId,records);
 
     a.studentAttemptCount = pkgAttempts.length;
 
@@ -530,11 +567,7 @@ async function populateStudentAssignmentStatus(a: Assignment, studentId: string)
     }
   } else if (a.skill === 'speaking') {
     // Speaking assessment assignment
-    const assessment = (await db.prepare(`
-      SELECT * FROM speaking_assessments
-      WHERE assignment_id = ? AND student_id = ?
-      ORDER BY updated_at DESC LIMIT 1
-    `).get(a.id, studentId)) as any;
+    const assessment = (await studentAssignmentRecords(a,studentId,records))[0];
 
     if (!a.isReleased || new Date(a.releaseAt).getTime() > Date.now()) {
       a.studentStatus = 'not_started';
@@ -559,11 +592,7 @@ async function populateStudentAssignmentStatus(a: Assignment, studentId: string)
     return;
   } else if (a.skill === 'writing') {
     // Writing assignment
-    const attempts = (await db.prepare(`
-      SELECT * FROM writing_attempts
-      WHERE assignment_id = ? AND user_id = ?
-      ORDER BY started_at DESC
-    `).all(a.id, studentId)) as any[];
+    const attempts = await studentAssignmentRecords(a,studentId,records);
 
     a.studentAttemptCount = attempts.length;
 
@@ -588,20 +617,7 @@ async function populateStudentAssignmentStatus(a: Assignment, studentId: string)
     return;
   } else {
     // Reading or Listening single skill assignment
-    let attempts: any[] = [];
-    if (a.skill === 'listening') {
-      attempts = (await db.prepare(`
-        SELECT * FROM listening_attempts
-        WHERE assignment_id = ? AND user_id = ?
-        ORDER BY started_at DESC
-      `).all(a.id, studentId)) as any[];
-    } else {
-      attempts = (await db.prepare(`
-        SELECT * FROM reading_attempts
-        WHERE assignment_id = ? AND user_id = ?
-        ORDER BY started_at DESC
-      `).all(a.id, studentId)) as any[];
-    }
+    const attempts = await studentAssignmentRecords(a,studentId,records);
 
     a.studentAttemptCount = attempts.length;
 
@@ -1168,6 +1184,7 @@ export async function getClassOverview(classId: string, teacherId: string, isAdm
 
   // Get assignments
   const assignments = (await listClassAssignments(classId, teacherId, 'teacher'));
+  const statusRecords = await loadStudentAssignmentRecords(assignments,students.map(student=>student.id));
 
   const preTestAssign = assignments.find((a) => a.purpose === 'pre_test');
   const postTestAssign = assignments.find((a) => a.purpose === 'post_test');
@@ -1184,7 +1201,7 @@ export async function getClassOverview(classId: string, teacherId: string, isAdm
 
     for (const student of students) {
       const copy = { ...a };
-      (await populateStudentAssignmentStatus(copy, student.id));
+      (await populateStudentAssignmentStatus(copy, student.id, statusRecords));
       if (copy.studentStatus === 'submitted') {
         submitted++;
         if (copy.lastAttemptScore !== undefined) {
@@ -1234,7 +1251,7 @@ export async function getClassOverview(classId: string, teacherId: string, isAdm
 
     if (preTestAssign) {
       const p = { ...preTestAssign };
-      (await populateStudentAssignmentStatus(p, s.id));
+      (await populateStudentAssignmentStatus(p, s.id, statusRecords));
       if (p.studentStatus === 'submitted') {
         preStatus = 'completed';
         preTestCompletedCount++;
@@ -1248,7 +1265,7 @@ export async function getClassOverview(classId: string, teacherId: string, isAdm
         postStatus = 'awaiting_release';
       } else {
         const p = { ...postTestAssign };
-        (await populateStudentAssignmentStatus(p, s.id));
+        (await populateStudentAssignmentStatus(p, s.id, statusRecords));
         if (p.studentStatus === 'submitted') {
           postStatus = 'completed';
           postTestCompletedCount++;
@@ -1260,7 +1277,7 @@ export async function getClassOverview(classId: string, teacherId: string, isAdm
 
     for (const a of assignments) {
       const copy = { ...a };
-      (await populateStudentAssignmentStatus(copy, s.id));
+      (await populateStudentAssignmentStatus(copy, s.id, statusRecords));
       if (copy.studentStatus === 'submitted') completedCount++;
       if (copy.studentStatus === 'overdue') overdueCount++;
     }

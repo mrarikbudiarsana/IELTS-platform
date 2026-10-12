@@ -166,23 +166,24 @@ export async function getSpeakingSetVersionById(versionId: string): Promise<Spea
 export async function listSpeakingSets(role?: string, filter: { status?: string; includeArchived?: boolean } = {}): Promise<SpeakingSet[]> {
   const student = role === 'student';
   const status = student ? 'published' : filter.status;
-  const rows = await db.prepare(`SELECT * FROM speaking_sets WHERE ${status ? 'status = ?' : filter.includeArchived ? '1 = 1' : "status != 'archived'"} ORDER BY created_at DESC`).all(...(status ? [status] : []));
-  return (await Promise.all(rows.map(async (row) => {
-    const latestVersion = (await db
-      .prepare('SELECT id FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1')
-      .get(row.id)) as any;
+  const rows = await db.prepare(`SELECT s.*, v.id AS catalogue_version_id
+    FROM speaking_sets s LEFT JOIN speaking_set_versions v ON v.id = (
+      SELECT id FROM speaking_set_versions WHERE set_id = s.id ORDER BY version_number DESC LIMIT 1
+    ) WHERE ${status ? 's.status = ?' : filter.includeArchived ? '1 = 1' : "s.status != 'archived'"}
+    ORDER BY s.created_at DESC`).all(...(status ? [status] : []));
+  return rows.map(row => {
     return {
       id: row.id,
       title: row.title,
       currentVersionNumber: row.current_version_number,
       status: row.status as PublicationStatus,
-      latestVersionId: latestVersion ? latestVersion.id : '',
+      latestVersionId: row.catalogue_version_id || '',
       createdById: row.created_by_id,
       isFreeTier: Boolean(row.is_free_tier),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
-  })));
+  });
 }
 
 export async function updateSpeakingDraftVersion(params: {
@@ -700,12 +701,7 @@ export async function correctReleasedSpeakingScores(
   return (await getSpeakingAssessmentById(assessmentId, teacherId, 'teacher'))!;
 }
 
-export async function getSpeakingAssessmentById(
-  assessmentId: string,
-  requestingUserId: string,
-  requestingUserRole: string
-): Promise<SpeakingAssessment | null> {
-  const row = (await db.prepare(`
+const speakingAssessmentQuery = `
     SELECT sa.*,
       u_stud.full_name as student_name,
       u_stud.email as student_email,
@@ -719,10 +715,20 @@ export async function getSpeakingAssessmentById(
     LEFT JOIN classes c ON sa.class_id = c.id
     LEFT JOIN assignments a ON sa.assignment_id = a.id
     LEFT JOIN speaking_sets ss ON sa.set_id = ss.id
-    WHERE sa.id = ?
-  `).get(assessmentId)) as any;
+  `;
+
+export async function getSpeakingAssessmentById(
+  assessmentId: string,
+  requestingUserId: string,
+  requestingUserRole: string
+): Promise<SpeakingAssessment | null> {
+  const row = await db.prepare(speakingAssessmentQuery + ' WHERE sa.id = ?').get(assessmentId);
 
   if (!row) return null;
+  return mapSpeakingAssessmentRow(row, requestingUserId, requestingUserRole);
+}
+
+async function mapSpeakingAssessmentRow(row: any, requestingUserId: string, requestingUserRole: string, loadedCorrections?: any[]): Promise<SpeakingAssessment> {
 
   const isTeacherOrAdmin = requestingUserRole === 'teacher' || requestingUserRole === 'admin';
 
@@ -738,13 +744,13 @@ export async function getSpeakingAssessmentById(
   }
 
   // Fetch correction history
-  const corrections = (await db.prepare(`
+  const corrections = loadedCorrections === undefined ? (await db.prepare(`
     SELECT sc.*, u.full_name as teacher_name
     FROM speaking_score_corrections sc
     JOIN users u ON sc.teacher_id = u.id
     WHERE sc.assessment_id = ?
     ORDER BY sc.corrected_at DESC
-  `).all(assessmentId)) as any[];
+  `).all(row.id)) : loadedCorrections;
 
   const mappedCorrections: SpeakingScoreCorrection[] = corrections.map((c) => ({
     id: c.id,
@@ -803,6 +809,21 @@ export async function getSpeakingAssessmentById(
   return assessment;
 }
 
+async function mapSpeakingAssessmentRows(rows: any[], userId: string, role: string): Promise<SpeakingAssessment[]> {
+  if (!rows.length) return [];
+  const corrections = await db.prepare(`SELECT sc.*, u.full_name AS teacher_name
+    FROM speaking_score_corrections sc JOIN users u ON sc.teacher_id = u.id
+    WHERE sc.assessment_id IN (${rows.map(()=>'?').join(',')}) ORDER BY sc.corrected_at DESC
+  `).all(...rows.map(row=>row.id));
+  const byAssessment = new Map<string, any[]>();
+  for (const correction of corrections) {
+    const group = byAssessment.get(correction.assessment_id) || [];
+    group.push(correction);
+    byAssessment.set(correction.assessment_id,group);
+  }
+  return Promise.all(rows.map(row=>mapSpeakingAssessmentRow(row,userId,role,byAssessment.get(row.id)||[])));
+}
+
 export async function listTeacherAssessmentQueue(
   teacherId: string,
   filters?: {
@@ -812,22 +833,7 @@ export async function listTeacherAssessmentQueue(
   },
   isAdmin = false
 ): Promise<SpeakingAssessment[]> {
-  let query = `
-    SELECT sa.*,
-      u_stud.full_name as student_name,
-      u_stud.email as student_email,
-      u_teach.full_name as teacher_name,
-      c.title as class_title,
-      a.title as assignment_title,
-      ss.title as set_title
-    FROM speaking_assessments sa
-    JOIN users u_stud ON sa.student_id = u_stud.id
-    JOIN users u_teach ON sa.teacher_id = u_teach.id
-    LEFT JOIN classes c ON sa.class_id = c.id
-    LEFT JOIN assignments a ON sa.assignment_id = a.id
-    LEFT JOIN speaking_sets ss ON sa.set_id = ss.id
-    WHERE 1=1
-  `;
+  let query = speakingAssessmentQuery + ' WHERE 1=1';
   const params: any[] = [];
 
   if (!isAdmin) {
@@ -853,15 +859,14 @@ export async function listTeacherAssessmentQueue(
   query += ' ORDER BY sa.updated_at DESC';
 
   const rows = (await db.prepare(query).all(...params)) as any[];
-  return (await Promise.all(rows.map(async (row) => (await getSpeakingAssessmentById(row.id, teacherId, 'teacher'))!)));
+  return mapSpeakingAssessmentRows(rows,teacherId,isAdmin ? 'admin' : 'teacher');
 }
 
 export async function listStudentSpeakingAssessments(studentId: string): Promise<SpeakingAssessment[]> {
-  const rows = (await db.prepare(`
-    SELECT id FROM speaking_assessments
-    WHERE student_id = ? AND status = 'released'
-    ORDER BY session_date DESC
+  const rows = (await db.prepare(speakingAssessmentQuery + `
+    WHERE sa.student_id = ? AND sa.status = 'released'
+    ORDER BY sa.session_date DESC
   `).all(studentId)) as any[];
 
-  return (await Promise.all(rows.map(async (r) => (await getSpeakingAssessmentById(r.id, studentId, 'student'))!))).filter(Boolean);
+  return mapSpeakingAssessmentRows(rows,studentId,'student');
 }

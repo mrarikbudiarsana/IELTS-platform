@@ -324,6 +324,10 @@ export async function getWritingTaskById(taskId: string, userRole: 'student' | '
     .prepare('SELECT * FROM writing_task_versions WHERE task_id = ? ORDER BY version_number ASC')
     .all(taskId)) as any[];
 
+  return mapWritingTaskRow(row, versionRows, userRole);
+}
+
+function mapWritingTaskRow(row: any, versionRows: any[], userRole: 'student' | 'teacher' | 'admin'): WritingTask {
   const versions = versionRows.map((v) => mapVersionRow(v, userRole));
   const latestVersion = versions[versions.length - 1];
 
@@ -375,14 +379,24 @@ export async function listWritingTasks(filter: {
   }
 
   if (filter.testType) {
-    query += ' AND (test_type = ? OR test_type = "both")';
+    query += " AND (test_type = ? OR test_type = 'both')";
     params.push(filter.testType);
   }
 
   query += ' ORDER BY created_at DESC';
 
   const rows = (await db.prepare(query).all(...params)) as any[];
-  return (await Promise.all(rows.map(async (r) => (await getWritingTaskById(r.id, filter.userRole))!)));
+  if (!rows.length) return [];
+  const versions = await db.prepare(`SELECT * FROM writing_task_versions
+    WHERE task_id IN (${rows.map(()=>'?').join(',')}) ORDER BY version_number ASC
+  `).all(...rows.map(row=>row.id));
+  const byTask = new Map<string, any[]>();
+  for (const version of versions) {
+    const group = byTask.get(version.task_id) || [];
+    group.push(version);
+    byTask.set(version.task_id, group);
+  }
+  return rows.map(row=>mapWritingTaskRow(row,byTask.get(row.id)||[],filter.userRole));
 }
 
 // -------------------------------------------------------------
@@ -694,59 +708,56 @@ export async function createResponseRevision(params: {
  * Retrieves a full Writing Attempt by ID including responses and assessments.
  */
 export async function getWritingAttemptById(attemptId: string): Promise<WritingAttempt | null> {
-  const row = (await db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId)) as any;
-  if (!row) return null;
+  return (await loadWritingAttempts('wa.id = ?', [attemptId]))[0] || null;
+}
 
-  const user = (await db.prepare('SELECT full_name FROM users WHERE id = ?').get(row.user_id)) as any;
-
-  // Retrieve responses (latest version for each task number)
-  const task1ResponseRow = (await db
-    .prepare(
-      `SELECT * FROM writing_responses 
-       WHERE attempt_id = ? AND task_number = 1 
-       ORDER BY version DESC LIMIT 1`
-    )
-    .get(attemptId)) as any;
-
-  const task2ResponseRow = (await db
-    .prepare(
-      `SELECT * FROM writing_responses 
-       WHERE attempt_id = ? AND task_number = 2 
-       ORDER BY version DESC LIMIT 1`
-    )
-    .get(attemptId)) as any;
-
-  const task1Response = task1ResponseRow ? (await mapResponseRow(task1ResponseRow)) : undefined;
-  const task2Response = task2ResponseRow ? (await mapResponseRow(task2ResponseRow)) : undefined;
-
-  // Task titles
-  let task1Title: string | undefined;
-  let task2Title: string | undefined;
-  if (row.task1_id) {
-    const t = (await db.prepare('SELECT title FROM writing_tasks WHERE id = ?').get(row.task1_id)) as any;
-    if (t) task1Title = t.title;
+async function loadWritingAttempts(where: string, args: any[]): Promise<WritingAttempt[]> {
+  const rows = await db.prepare(`SELECT wa.*, u.full_name AS user_name,
+    t1.title AS task1_title, t2.title AS task2_title
+    FROM writing_attempts wa
+    LEFT JOIN users u ON u.id = wa.user_id
+    LEFT JOIN writing_tasks t1 ON t1.id = wa.task1_id
+    LEFT JOIN writing_tasks t2 ON t2.id = wa.task2_id
+    WHERE ${where} ORDER BY wa.started_at DESC
+  `).all(...args);
+  if (!rows.length) return [];
+  const responses = await db.prepare(`SELECT r.* FROM writing_responses r
+    WHERE r.attempt_id IN (${rows.map(()=>'?').join(',')})
+      AND r.version = (SELECT MAX(other.version) FROM writing_responses other
+        WHERE other.attempt_id = r.attempt_id AND other.task_number = r.task_number)
+    ORDER BY r.version DESC
+  `).all(...rows.map(row=>row.id));
+  const assessments = responses.length ? await db.prepare(`SELECT * FROM writing_assessments
+    WHERE response_id IN (${responses.map(()=>'?').join(',')}) ORDER BY created_at DESC, id DESC
+  `).all(...responses.map(response=>response.id)) : [];
+  const byResponse = new Map<string, any>();
+  for (const assessment of assessments) if (!byResponse.has(assessment.response_id)) byResponse.set(assessment.response_id,assessment);
+  const mappedResponses = new Map<string, WritingResponse>();
+  for (const response of responses) {
+    const key = `${response.attempt_id}:${response.task_number}`;
+    if (!mappedResponses.has(key)) mappedResponses.set(key, await mapResponseRow(response, byResponse.get(response.id) || null));
   }
-  if (row.task2_id) {
-    const t = (await db.prepare('SELECT title FROM writing_tasks WHERE id = ?').get(row.task2_id)) as any;
-    if (t) task2Title = t.title;
-  }
+  return rows.map(row=>mapWritingAttemptRow(row,mappedResponses));
+}
+
+function mapWritingAttemptRow(row: any, responses: Map<string, WritingResponse>): WritingAttempt {
 
   return {
     id: row.id,
     userId: row.user_id,
-    userName: user ? user.full_name : undefined,
+    userName: row.user_name || undefined,
     mode: row.mode,
     assignmentId: row.assignment_id || undefined,
     packageAttemptId: row.package_attempt_id || undefined,
     task1Id: row.task1_id || undefined,
     task1VersionId: row.task1_version_id || undefined,
-    task1Title,
+    task1Title: row.task1_title || undefined,
     task2Id: row.task2_id || undefined,
     task2VersionId: row.task2_version_id || undefined,
-    task2Title,
+    task2Title: row.task2_title || undefined,
     status: row.status,
-    task1Response,
-    task2Response,
+    task1Response: responses.get(`${row.id}:1`),
+    task2Response: responses.get(`${row.id}:2`),
     durationMinutes: row.duration_minutes,
     deadlineAt: row.deadline_at || undefined,
     task1Band: row.task1_band !== null && row.task1_band !== undefined ? row.task1_band : undefined,
@@ -766,11 +777,7 @@ export async function getWritingAttemptById(attemptId: string): Promise<WritingA
  * Retrieves all Writing attempts for a specific student.
  */
 export async function listUserWritingAttempts(userId: string): Promise<WritingAttempt[]> {
-  const rows = (await db
-    .prepare('SELECT id FROM writing_attempts WHERE user_id = ? ORDER BY started_at DESC')
-    .all(userId)) as any[];
-
-  return (await Promise.all(rows.map(async (r) => (await getWritingAttemptById(r.id))!))).filter(Boolean);
+  return loadWritingAttempts('wa.user_id = ?', [userId]);
 }
 
 /**
@@ -816,11 +823,11 @@ function mapVersionRow(row: any, userRole: 'student' | 'teacher' | 'admin'): Wri
   };
 }
 
-async function mapResponseRow(row: any): Promise<WritingResponse> {
+async function mapResponseRow(row: any, loadedAssessment?: any): Promise<WritingResponse> {
   // Check if AI assessment exists for this response
-  const assessmentRow = (await db
-    .prepare('SELECT * FROM writing_assessments WHERE response_id = ?')
-    .get(row.id)) as any;
+  const assessmentRow = loadedAssessment === undefined ? await db
+    .prepare('SELECT * FROM writing_assessments WHERE response_id = ? ORDER BY created_at DESC, id DESC LIMIT 1')
+    .get(row.id) : loadedAssessment;
 
   let aiAssessment = undefined;
   if (assessmentRow) {

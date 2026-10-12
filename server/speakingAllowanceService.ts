@@ -9,9 +9,9 @@ import { SpeakingAllowanceBalance, SpeakingAllowanceLedger } from '../shared/typ
 export async function getUserSpeakingAllowanceBalance(userId: string): Promise<SpeakingAllowanceBalance> {
   const rows = (await db
     .prepare(
-      `SELECT transaction_type, amount 
+      `SELECT transaction_type, SUM(CASE WHEN transaction_type IN ('reservation', 'consumption') THEN ABS(amount) ELSE amount END) AS amount
        FROM speaking_allowance_ledger 
-       WHERE user_id = ?`
+       WHERE user_id = ? GROUP BY transaction_type`
     )
     .all(userId)) as { transaction_type: string; amount: number }[];
 

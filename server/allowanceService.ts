@@ -8,9 +8,9 @@ import { WritingAllowanceBalance, WritingAllowanceLedger } from '../shared/types
 export async function getUserAllowanceBalance(userId: string): Promise<WritingAllowanceBalance> {
   const rows = (await db
     .prepare(
-      `SELECT transaction_type, amount 
+      `SELECT transaction_type, SUM(CASE WHEN transaction_type IN ('reservation', 'consumption') THEN ABS(amount) ELSE amount END) AS amount
        FROM writing_allowance_ledger 
-       WHERE user_id = ?`
+       WHERE user_id = ? GROUP BY transaction_type`
     )
     .all(userId)) as { transaction_type: string; amount: number }[];
 
