@@ -47,8 +47,9 @@ Import the GitHub repository as an existing project. Use the repository root
 - Functions directory: `netlify/functions`
 - Node: 22
 
-Netlify installs root dependencies before the build command. Remove any old
-dashboard base-directory override pointing to `client`.
+Netlify installs root dependencies before the build command. The explicit
+`base = "."` selects the repository root even if the dashboard previously used
+`client` as its base directory.
 
 Set these environment variables in Netlify's project settings:
 
