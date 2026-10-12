@@ -202,21 +202,19 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
         const params: any = {};
         if (filterType !== 'all') params.testType = filterType;
 
-        const res = await api.getTests(params);
+        const [res, attRes] = await Promise.all([
+          api.getTests(params),
+          isLoggedIn ? api.getAttempts() : Promise.resolve({ attempts: [] }),
+        ]);
         setReadingTests(res.tests);
-
-        if (isLoggedIn) {
-          const attRes = await api.getAttempts();
-          setReadingAttempts(attRes.attempts);
-        }
+        setReadingAttempts(attRes.attempts);
       } else if (selectedSkill === 'listening') {
-        const res = await api.getListeningTests({});
+        const [res, attRes] = await Promise.all([
+          api.getListeningTests({}),
+          isLoggedIn ? api.getListeningAttempts() : Promise.resolve({ attempts: [] }),
+        ]);
         setListeningTests(res.tests);
-
-        if (isLoggedIn) {
-          const attRes = await api.getListeningAttempts();
-          setListeningAttempts(attRes.attempts);
-        }
+        setListeningAttempts(attRes.attempts);
       } else if (selectedSkill === 'writing') {
         const res = await api.getWritingTasks();
         setWritingTasks(res.tasks);

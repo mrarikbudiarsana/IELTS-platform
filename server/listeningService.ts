@@ -1,4 +1,3 @@
-import { asyncFilter } from './asyncCollections';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import {
@@ -469,41 +468,40 @@ export async function listListeningTests(params: {
   isTeacherOrAdmin: boolean;
   category?: TestMode;
 }): Promise<ListeningTest[]> {
-  let query = 'SELECT * FROM listening_tests WHERE 1=1';
+  let query = `SELECT t.*, v.id AS catalogue_version_id, v.total_questions,
+    v.parts_json, v.question_groups_json
+    FROM listening_tests t
+    LEFT JOIN listening_test_versions v ON v.id = (
+      SELECT id FROM listening_test_versions WHERE test_id = t.id ORDER BY version_number DESC LIMIT 1
+    ) WHERE 1=1`;
   const args: any[] = [];
 
   if (!params.isTeacherOrAdmin) {
-    query += " AND status = 'published'";
+    query += ` AND t.status = 'published' AND NOT EXISTS (
+      SELECT 1 FROM assignments a
+      LEFT JOIN test_packages tp ON a.package_id = tp.id
+      WHERE a.purpose = 'post_test'
+        AND (a.is_released = 0 OR a.release_at > datetime('now'))
+        AND (a.test_id = t.id OR tp.listening_test_id = t.id)
+    )`;
   }
 
   if (params.category) {
-    query += ' AND category = ?';
+    query += ' AND t.category = ?';
     args.push(params.category);
   }
 
-  query += ' ORDER BY created_at DESC';
+  query += ' ORDER BY t.created_at DESC';
 
   const rows = (await db.prepare(query).all(...args)) as any[];
 
-  const tests = (await Promise.all((await asyncFilter(rows, async (row) => {
-      if (params.isTeacherOrAdmin) return true;
-      // Filter out scratch automated test titles with epoch timestamps
-      if (/\b\d{10,}\b/.test(row.title)) return false;
-      // Protected post-test check: hide if reserved in an unreleased post-test
-      const isReserved = (await db.prepare(`
-        SELECT 1 FROM assignments a
-        LEFT JOIN test_packages tp ON a.package_id = tp.id
-        WHERE a.purpose = 'post_test'
-          AND (a.is_released = 0 OR a.release_at > datetime('now'))
-          AND (a.test_id = ? OR tp.listening_test_id = ?)
-        LIMIT 1
-      `).get(row.id, row.id));
-      return !isReserved;
-    }))
-    .map(async (row) => {
-      const latestVersion = (await db
-        .prepare('SELECT * FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-        .get(row.id)) as any;
+  const tests = rows
+    .filter(row => params.isTeacherOrAdmin || !/\b\d{10,}\b/.test(row.title))
+    .map(row => {
+      const latestVersion = row.catalogue_version_id ? {
+        id: row.catalogue_version_id, total_questions: row.total_questions,
+        parts_json: row.parts_json, question_groups_json: row.question_groups_json,
+      } : null;
 
       let partCount = 0;
       let questionGroupsSummary: any[] = [];
@@ -542,7 +540,7 @@ export async function listListeningTests(params: {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
-    })));
+    });
 
   return sortTestsChronological(tests);
 }
