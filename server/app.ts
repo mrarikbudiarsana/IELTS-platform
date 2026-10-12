@@ -1,4 +1,6 @@
 import './environment';
+import { isRetiredDemoAccount } from './retiredDemoAccounts';
+import { extractReadingPdf, PdfImportError } from './readingPdfImportService';
 import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
@@ -191,6 +193,11 @@ app.post('/api/auth/register', async (req, res) => {
     return;
   }
 
+  if (isRetiredDemoAccount(email)) {
+    res.status(400).json({ error: 'This email is reserved. Register using your own email address.' });
+    return;
+  }
+
   const existing = (await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim()));
   if (existing) {
     res.status(409).json({ error: 'An account with this email already exists' });
@@ -235,6 +242,11 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password are required' });
+    return;
+  }
+
+  if (isRetiredDemoAccount(email)) {
+    res.status(401).json({ error: 'Demo accounts have been retired. Sign in with your own account.' });
     return;
   }
 
@@ -297,6 +309,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     return;
   }
 
+  if (isRetiredDemoAccount(email)) {
+    res.json({ message: 'If an account exists, a recovery token has been generated.' });
+    return;
+  }
+
   const row = (await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase().trim())) as any;
   if (!row) {
     // Return generic success to prevent email enumeration
@@ -331,7 +348,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     .prepare('SELECT * FROM users WHERE reset_token = ? AND reset_token_expires > datetime(\'now\')')
     .get(resetToken)) as any;
 
-  if (!row) {
+  if (!row || isRetiredDemoAccount(row.email)) {
     res.status(400).json({ error: 'Invalid or expired password reset token' });
     return;
   }
@@ -426,6 +443,26 @@ app.get('/api/reading/tests/:id', authMiddleware, async (req: AuthenticatedReque
   }
 
   res.json({ test, version: returnedVersion });
+});
+
+// Extraction returns a review payload only; it never creates or publishes a test.
+const activePdfImports = new Set<string>();
+app.post('/api/reading/import-pdf', authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
+  const userId = req.user!.id;
+  if (activePdfImports.has(userId)) {
+    res.status(429).json({ error: 'A PDF import is already running for your account. Please wait.' });
+    return;
+  }
+  activePdfImports.add(userId);
+  try {
+    res.json(await extractReadingPdf(req.body));
+  } catch (error) {
+    res.status(error instanceof PdfImportError ? error.status : 500).json({
+      error: error instanceof PdfImportError ? error.message : 'PDF import failed. Please try again.',
+    });
+  } finally {
+    activePdfImports.delete(userId);
+  }
 });
 
 // Create new draft test (Teacher/Admin only)
@@ -597,7 +634,7 @@ app.get('/api/attempts', authMiddleware, async (req: AuthenticatedRequest, res) 
 // List all users (Admin only)
 app.get('/api/admin/users', authMiddleware, requireRole('admin'), async (_req, res) => {
   const rows = (await db.prepare('SELECT id, email, full_name, role, test_type_preference, created_at FROM users ORDER BY created_at DESC').all());
-  res.json({ users: rows });
+  res.json({ users: rows.filter((row: any) => !isRetiredDemoAccount(row.email)) });
 });
 
 // Promote/modify user role (Admin only)

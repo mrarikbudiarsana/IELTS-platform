@@ -30,16 +30,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onNavigate,
   onOpenLogin,
-  onOpenElevate,
 }) => {
-  const { user, logout, quickLoginAs } = useAuth();
+  const { user, logout } = useAuth();
   const [allowanceBalance, setAllowanceBalance] = useState<number | null>(null);
   const [speakingBalance, setSpeakingBalance] = useState<number | null>(null);
 
   // UI state
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [devToolsOpen, setDevToolsOpen] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -395,67 +393,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
       </header>
 
-      {/* DISCREET DEVELOPER / REVIEWER SWITCHER TOOLBAR (Keeps student UI clean) */}
-      <div className="fixed bottom-3 right-3 z-30">
-        <div className="relative">
-          {devToolsOpen ? (
-            <div className="bg-slate-900 text-white rounded-xl p-3 shadow-xl border border-slate-700 w-56 text-xs space-y-2 animate-in fade-in duration-100">
-              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-                <span className="font-semibold text-slate-300">Reviewer Test Switcher</span>
-                <button
-                  onClick={() => setDevToolsOpen(false)}
-                  className="text-slate-400 hover:text-white"
-                >
-                  ✕
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Switch accounts quickly for testing:
-              </p>
-              <div className="flex flex-col gap-1.5 pt-1">
-                <button
-                  onClick={() => {
-                    quickLoginAs('student');
-                    setDevToolsOpen(false);
-                  }}
-                  className="px-2.5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 font-medium text-white text-left transition-colors"
-                >
-                  👤 Switch to Demo Student
-                </button>
-                <button
-                  onClick={() => {
-                    quickLoginAs('teacher');
-                    setDevToolsOpen(false);
-                  }}
-                  className="px-2.5 py-1.5 rounded bg-amber-600 hover:bg-amber-500 font-medium text-white text-left transition-colors"
-                >
-                  🎓 Switch to Demo Teacher
-                </button>
-                {user?.role === 'student' && (
-                  <button
-                    onClick={() => {
-                      onOpenElevate();
-                      setDevToolsOpen(false);
-                    }}
-                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-left border border-slate-700 transition-colors"
-                  >
-                    🔑 Elevate via Secret Key
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setDevToolsOpen(true)}
-              className="bg-slate-900/80 hover:bg-slate-900 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-full text-[11px] font-medium shadow-md border border-slate-700 flex items-center gap-1.5 backdrop-blur-xs transition-colors"
-              title="Open Reviewer / Developer Testing Switcher"
-            >
-              <span>🛠️</span>
-              <span className="hidden sm:inline">Reviewer Switcher</span>
-            </button>
-          )}
-        </div>
-      </div>
     </>
   );
 };

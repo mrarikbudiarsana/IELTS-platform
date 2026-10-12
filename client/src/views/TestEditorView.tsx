@@ -22,6 +22,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { CloudinaryMediaUploader } from '../components/CloudinaryMediaUploader';
+import { ReadingPdfImporter } from '../components/ReadingPdfImporter';
 
 
 interface TestEditorViewProps {
@@ -130,9 +131,15 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
         }
         seen.add(q.questionNumber);
 
-        if (!q.answerKey || (typeof q.answerKey === 'string' && !q.answerKey.trim())) {
+        if (!q.answerKey || (typeof q.answerKey === 'string' && !q.answerKey.trim()) || (Array.isArray(q.answerKey) && (!q.answerKey.length || q.answerKey.some(answer => !answer.trim())))) {
           errors.push(`Question ${q.questionNumber} is missing an answer key`);
         }
+      }
+    }
+
+    for (const group of questionGroups) {
+      if (group.questionType === 'diagram_completion' && !group.diagramData?.imageUrl) {
+        errors.push(`${group.title}: Upload the original diagram image before publishing`);
       }
     }
 
@@ -170,8 +177,10 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
         setSavedSuccess('Test created successfully!');
         setTimeout(() => onBack(), 1200);
       }
+      return true;
     } catch (err: any) {
       alert(`Save error: ${err.message}`);
+      return false;
     } finally {
       setSaving(false);
       setTimeout(() => setSavedSuccess(null), 3000);
@@ -185,7 +194,7 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
       return;
     }
     try {
-      await handleSave();
+      if (!await handleSave()) return;
       if (testId && versionId) {
         await api.publishVersion(testId, versionId);
         alert('Test validated and published successfully!');
@@ -293,6 +302,14 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
           <span>{savedSuccess}</span>
         </div>
       )}
+
+      <ReadingPdfImporter disabled={saving} onApply={result => {
+        setTitle(result.title);
+        setTestType(result.testType);
+        setPassages(result.passages);
+        setQuestionGroups(result.questionGroups);
+        setSavedSuccess(null);
+      }} />
 
       {/* VALIDATION PRE-CHECK BANNER */}
       <div className="mb-8 p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
@@ -635,6 +652,23 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
             </div>
 
             {/* Diagram Image Uploader for Diagram Label Completion */}
+            {group.contentWithGaps !== undefined && (
+              <label className="block text-xs font-bold text-slate-600">Summary / Notes (use [question number] for blanks)
+                <textarea rows={5} value={group.contentWithGaps} className="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm font-normal"
+                  onChange={e => setQuestionGroups(questionGroups.map((item, i) => i === gIdx ? { ...item, contentWithGaps: e.target.value } : item))} />
+              </label>
+            )}
+            {group.optionsList && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-600">Group Options</p>
+                {group.optionsList.map((option, optionIndex) => <label key={optionIndex} className="flex items-center gap-2 text-xs font-bold">
+                  {option.key}
+                  <input value={option.text} className="flex-1 rounded-md border border-slate-300 p-2 font-normal" onChange={e => {
+                    setQuestionGroups(questionGroups.map((item, i) => i === gIdx ? { ...item, optionsList: item.optionsList!.map((entry, j) => j === optionIndex ? { ...entry, text: e.target.value } : entry) } : item));
+                  }} />
+                </label>)}
+              </div>
+            )}
             {group.questionType === 'diagram_completion' && (
               <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg">
                 <CloudinaryMediaUploader
@@ -702,12 +736,23 @@ export const TestEditorView: React.FC<TestEditorViewProps> = ({
                       placeholder="Answer key (e.g. TRUE / B / solar)"
                       onChange={(e) => {
                         const updated = [...questionGroups];
-                        updated[gIdx].questions[qIdx].answerKey = e.target.value;
+                        updated[gIdx].questions[qIdx].answerKey = Array.isArray(q.answerKey) || group.questionType === 'multiple_choice_multi'
+                          ? e.target.value.split(',').map(value => value.trim()).filter(Boolean)
+                          : e.target.value;
                         setQuestionGroups(updated);
                       }}
                       className="w-48 px-2.5 py-1 border border-emerald-300 bg-emerald-50/40 rounded text-xs font-bold text-emerald-900"
                     />
                   </div>
+
+                  {q.options && <div className="space-y-1">
+                    {q.options.map((option, optionIndex) => <label key={optionIndex} className="flex items-center gap-2 text-xs font-bold">
+                      {option.key}
+                      <input value={option.text} className="flex-1 rounded border border-slate-200 px-2 py-1 font-normal" onChange={e => {
+                        setQuestionGroups(questionGroups.map((item, i) => i === gIdx ? { ...item, questions: item.questions.map((question, j) => j === qIdx ? { ...question, options: question.options!.map((entry, k) => k === optionIndex ? { ...entry, text: e.target.value } : entry) } : question) } : item));
+                      }} />
+                    </label>)}
+                  </div>}
 
                   <div className="flex gap-2">
                     <input

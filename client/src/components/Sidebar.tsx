@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapse,
 }) => {
-  const { user, logout, quickLoginAs } = useAuth();
+  const { user, logout } = useAuth();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -316,7 +316,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Upgrade to Pro Pill Button */}
         {!isCollapsed ? (
           <button
-            onClick={onOpenElevate}
+            onClick={() => onNavigate('account')}
             className="w-full py-2 px-3 rounded-full bg-[#0B4A75] hover:bg-[#0D588B] text-white text-xs font-semibold border border-[#14669E] shadow-2xs transition-all flex items-center justify-center gap-1.5 group"
           >
             <Sparkles className="w-3.5 h-3.5 text-[#FC9F23] group-hover:rotate-12 transition-transform" />
@@ -324,7 +324,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         ) : (
           <button
-            onClick={onOpenElevate}
+            onClick={() => onNavigate('account')}
             className="w-full p-2 rounded-full bg-[#0B4A75] hover:bg-[#0D588B] text-[#FC9F23] flex items-center justify-center border border-[#14669E]"
             title="Upgrade to Pro"
           >
@@ -413,41 +413,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>Account & Membership</span>
               </button>
 
-              <button
-                onClick={() => {
-                  onOpenElevate();
-                  setProfileMenuOpen(false);
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#FC9F23]" />
-                <span>Role & Tier Settings</span>
-              </button>
-
-              <div className="my-1 border-t border-[#182C40]" />
-
-              {/* Dev quick switcher */}
-              <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400">
-                Quick Role Switch
-              </div>
-              <button
-                onClick={() => {
-                  quickLoginAs('student');
-                  setProfileMenuOpen(false);
-                }}
-                className="w-full text-left px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 text-[11px]"
-              >
-                Switch to Student
-              </button>
-              <button
-                onClick={() => {
-                  quickLoginAs('teacher');
-                  setProfileMenuOpen(false);
-                }}
-                className="w-full text-left px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 text-[11px]"
-              >
-                Switch to Teacher
-              </button>
+              {user.role === 'admin' && (
+                <button
+                  onClick={() => {
+                    onOpenElevate();
+                    setProfileMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#FC9F23]" />
+                  <span>Role Settings</span>
+                </button>
+              )}
 
               <div className="my-1 border-t border-[#182C40]" />
 

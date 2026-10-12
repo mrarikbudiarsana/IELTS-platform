@@ -213,35 +213,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                 {loading ? 'Authenticating...' : 'Sign In'}
               </button>
 
-              <div className="pt-3 border-t border-slate-100 space-y-2">
-                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 text-center">
-                  Quick Demo Access
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('student@ieltsplatform.test');
-                      setPassword('Password123!');
-                      login('student@ieltsplatform.test', 'Password123!').then(onClose);
-                    }}
-                    className="py-2 px-3 rounded-xl bg-[#EBF4F9] hover:bg-[#D8EAF4] text-[#084F7D] font-semibold text-xs transition-colors text-center"
-                  >
-                    Demo Student (Arik)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('arik@ieltsplatform.test');
-                      setPassword('Password123!');
-                      login('arik@ieltsplatform.test', 'Password123!').then(onClose);
-                    }}
-                    className="py-2 px-3 rounded-xl bg-[#FAF9F5] hover:bg-[#EFECE4] text-slate-700 border border-slate-200 font-bold text-xs transition-colors text-center"
-                  >
-                    Demo Teacher
-                  </button>
-                </div>
-              </div>
             </form>
           )}
 

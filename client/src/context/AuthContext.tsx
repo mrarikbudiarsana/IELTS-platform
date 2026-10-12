@@ -9,7 +9,6 @@ interface AuthContextType {
   register: (data: any) => Promise<void>;
   logout: () => void;
   elevateRole: (secretKey?: string, targetRole?: 'teacher' | 'admin') => Promise<void>;
-  quickLoginAs: (role: 'student' | 'teacher') => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (data: { targetBand?: number | null; testDate?: string | null; testTypePreference?: string }) => Promise<void>;
 }
@@ -67,14 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(res.user);
   };
 
-  const quickLoginAs = async (role: 'student' | 'teacher') => {
-    if (role === 'teacher') {
-      await login('arik@ieltsplatform.test', 'Password123!');
-    } else {
-      await login('student@ieltsplatform.test', 'Password123!');
-    }
-  };
-
   const updateProfile = async (data: { targetBand?: number | null; testDate?: string | null; testTypePreference?: string }) => {
     const res = await api.updateProfile(data);
     setUser(res.user);
@@ -89,7 +80,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         elevateRole,
-        quickLoginAs,
         refreshUser,
         updateProfile,
       }}

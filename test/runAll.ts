@@ -3,6 +3,9 @@ import path from 'path';
 
 console.log('Running complete IELTS Test Verification Suite (Reading + Listening)...\n');
 
+const pdfImportTests = spawnSync(process.execPath, ['--import', 'tsx', '--test', 'test/readingPdfImport.test.ts', 'test/retiredDemoAccounts.test.ts'], { stdio: 'inherit' });
+if (pdfImportTests.status !== 0) process.exit(pdfImportTests.status || 1);
+
 const res1 = spawnSync('npx', ['tsx', 'test/runTests.ts'], { stdio: 'inherit', shell: true });
 if (res1.status !== 0) {
   process.exit(res1.status || 1);

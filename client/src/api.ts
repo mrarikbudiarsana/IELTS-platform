@@ -1,3 +1,5 @@
+import type { ReadingPdfImportResult } from '../../shared/readingPdfImport';
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export function getStoredToken(): string | null {
@@ -48,6 +50,9 @@ export const api = {
   elevate: (body: { secretKey?: string; targetRole: string }) => request<{ message: string; user: any; token: string }>('/auth/elevate', { method: 'POST', body: JSON.stringify(body) }),
 
   // Reading Tests
+  importReadingPdf: (body: { pdfBase64: string; focus: string }) => request<ReadingPdfImportResult>('/reading/import-pdf', {
+    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
+  }),
   getTests: (params?: { testType?: string; category?: string }) => {
     const q = new URLSearchParams(params as any).toString();
     return request<{ tests: any[] }>(`/reading/tests${q ? `?${q}` : ''}`);

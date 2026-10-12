@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Shield, KeyRound, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Shield, AlertCircle, X } from 'lucide-react';
 
 interface ElevateModalProps {
   isOpen: boolean;
@@ -8,20 +8,19 @@ interface ElevateModalProps {
 }
 
 export const ElevateModal: React.FC<ElevateModalProps> = ({ isOpen, onClose }) => {
-  const { elevateRole } = useAuth();
-  const [secretKey, setSecretKey] = useState('arik-teacher-grant-2026');
+  const { user, elevateRole } = useAuth();
   const [role, setRole] = useState<'teacher' | 'admin'>('teacher');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  if (!isOpen) return null;
+  if (!isOpen || user?.role !== 'admin') return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      await elevateRole(secretKey, role);
+      await elevateRole(undefined, role);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Privilege elevation failed');
@@ -36,7 +35,7 @@ export const ElevateModal: React.FC<ElevateModalProps> = ({ isOpen, onClose }) =
         <div className="flex items-center justify-between px-6 py-4 bg-amber-950 text-amber-200">
           <div className="font-bold text-base flex items-center gap-2">
             <Shield className="w-5 h-5 text-amber-400" />
-            Protected Teacher Elevation
+            Role Settings
           </div>
           <button onClick={onClose} className="text-amber-400 hover:text-white p-1">
             <X className="w-5 h-5" />
@@ -45,7 +44,7 @@ export const ElevateModal: React.FC<ElevateModalProps> = ({ isOpen, onClose }) =
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <p className="text-xs text-slate-600 leading-relaxed">
-            Per the system blueprint, public accounts cannot self-assign teacher or administrative roles. Enter the teacher bootstrap key to authorize privileged content authoring.
+            Choose the role for your administrator account.
           </p>
 
           {error && (
@@ -67,26 +66,6 @@ export const ElevateModal: React.FC<ElevateModalProps> = ({ isOpen, onClose }) =
               <option value="teacher">Teacher (Author Tests & Review Submissions)</option>
               <option value="admin">Administrator (Full Access & User Management)</option>
             </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-              Security Setup Key
-            </label>
-            <div className="relative">
-              <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-              <input
-                type="text"
-                required
-                value={secretKey}
-                onChange={(e) => setSecretKey(e.target.value)}
-                placeholder="Enter teacher bootstrap key"
-                className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm font-mono"
-              />
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1">
-              Default pilot key: <code className="text-amber-700 font-mono">arik-teacher-grant-2026</code>
-            </div>
           </div>
 
           <button

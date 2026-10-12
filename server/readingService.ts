@@ -60,6 +60,10 @@ export function validateTestVersion(
       errors.push(`Question group "${group.title}": Flow-chart completion requires flowchart steps`);
     }
 
+    if (group.questionType === 'diagram_completion' && !group.diagramData?.imageUrl?.trim()) {
+      errors.push(`Question group "${group.title}": Diagram completion requires the original diagram image`);
+    }
+
     for (const q of group.questions) {
       totalQuestionsCount++;
       if (seenQuestionNumbers.has(q.questionNumber)) {
@@ -71,7 +75,7 @@ export function validateTestVersion(
         q.answerKey === undefined ||
         q.answerKey === null ||
         (typeof q.answerKey === 'string' && q.answerKey.trim() === '') ||
-        (Array.isArray(q.answerKey) && q.answerKey.length === 0)
+        (Array.isArray(q.answerKey) && (q.answerKey.length === 0 || q.answerKey.some(answer => !answer.trim())))
       ) {
         errors.push(`Question ${q.questionNumber}: Missing answer key`);
       }

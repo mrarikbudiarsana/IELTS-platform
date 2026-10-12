@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { db } from './db';
 import { User, UserRole } from '../shared/types';
+import { isRetiredDemoAccount } from './retiredDemoAccounts';
 
 if (process.env.NETLIFY && (!process.env.JWT_SECRET || !process.env.TEACHER_SETUP_SECRET)) {
   throw new Error('Set JWT_SECRET and TEACHER_SETUP_SECRET in Netlify environment variables.');
@@ -65,7 +66,7 @@ export async function authMiddleware(req: AuthenticatedRequest, res: Response, n
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
     const row = (await db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.id));
-    if (!row) {
+    if (!row || isRetiredDemoAccount(row.email)) {
       res.status(401).json({ error: 'User not found' });
       return;
     }

@@ -9,6 +9,7 @@
     "client": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
     "test": "tsx test/runIsolated.ts",
+    "test:pdf-import": "node --import tsx --test test/readingPdfImport.test.ts",
     "test:legacy": "tsx test/runAll.ts",
     "typecheck:server": "tsc -p tsconfig.server.json",
     "db:check": "tsx scripts/checkDatabase.ts",
@@ -38,6 +39,7 @@
     "dotenv": "^18.0.7",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.23.1",
     "serverless-http": "^4.0.0",
     "uuid": "^11.1.1"
