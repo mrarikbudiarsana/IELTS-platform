@@ -8,6 +8,7 @@ import {
   WritingTaskSubtype,
 } from '../types';
 import { CloudinaryMediaUploader } from '../components/CloudinaryMediaUploader';
+import { EditorTextImporter } from '../components/EditorTextImporter';
 
 export const TeacherWritingEditorView: React.FC = () => {
   const [tasks, setTasks] = useState<WritingTask[]>([]);
@@ -329,6 +330,15 @@ export const TeacherWritingEditorView: React.FC = () => {
               </div>
 
               {/* Form Fields */}
+              <EditorTextImporter skill="writing" disabled={loading || (!!selectedTask && !isDraft)} onApply={task => {
+                setSelectedTask(null);
+                setIsEditing(true);
+                setFormData({ ...task, subtype: task.subtype || 'general_essay',
+                  teacherVisualDescription: task.teacherVisualDescription || '',
+                  teacherAssessmentGuidance: task.teacherAssessmentGuidance || '',
+                  modelResponse: task.modelResponse || '', images: [] });
+                setSuccessMsg('Imported task applied. Review the content and any visual before saving.');
+              }} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Title */}
                 <div className="md:col-span-3">

@@ -1,4 +1,5 @@
 import type { ReadingPdfImportResult } from '../../shared/readingPdfImport';
+import type { TextImportResults, TextImportSkill } from '../../shared/textImport';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -40,6 +41,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  importEditorText: <K extends TextImportSkill>(skill: K, body: { text: string; focus: string }) => request<TextImportResults[K]>(`/${skill}/import-text`, {
+    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
+  }),
   // Auth
   register: (body: any) => request<{ user: any; token: string }>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: any) => request<{ user: any; token: string }>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
@@ -50,6 +54,9 @@ export const api = {
   elevate: (body: { secretKey?: string; targetRole: string }) => request<{ message: string; user: any; token: string }>('/auth/elevate', { method: 'POST', body: JSON.stringify(body) }),
 
   // Reading Tests
+  importReadingText: (body: { text: string; focus: string }) => request<ReadingPdfImportResult>('/reading/import-text', {
+    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
+  }),
   importReadingPdf: (body: { pdfBase64: string; focus: string }) => request<ReadingPdfImportResult>('/reading/import-pdf', {
     method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
   }),

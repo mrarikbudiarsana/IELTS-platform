@@ -1,6 +1,7 @@
 import './environment';
 import { isRetiredDemoAccount } from './retiredDemoAccounts';
-import { extractReadingPdf, PdfImportError } from './readingPdfImportService';
+import { extractReadingPdf, extractReadingText, PdfImportError } from './readingPdfImportService';
+import { extractEditorText } from './textImportService';
 import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
@@ -447,18 +448,21 @@ app.get('/api/reading/tests/:id', authMiddleware, async (req: AuthenticatedReque
 
 // Extraction returns a review payload only; it never creates or publishes a test.
 const activePdfImports = new Set<string>();
-app.post('/api/reading/import-pdf', authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
+app.post(['/api/reading/import-pdf', '/api/reading/import-text', '/api/listening/import-text', '/api/writing/import-text'], authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   if (activePdfImports.has(userId)) {
-    res.status(429).json({ error: 'A PDF import is already running for your account. Please wait.' });
+    res.status(429).json({ error: 'A test import is already running for your account. Please wait.' });
     return;
   }
   activePdfImports.add(userId);
   try {
-    res.json(await extractReadingPdf(req.body));
+    const result = req.path.startsWith('/api/listening/') ? await extractEditorText('listening', req.body)
+      : req.path.startsWith('/api/writing/') ? await extractEditorText('writing', req.body)
+      : req.path.endsWith('/import-text') ? await extractReadingText(req.body) : await extractReadingPdf(req.body);
+    res.json(result);
   } catch (error) {
     res.status(error instanceof PdfImportError ? error.status : 500).json({
-      error: error instanceof PdfImportError ? error.message : 'PDF import failed. Please try again.',
+      error: error instanceof PdfImportError ? error.message : 'Test import failed. Please try again.',
     });
   } finally {
     activePdfImports.delete(userId);

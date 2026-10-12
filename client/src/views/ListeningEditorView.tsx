@@ -19,6 +19,7 @@ import {
   ListOrdered,
 } from 'lucide-react';
 import { CloudinaryMediaUploader } from '../components/CloudinaryMediaUploader';
+import { EditorTextImporter } from '../components/EditorTextImporter';
 
 
 interface ListeningEditorViewProps {
@@ -366,6 +367,14 @@ export const ListeningEditorView: React.FC<ListeningEditorViewProps> = ({
       )}
 
       {/* METADATA FORM */}
+      <EditorTextImporter skill="listening" disabled={loading || isPublished} onApply={result => {
+        setTitle(result.title);
+        setParts(result.parts);
+        setQuestionGroups(result.questionGroups);
+        setActivePartIdx(0);
+        setValidationErrors(result.warnings);
+        setSavedSuccess(false);
+      }} />
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xs mb-6">
         <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
           <Music className="w-4 h-4 text-indigo-600" />

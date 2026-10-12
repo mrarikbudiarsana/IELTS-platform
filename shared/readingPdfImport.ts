@@ -2,6 +2,7 @@ import type { ReadingPassage, QuestionGroup, ReadingTestType } from './types';
 
 export const PDF_IMPORT_MAX_BYTES = 3 * 1024 * 1024;
 export const PDF_IMPORT_MAX_PAGES = 20;
+export const TEXT_IMPORT_MAX_CHARS = 60000;
 export interface ReadingPdfImportResult {
   title: string;
   testType: ReadingTestType;

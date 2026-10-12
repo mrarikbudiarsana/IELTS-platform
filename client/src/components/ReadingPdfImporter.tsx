@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Sparkles, LoaderCircle, X } from 'lucide-react';
 import { api } from '../api';
 import { QuestionRenderer } from './QuestionRenderer';
-import { parsePdfPages, PDF_IMPORT_MAX_BYTES, type ReadingPdfImportResult } from '../../../shared/readingPdfImport';
+import { parsePdfPages, PDF_IMPORT_MAX_BYTES, TEXT_IMPORT_MAX_CHARS, type ReadingPdfImportResult } from '../../../shared/readingPdfImport';
 
 export function ReadingPdfImporter({ onApply, disabled }: {
   onApply: (result: ReadingPdfImportResult) => void;
@@ -10,6 +10,8 @@ export function ReadingPdfImporter({ onApply, disabled }: {
 }) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [source, setSource] = useState<'pdf' | 'text'>('text');
+  const [sourceText, setSourceText] = useState('');
   const [pages, setPages] = useState('');
   const [focus, setFocus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -19,9 +21,15 @@ export function ReadingPdfImporter({ onApply, disabled }: {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   const extract = async () => {
-    if (!file || busy) return;
+    if (busy || disabled || (source === 'pdf' ? !file : !sourceText.trim())) return;
     setBusy(true); setError(''); setResult(null);
     try {
+      if (source === 'text') {
+        const imported = await api.importReadingText({ text: sourceText, focus });
+        if (mounted.current) setResult(imported);
+        return;
+      }
+      if (!file) return;
       if (!file.name.toLowerCase().endsWith('.pdf')) throw new Error('Select a PDF file.');
       if (file.size > 30 * 1024 * 1024) throw new Error('Use a PDF smaller than 30 MB.');
       const { PDFDocument } = await import('pdf-lib');
@@ -39,7 +47,7 @@ export function ReadingPdfImporter({ onApply, disabled }: {
       const imported = await api.importReadingPdf({ pdfBase64: btoa(binary), focus });
       if (mounted.current) setResult(imported);
     } catch (err) {
-      if (mounted.current) setError(err instanceof Error ? err.message : 'PDF import failed. Please retry.');
+      if (mounted.current) setError(err instanceof Error ? err.message : 'Reading import failed. Please retry.');
     } finally { if (mounted.current) setBusy(false); }
   };
 
@@ -48,11 +56,25 @@ export function ReadingPdfImporter({ onApply, disabled }: {
     <section className="mb-6 rounded-2xl border border-indigo-200 bg-white p-4 shadow-2xs">
       <button type="button" disabled={busy || disabled} onClick={() => setOpen(!open)}
         aria-expanded={open} className="flex items-center gap-2 font-bold text-sm text-indigo-700 disabled:opacity-50">
-        <Sparkles className="w-4 h-4" /> Import PDF with AI
+        <Sparkles className="w-4 h-4" /> Import text or PDF with AI
       </button>
       {open && <div className="mt-4 space-y-4">
-        <p className="text-sm text-slate-600">Upload one Reading test, including its answer key if available. Selected pages are sent to OpenAI for extraction. Review the result before saving a draft.</p>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex gap-2" role="group" aria-label="Import source">
+          {(['text', 'pdf'] as const).map(value => <button key={value} type="button" disabled={busy}
+            aria-pressed={source === value} onClick={() => { setSource(value); setResult(null); setError(''); }}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold ${source === value ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'} disabled:opacity-50`}>
+            {value === 'text' ? 'Paste text' : 'Upload PDF'}
+          </button>)}
+        </div>
+        <p className="text-sm text-slate-600">{source === 'text'
+          ? 'Paste one Reading test with passages, questions, options and its answer key if available. Text is sent to OpenAI using a lower-cost model by default, without PDF page images. AI formats the supplied questions into an editable test; missing answers are flagged for review.'
+          : 'Upload one Reading test, including its answer key if available. Selected pages are sent to OpenAI for extraction. Review the result before saving a draft.'}</p>
+        {source === 'text' ? <label className="block space-y-1 text-sm font-medium text-slate-700">Reading test text
+          <textarea value={sourceText} maxLength={TEXT_IMPORT_MAX_CHARS} rows={12} disabled={busy}
+            onChange={e => { setSourceText(e.target.value); setResult(null); setError(''); }}
+            placeholder="Paste the passage, numbered questions, answer options and answer key here..." className={inputClass} />
+          <span className="block text-xs text-slate-500">{sourceText.length.toLocaleString()} / {TEXT_IMPORT_MAX_CHARS.toLocaleString()} characters. Include only the test you want to import to keep usage down.</span>
+        </label> : <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm font-medium text-slate-700">Reading PDF
             <input type="file" accept=".pdf,application/pdf" disabled={busy} className={inputClass}
               onChange={e => { setFile(e.target.files?.[0] || null); setResult(null); setError(''); }} />
@@ -63,12 +85,12 @@ export function ReadingPdfImporter({ onApply, disabled }: {
               placeholder="Example: 5-12, 28 (blank = all pages)" className={inputClass} />
             <span className="block text-xs text-slate-500">Up to 20 pages. Count from the PDF’s first page, including the cover.</span>
           </label>
-        </div>
+        </div>}
         <label className="block space-y-1 text-sm font-medium text-slate-700">Which test should be extracted? (optional)
           <input value={focus} maxLength={2000} disabled={busy} onChange={e => { setFocus(e.target.value); setResult(null); }}
             placeholder="Example: Academic Reading Test 2; answer key is on the last selected page" className={inputClass} />
         </label>
-        <button type="button" onClick={extract} disabled={!file || busy || disabled}
+        <button type="button" onClick={extract} disabled={(source === 'pdf' ? !file : !sourceText.trim()) || busy || disabled}
           className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
           {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
           {busy ? 'Extracting questions…' : 'Extract and review'}
@@ -77,7 +99,7 @@ export function ReadingPdfImporter({ onApply, disabled }: {
         {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
         {result && <div className="space-y-4 border-t border-slate-200 pt-4">
           <h3 className="font-bold text-slate-900">Review: {result.title}</h3>
-          <p className="text-sm text-slate-600">{result.testType === 'academic' ? 'Academic' : 'General Training'} · {result.passages.length} passages · {result.questionGroups.reduce((n, g) => n + g.questions.length, 0)} questions. Check wording, options and answers against the PDF.</p>
+          <p className="text-sm text-slate-600">{result.testType === 'academic' ? 'Academic' : 'General Training'} · {result.passages.length} passages · {result.questionGroups.reduce((n, g) => n + g.questions.length, 0)} questions. Check wording, options and answers against the {source === 'text' ? 'pasted text' : 'PDF'}.</p>
           {result.warnings.length > 0 && <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
             <p className="font-bold mb-2">Needs review</p>
             <ul className="list-disc pl-5 space-y-1">{result.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>
