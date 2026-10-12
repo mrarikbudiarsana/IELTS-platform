@@ -10,11 +10,13 @@ this does not switch users to Supabase Auth.
 1. In Supabase's **Connect** panel, copy the **Transaction pooler** connection string
    (port 6543) and replace its password placeholder. URL-encode special characters
    in the password. Set this as `DATABASE_URL` in your local `.env.local`.
-2. Download the server root certificate from **Database Settings → SSL Configuration**.
-   Set `DATABASE_SSL_CA_FILE` locally to the downloaded file's path. On Netlify,
-   set `DATABASE_SSL_CA` to the full PEM certificate, with newlines or literal `\n`.
-   Certificate verification stays enabled. Avoid `sslmode`/`sslrootcert` URL parameters
-   overriding the configured TLS settings; use the separate CA environment variable.
+2. The API bundles the verified public Supabase root certificate for Supabase
+   database and pooler hosts. Certificate verification stays enabled even when
+   `DATABASE_SSL_CA` is absent or malformed. To add a different CA, download its
+   certificate from **Database Settings → SSL Configuration** and set
+   `DATABASE_SSL_CA_FILE` locally, or `DATABASE_SSL_CA` on Netlify to the full PEM
+   certificate (newlines or literal `\n`). Connection-string SSL parameters are
+   removed so they cannot replace the API's verified TLS configuration.
 3. Run `npm run db:check`, then `npm run db:migrate` locally. The complete schema
    adds missing tables and columns to the earlier partial migration and converts
    legacy timestamp columns to the application's UTC text format. Migration runs
@@ -56,7 +58,7 @@ Set these environment variables in Netlify's project settings:
 | Variable | Scope / purpose |
 | --- | --- |
 | `DATABASE_URL` | Functions; Supabase transaction pooler |
-| `DATABASE_SSL_CA` | Functions; PEM server root certificate |
+| `DATABASE_SSL_CA` | Functions; optional additional PEM certificate; Supabase root is bundled |
 | `JWT_SECRET` | Functions; strong random signing secret |
 | `TEACHER_SETUP_SECRET` | Functions; separate strong random setup secret |
 | `VITE_CLOUDINARY_CLOUD_NAME` | Build; media upload account |

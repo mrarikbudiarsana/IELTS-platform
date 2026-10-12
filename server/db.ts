@@ -4,6 +4,7 @@ import { Pool, PoolClient } from 'pg';
 import fs from 'node:fs';
 import type Database from 'better-sqlite3';
 import { toPostgresSql } from './postgresSql';
+import { postgresConnectionOptions } from './postgresTls';
 
 const postgres = Boolean(process.env.DATABASE_URL) && process.env.DATABASE_PROVIDER !== 'sqlite';
 if (process.env.NETLIFY && !postgres) throw new Error('Netlify requires DATABASE_URL for Supabase PostgreSQL.');
@@ -16,17 +17,15 @@ export function useTestPool(testPool: Pool) {
   pool = testPool;
 }
 function getPool() {
-  const ca = process.env.DATABASE_SSL_CA?.replace(/\\n/g, '\n') || (process.env.DATABASE_SSL_CA_FILE ? fs.readFileSync(process.env.DATABASE_SSL_CA_FILE, 'utf8') : undefined);
+  const ca = process.env.DATABASE_SSL_CA || (process.env.DATABASE_SSL_CA_FILE ? fs.readFileSync(process.env.DATABASE_SSL_CA_FILE, 'utf8') : undefined);
+  const connection = postgresConnectionOptions(process.env.DATABASE_URL!, ca);
   return pool ||= new Pool({
-    connectionString: process.env.DATABASE_URL,
+    ...connection,
     max: 2,
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 10000,
     allowExitOnIdle: true,
-    ssl: process.env.DATABASE_SSL === 'false' ? false : {
-      rejectUnauthorized: true,
-      ...(ca ? { ca } : {}),
-    },
+    ssl: process.env.DATABASE_SSL === 'false' && !process.env.NETLIFY ? false : connection.ssl,
   });
 }
 async function getSqlite() {
