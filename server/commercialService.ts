@@ -24,7 +24,7 @@ import { getUserSpeakingAllowanceBalance, grantSpeakingAllowance } from './speak
 // PRODUCT MANAGEMENT (ADMIN ONLY)
 // ---------------------------------------------------------------------
 
-export function createProduct(
+export async function createProduct(
   adminId: string,
   params: {
     sku: string;
@@ -39,7 +39,7 @@ export function createProduct(
     grantsCatalogueAccess?: boolean;
     renewalType?: RenewalType;
   }
-): CommercialProduct {
+): Promise<CommercialProduct> {
   const id = uuidv4();
   const now = new Date().toISOString();
   const currency = params.currency || 'IDR';
@@ -52,7 +52,7 @@ export function createProduct(
     throw new Error('Price amount must be zero or positive.');
   }
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO commercial_products (
       id, sku, title, description, product_type, price_amount, currency,
       duration_days, writing_allowances, speaking_allowances, grants_catalogue_access,
@@ -77,12 +77,12 @@ export function createProduct(
     params.renewalType || 'manual',
     now,
     now
-  );
+  ));
 
-  return getProductById(id)!;
+  return (await getProductById(id))!;
 }
 
-export function updateProduct(
+export async function updateProduct(
   adminId: string,
   productId: string,
   params: Partial<{
@@ -96,12 +96,12 @@ export function updateProduct(
     grantsCatalogueAccess: boolean;
     renewalType: RenewalType;
   }>
-): CommercialProduct {
-  const existing = getProductById(productId);
+): Promise<CommercialProduct> {
+  const existing = (await getProductById(productId));
   if (!existing) throw new Error('Product not found.');
 
   const now = new Date().toISOString();
-  db.prepare(`
+  (await db.prepare(`
     UPDATE commercial_products
     SET title = COALESCE(?, title),
         description = COALESCE(?, description),
@@ -126,48 +126,48 @@ export function updateProduct(
     params.renewalType ?? null,
     now,
     productId
-  );
+  ));
 
-  return getProductById(productId)!;
+  return (await getProductById(productId))!;
 }
 
-export function publishProduct(adminId: string, productId: string): CommercialProduct {
-  const product = getProductById(productId);
+export async function publishProduct(adminId: string, productId: string): Promise<CommercialProduct> {
+  const product = (await getProductById(productId));
   if (!product) throw new Error('Product not found.');
   if (product.priceAmount <= 0 && product.productType !== 'paid_plan') {
     throw new Error('Cannot publish product without configured price amount.');
   }
 
   const now = new Date().toISOString();
-  db.prepare("UPDATE commercial_products SET status = 'published', updated_at = ? WHERE id = ?").run(now, productId);
-  return getProductById(productId)!;
+  (await db.prepare("UPDATE commercial_products SET status = 'published', updated_at = ? WHERE id = ?").run(now, productId));
+  return (await getProductById(productId))!;
 }
 
-export function archiveProduct(adminId: string, productId: string): CommercialProduct {
+export async function archiveProduct(adminId: string, productId: string): Promise<CommercialProduct> {
   const now = new Date().toISOString();
-  db.prepare("UPDATE commercial_products SET status = 'archived', updated_at = ? WHERE id = ?").run(now, productId);
-  return getProductById(productId)!;
+  (await db.prepare("UPDATE commercial_products SET status = 'archived', updated_at = ? WHERE id = ?").run(now, productId));
+  return (await getProductById(productId))!;
 }
 
-export function getProductById(productId: string): CommercialProduct | null {
-  const row = db.prepare('SELECT * FROM commercial_products WHERE id = ?').get(productId) as any;
+export async function getProductById(productId: string): Promise<CommercialProduct | null> {
+  const row = (await db.prepare('SELECT * FROM commercial_products WHERE id = ?').get(productId)) as any;
   if (!row) return null;
   return mapProductRow(row);
 }
 
-export function getProductBySku(sku: string): CommercialProduct | null {
-  const row = db.prepare('SELECT * FROM commercial_products WHERE sku = ?').get(sku) as any;
+export async function getProductBySku(sku: string): Promise<CommercialProduct | null> {
+  const row = (await db.prepare('SELECT * FROM commercial_products WHERE sku = ?').get(sku)) as any;
   if (!row) return null;
   return mapProductRow(row);
 }
 
-export function listProducts(isStaff: boolean = false): CommercialProduct[] {
+export async function listProducts(isStaff: boolean = false): Promise<CommercialProduct[]> {
   let query = 'SELECT * FROM commercial_products';
   if (!isStaff) {
     query += " WHERE status = 'published'";
   }
   query += ' ORDER BY price_amount ASC, created_at ASC';
-  const rows = db.prepare(query).all() as any[];
+  const rows = (await db.prepare(query).all()) as any[];
   return rows.map(mapProductRow);
 }
 
@@ -195,14 +195,14 @@ function mapProductRow(row: any): CommercialProduct {
 // CHECKOUT & SERVER-SIDE PRICE DISCLOSURE
 // -------------------------------------------------------------
 
-export function getCheckoutPreview(userId: string, productId: string): CheckoutPreviewResponse {
-  const product = getProductById(productId);
+export async function getCheckoutPreview(userId: string, productId: string): Promise<CheckoutPreviewResponse> {
+  const product = (await getProductById(productId));
   if (!product) throw new Error('Product not found.');
   if (product.status !== 'published') {
     throw new Error('This product is not currently published or available for purchase.');
   }
 
-  const userEntitlements = getUserCommercialSummary(userId);
+  const userEntitlements = (await getUserCommercialSummary(userId));
 
   const benefits: string[] = [];
   if (product.grantsCatalogueAccess) {
@@ -269,20 +269,20 @@ export async function createOrder(
   productId: string,
   preferredProvider: string = 'midtrans'
 ): Promise<{ order: CommercialOrder; checkoutUrl: string }> {
-  const product = getProductById(productId);
+  const product = (await getProductById(productId));
   if (!product) throw new Error('Product not found.');
   if (product.status !== 'published') {
     throw new Error('Product is unpublished and cannot be purchased.');
   }
 
-  const user = db.prepare('SELECT id, full_name, email FROM users WHERE id = ?').get(userId) as any;
+  const user = (await db.prepare('SELECT id, full_name, email FROM users WHERE id = ?').get(userId)) as any;
   if (!user) throw new Error('User not found.');
 
   const orderId = `ORD-${Date.now()}-${uuidv4().slice(0, 6).toUpperCase()}`;
   const now = new Date().toISOString();
 
   // Create order row in pending status
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO commercial_orders (
       id, user_id, product_id, product_sku, product_title,
       gross_amount, currency, payment_provider, status,
@@ -303,9 +303,9 @@ export async function createOrder(
     preferredProvider,
     now,
     now
-  );
+  ));
 
-  const initialOrder = getOrderById(orderId)!;
+  const initialOrder = (await getOrderById(orderId))!;
 
   // Contact payment gateway to generate checkout session URL
   const gateway = getPaymentGateway(preferredProvider);
@@ -316,7 +316,7 @@ export async function createOrder(
   });
 
   // Store checkout URL and provider transaction ID
-  db.prepare(`
+  (await db.prepare(`
     UPDATE commercial_orders
     SET checkout_url = ?,
         provider_transaction_id = ?,
@@ -328,23 +328,23 @@ export async function createOrder(
     gatewayResult.providerTransactionId,
     JSON.stringify(gatewayResult.metadata || {}),
     orderId
-  );
+  ));
 
-  const updatedOrder = getOrderById(orderId)!;
+  const updatedOrder = (await getOrderById(orderId))!;
   return {
     order: updatedOrder,
     checkoutUrl: gatewayResult.checkoutUrl,
   };
 }
 
-export function getOrderById(orderId: string): CommercialOrder | null {
-  const row = db.prepare('SELECT * FROM commercial_orders WHERE id = ?').get(orderId) as any;
+export async function getOrderById(orderId: string): Promise<CommercialOrder | null> {
+  const row = (await db.prepare('SELECT * FROM commercial_orders WHERE id = ?').get(orderId)) as any;
   if (!row) return null;
   return mapOrderRow(row);
 }
 
-export function listUserOrders(userId: string): CommercialOrder[] {
-  const rows = db.prepare('SELECT * FROM commercial_orders WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+export async function listUserOrders(userId: string): Promise<CommercialOrder[]> {
+  const rows = (await db.prepare('SELECT * FROM commercial_orders WHERE user_id = ? ORDER BY created_at DESC').all(userId)) as any[];
   return rows.map(mapOrderRow);
 }
 
@@ -389,7 +389,7 @@ export async function processPaymentWebhook(
   }
 
   const orderId = verification.orderId;
-  const order = getOrderById(orderId);
+  const order = (await getOrderById(orderId));
   if (!order) {
     throw new Error(`Order ${orderId} not found for webhook notification.`);
   }
@@ -398,9 +398,9 @@ export async function processPaymentWebhook(
   const now = new Date().toISOString();
 
   // 1. Check idempotency in payment_webhook_events
-  const existingEvent = db
+  const existingEvent = (await db
     .prepare('SELECT id, is_processed FROM payment_webhook_events WHERE provider_event_id = ?')
-    .get(eventId) as any;
+    .get(eventId)) as any;
 
   if (existingEvent && existingEvent.is_processed) {
     return {
@@ -412,20 +412,20 @@ export async function processPaymentWebhook(
   }
 
   if (!existingEvent) {
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO payment_webhook_events (
         id, provider, provider_event_id, order_id, event_type, payload_json, is_processed, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, 0, ?)
-    `).run(uuidv4(), provider, eventId, orderId, verification.eventType, JSON.stringify(payload), now);
+    `).run(uuidv4(), provider, eventId, orderId, verification.eventType, JSON.stringify(payload), now));
   }
 
   // 2. Handle out-of-order transitions:
   // If order is already paid, a late or out-of-order 'pending' must not revert the order!
   if (order.status === 'paid' && verification.transactionStatus === 'pending') {
-    db.prepare('UPDATE payment_webhook_events SET is_processed = 1, processed_at = ? WHERE provider_event_id = ?').run(
+    (await db.prepare('UPDATE payment_webhook_events SET is_processed = 1, processed_at = ? WHERE provider_event_id = ?').run(
       now,
       eventId
-    );
+    ));
     return { success: true, orderId, status: order.status, wasAlreadyProcessed: true };
   }
 
@@ -433,9 +433,9 @@ export async function processPaymentWebhook(
   const targetStatus = verification.transactionStatus;
 
   if (targetStatus === 'paid' && order.status !== 'paid') {
-    const tx = db.transaction(() => {
+    const tx = db.transaction(async () => {
       // Mark order paid
-      db.prepare(`
+      (await db.prepare(`
         UPDATE commercial_orders
         SET status = 'paid',
             provider_transaction_id = COALESCE(?, provider_transaction_id),
@@ -443,32 +443,32 @@ export async function processPaymentWebhook(
             paid_at = ?,
             updated_at = ?
         WHERE id = ?
-      `).run(verification.providerTransactionId || null, verification.paymentMethod || null, now, now, orderId);
+      `).run(verification.providerTransactionId || null, verification.paymentMethod || null, now, now, orderId));
 
       // Activate entitlements and allowances
-      activateOrderEntitlements(order);
+      (await activateOrderEntitlements(order));
 
       // Mark webhook processed
-      db.prepare('UPDATE payment_webhook_events SET is_processed = 1, processed_at = ? WHERE provider_event_id = ?').run(
+      (await db.prepare('UPDATE payment_webhook_events SET is_processed = 1, processed_at = ? WHERE provider_event_id = ?').run(
         now,
         eventId
-      );
+      ));
     });
 
-    tx();
+    (await tx());
   } else {
     // Other transitions: failed, cancelled, expired, etc.
-    db.prepare(`
+    (await db.prepare(`
       UPDATE commercial_orders
       SET status = ?,
           updated_at = ?
       WHERE id = ?
-    `).run(targetStatus, now, orderId);
+    `).run(targetStatus, now, orderId));
 
-    db.prepare('UPDATE payment_webhook_events SET is_processed = 1, processed_at = ? WHERE provider_event_id = ?').run(
+    (await db.prepare('UPDATE payment_webhook_events SET is_processed = 1, processed_at = ? WHERE provider_event_id = ?').run(
       now,
       eventId
-    );
+    ));
   }
 
   return {
@@ -483,8 +483,8 @@ export async function processPaymentWebhook(
  * Activates entitlements granted by a confirmed order.
  * Strictly idempotent via unique idempotency keys in ledgers.
  */
-function activateOrderEntitlements(order: CommercialOrder): void {
-  const product = getProductById(order.productId);
+async function activateOrderEntitlements(order: CommercialOrder): Promise<void> {
+  const product = (await getProductById(order.productId));
   if (!product) return;
 
   const now = new Date().toISOString();
@@ -493,7 +493,7 @@ function activateOrderEntitlements(order: CommercialOrder): void {
   // 1. If product grants catalogue access or is paid plan:
   if (product.grantsCatalogueAccess || product.productType === 'paid_plan') {
     const durationDays = product.durationDays || 30;
-    const user = db.prepare('SELECT plan_type, plan_expires_at FROM users WHERE id = ?').get(userId) as any;
+    const user = (await db.prepare('SELECT plan_type, plan_expires_at FROM users WHERE id = ?').get(userId)) as any;
 
     let validUntilDate: Date;
     if (user?.plan_expires_at && new Date(user.plan_expires_at) > new Date()) {
@@ -507,15 +507,15 @@ function activateOrderEntitlements(order: CommercialOrder): void {
     const validUntilIso = validUntilDate.toISOString();
 
     // Update users record
-    db.prepare(`
+    (await db.prepare(`
       UPDATE users 
       SET plan_type = 'paid_plan', 
           plan_expires_at = ? 
       WHERE id = ?
-    `).run(validUntilIso, userId);
+    `).run(validUntilIso, userId));
 
     // Create user_subscriptions record
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO user_subscriptions (
         id, user_id, plan_id, order_id, status, valid_from, valid_until, renewal_type, created_at, updated_at
       ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
@@ -529,10 +529,10 @@ function activateOrderEntitlements(order: CommercialOrder): void {
       product.renewalType,
       now,
       now
-    );
+    ));
 
     // Record grant audit
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO commercial_entitlement_grants (
         id, user_id, source_type, source_id, grant_type, amount, valid_from, valid_until, status, notes, created_at
       ) VALUES (?, ?, 'purchase', ?, 'catalogue_access', 1, ?, ?, 'active', ?, ?)
@@ -544,21 +544,21 @@ function activateOrderEntitlements(order: CommercialOrder): void {
       validUntilIso,
       `Catalogue access via Order ${order.id} (${product.title})`,
       now
-    );
+    ));
   }
 
   // 2. Grant Writing Allowances (if product includes them)
   if (product.writingAllowances > 0) {
     const idempotencyKey = `order-${order.id}-writing`;
-    grantTestingAllowance({
+    (await grantTestingAllowance({
       adminId: userId, // Self-sourced via purchase
       userId,
       amount: product.writingAllowances,
       notes: `Purchased allowances via Order ${order.id} (${product.title})`,
       idempotencyKey,
-    });
+    }));
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO commercial_entitlement_grants (
         id, user_id, source_type, source_id, grant_type, amount, valid_from, status, notes, created_at
       ) VALUES (?, ?, 'purchase', ?, 'writing_allowance', ?, ?, 'active', ?, ?)
@@ -570,21 +570,21 @@ function activateOrderEntitlements(order: CommercialOrder): void {
       now,
       `Writing allowances via Order ${order.id}`,
       now
-    );
+    ));
   }
 
   // 3. Grant Speaking Allowances (if product includes them)
   if (product.speakingAllowances > 0) {
     const spkIdempotencyKey = `order-${order.id}-speaking`;
-    grantSpeakingAllowance({
+    (await grantSpeakingAllowance({
       adminId: userId,
       userId,
       amount: product.speakingAllowances,
       notes: `Purchased Speaking allowances via Order ${order.id} (${product.title})`,
       idempotencyKey: spkIdempotencyKey,
-    });
+    }));
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO commercial_entitlement_grants (
         id, user_id, source_type, source_id, grant_type, amount, valid_from, status, notes, created_at
       ) VALUES (?, ?, 'purchase', ?, 'speaking_allowance', ?, ?, 'active', ?, ?)
@@ -596,7 +596,7 @@ function activateOrderEntitlements(order: CommercialOrder): void {
       now,
       `Speaking allowances via Order ${order.id}`,
       now
-    );
+    ));
   }
 }
 
@@ -605,7 +605,7 @@ function activateOrderEntitlements(order: CommercialOrder): void {
 // -------------------------------------------------------------
 
 export async function reconcileOrder(orderId: string): Promise<CommercialOrder> {
-  const order = getOrderById(orderId);
+  const order = (await getOrderById(orderId));
   if (!order) throw new Error('Order not found.');
 
   if (order.status === 'paid') {
@@ -615,10 +615,10 @@ export async function reconcileOrder(orderId: string): Promise<CommercialOrder> 
   const gateway = getPaymentGateway(order.paymentProvider);
   const statusResult = await gateway.queryTransactionStatus(orderId);
 
-  if (statusResult.status === 'paid' && order.status !== 'paid') {
+  if (statusResult.status === 'paid') {
     const now = new Date().toISOString();
-    const tx = db.transaction(() => {
-      db.prepare(`
+    const tx = db.transaction(async () => {
+      (await db.prepare(`
         UPDATE commercial_orders
         SET status = 'paid',
             provider_transaction_id = COALESCE(?, provider_transaction_id),
@@ -626,22 +626,22 @@ export async function reconcileOrder(orderId: string): Promise<CommercialOrder> 
             paid_at = ?,
             updated_at = ?
         WHERE id = ?
-      `).run(statusResult.providerTransactionId || null, statusResult.paymentMethod || null, now, now, orderId);
+      `).run(statusResult.providerTransactionId || null, statusResult.paymentMethod || null, now, now, orderId));
 
-      activateOrderEntitlements(order);
+      (await activateOrderEntitlements(order));
     });
 
-    tx();
+    (await tx());
   } else if (statusResult.status !== order.status) {
-    db.prepare(`
+    (await db.prepare(`
       UPDATE commercial_orders
       SET status = ?,
           updated_at = datetime('now')
       WHERE id = ?
-    `).run(statusResult.status, orderId);
+    `).run(statusResult.status, orderId));
   }
 
-  return getOrderById(orderId)!;
+  return (await getOrderById(orderId))!;
 }
 
 // -------------------------------------------------------------
@@ -655,13 +655,13 @@ export async function refundOrder(params: {
   amount?: number;
 }): Promise<{ order: CommercialOrder; compensationNote: string }> {
   const { adminId, orderId, reason, amount } = params;
-  const order = getOrderById(orderId);
+  const order = (await getOrderById(orderId));
   if (!order) throw new Error('Order not found.');
   if (order.status !== 'paid') {
     throw new Error(`Cannot refund order in status "${order.status}". Only paid orders can be refunded.`);
   }
 
-  const product = getProductById(order.productId);
+  const product = (await getProductById(order.productId));
   const refundAmount = amount !== undefined ? amount : order.grossAmount;
   const now = new Date().toISOString();
 
@@ -674,9 +674,9 @@ export async function refundOrder(params: {
 
   let compensationNote = 'Refund processed cleanly.';
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     // 1. Update order status to 'refunded'
-    db.prepare(`
+    (await db.prepare(`
       UPDATE commercial_orders
       SET status = 'refunded',
           refund_amount = ?,
@@ -684,7 +684,7 @@ export async function refundOrder(params: {
           refunded_at = ?,
           updated_at = ?
       WHERE id = ?
-    `).run(refundAmount, reason, now, now, orderId);
+    `).run(refundAmount, reason, now, now, orderId));
 
     // 2. Compensate unused allowances if product included allowances
     let remainingWritingAllowancesRevoked = 0;
@@ -694,13 +694,13 @@ export async function refundOrder(params: {
     if (product) {
       if (product.writingAllowances > 0) {
         // Record compensating negative adjustment in ledger
-        const userBal = getUserAllowanceBalance(order.userId);
+        const userBal = (await getUserAllowanceBalance(order.userId));
         const deductAmount = Math.min(product.writingAllowances, userBal.available);
         remainingWritingAllowancesRevoked = deductAmount;
         consumedAllowancesRevoked += (product.writingAllowances - deductAmount);
 
         if (deductAmount > 0) {
-          db.prepare(`
+          (await db.prepare(`
             INSERT INTO writing_allowance_ledger (
               id, user_id, amount, balance_after, transaction_type, notes, created_by_id, created_at
             ) VALUES (?, ?, ?, ?, 'consumption', ?, ?, ?)
@@ -712,20 +712,20 @@ export async function refundOrder(params: {
             `Compensating deduction for Refunded Order ${orderId}: ${reason}`,
             adminId,
             now
-          );
+          ));
         } else {
           compensationNote += ' Note: Writing allowances were already consumed prior to refund; manual review logged.';
         }
       }
 
       if (product.speakingAllowances > 0) {
-        const spkBal = getUserSpeakingAllowanceBalance(order.userId);
+        const spkBal = (await getUserSpeakingAllowanceBalance(order.userId));
         const deductSpk = Math.min(product.speakingAllowances, spkBal.available);
         remainingSpeakingAllowancesRevoked = deductSpk;
         consumedAllowancesRevoked += (product.speakingAllowances - deductSpk);
 
         if (deductSpk > 0) {
-          db.prepare(`
+          (await db.prepare(`
             INSERT INTO speaking_allowance_ledger (
               id, user_id, amount, balance_after, transaction_type, notes, created_by_id, created_at
             ) VALUES (?, ?, ?, ?, 'consumption', ?, ?, ?)
@@ -737,47 +737,47 @@ export async function refundOrder(params: {
             `Compensating deduction for Refunded Order ${orderId}: ${reason}`,
             adminId,
             now
-          );
+          ));
         } else {
           compensationNote += ' Note: Speaking allowances were already consumed prior to refund; manual review logged.';
         }
       }
 
       // 3. Revoke active subscription for this order
-      db.prepare(`
+      (await db.prepare(`
         UPDATE user_subscriptions
         SET status = 'cancelled',
             cancelled_at = ?,
             cancellation_reason = ?,
             updated_at = ?
         WHERE order_id = ?
-      `).run(now, `Refunded by Admin: ${reason}`, now, orderId);
+      `).run(now, `Refunded by Admin: ${reason}`, now, orderId));
 
       // Mark entitlement grant revoked
-      db.prepare(`
+      (await db.prepare(`
         UPDATE commercial_entitlement_grants
         SET status = 'revoked',
             notes = notes || ' (Revoked due to refund)'
         WHERE source_type = 'purchase' AND source_id = ?
-      `).run(orderId);
+      `).run(orderId));
 
       // Reset user plan_type and plan_expires_at if no other active subscriptions exist
-      const otherActiveSub = db
+      const otherActiveSub = (await db
         .prepare(`SELECT 1 FROM user_subscriptions WHERE user_id = ? AND status = 'active' AND valid_until > datetime('now')`)
-        .get(order.userId);
+        .get(order.userId));
 
       if (!otherActiveSub) {
-        db.prepare(`
+        (await db.prepare(`
           UPDATE users
           SET plan_type = 'free',
               plan_expires_at = NULL
           WHERE id = ?
-        `).run(order.userId);
+        `).run(order.userId));
       }
     }
 
     return {
-      order: getOrderById(orderId)!,
+      order: (await getOrderById(orderId))!,
       compensationNote,
       refundAudit: {
         remainingWritingAllowancesRevoked,
@@ -787,7 +787,7 @@ export async function refundOrder(params: {
     };
   });
 
-  const txResult = tx();
+  const txResult = (await tx());
   return txResult;
 }
 
@@ -795,7 +795,7 @@ export async function refundOrder(params: {
 // TEACHER CODES (ATOMIC REDEMPTION & ACCESS LIFECYCLE)
 // -------------------------------------------------------------
 
-export function createTeacherCode(
+export async function createTeacherCode(
   adminId: string,
   params: {
     code: string;
@@ -810,12 +810,12 @@ export function createTeacherCode(
     speakingAllowances?: number;
     protectedPrepostAllowances?: number;
   }
-): TeacherCode {
+): Promise<TeacherCode> {
   const normalizedCode = params.code.trim().toUpperCase();
   if (!normalizedCode) throw new Error('Code is required.');
   if (!params.label) throw new Error('Code label is required.');
 
-  const existing = db.prepare('SELECT id FROM teacher_codes WHERE code = ?').get(normalizedCode);
+  const existing = (await db.prepare('SELECT id FROM teacher_codes WHERE code = ?').get(normalizedCode));
   if (existing) {
     throw new Error(`Teacher code "${normalizedCode}" already exists.`);
   }
@@ -823,7 +823,7 @@ export function createTeacherCode(
   const id = uuidv4();
   const now = new Date().toISOString();
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO teacher_codes (
       id, code, label, description, redemption_deadline_at,
       access_duration_days, max_redemptions, redemption_count, class_id,
@@ -851,12 +851,12 @@ export function createTeacherCode(
     adminId,
     now,
     now
-  );
+  ));
 
-  return getTeacherCodeById(id)!;
+  return (await getTeacherCodeById(id))!;
 }
 
-export function updateTeacherCode(
+export async function updateTeacherCode(
   adminId: string,
   codeId: string,
   params: Partial<{
@@ -871,12 +871,12 @@ export function updateTeacherCode(
     speakingAllowances: number;
     protectedPrepostAllowances: number;
   }>
-): TeacherCode {
-  const existing = getTeacherCodeById(codeId);
+): Promise<TeacherCode> {
+  const existing = (await getTeacherCodeById(codeId));
   if (!existing) throw new Error('Teacher code not found.');
 
   const now = new Date().toISOString();
-  db.prepare(`
+  (await db.prepare(`
     UPDATE teacher_codes
     SET label = COALESCE(?, label),
         description = COALESCE(?, description),
@@ -903,48 +903,48 @@ export function updateTeacherCode(
     params.protectedPrepostAllowances ?? null,
     now,
     codeId
-  );
+  ));
 
-  return getTeacherCodeById(codeId)!;
+  return (await getTeacherCodeById(codeId))!;
 }
 
-export function revokeTeacherCode(adminId: string, codeId: string): TeacherCode {
-  const existing = getTeacherCodeById(codeId);
+export async function revokeTeacherCode(adminId: string, codeId: string): Promise<TeacherCode> {
+  const existing = (await getTeacherCodeById(codeId));
   if (!existing) throw new Error('Teacher code not found.');
 
   const now = new Date().toISOString();
-  db.prepare("UPDATE teacher_codes SET status = 'revoked', updated_at = ? WHERE id = ?").run(now, codeId);
-  return getTeacherCodeById(codeId)!;
+  (await db.prepare("UPDATE teacher_codes SET status = 'revoked', updated_at = ? WHERE id = ?").run(now, codeId));
+  return (await getTeacherCodeById(codeId))!;
 }
 
-export function getTeacherCodeById(codeId: string): TeacherCode | null {
-  const row = db
+export async function getTeacherCodeById(codeId: string): Promise<TeacherCode | null> {
+  const row = (await db
     .prepare(
       `SELECT tc.*, c.title AS class_name 
        FROM teacher_codes tc 
        LEFT JOIN classes c ON tc.class_id = c.id 
        WHERE tc.id = ?`
     )
-    .get(codeId) as any;
+    .get(codeId)) as any;
   if (!row) return null;
   return mapTeacherCodeRow(row);
 }
 
-export function getTeacherCodeByCode(code: string): TeacherCode | null {
+export async function getTeacherCodeByCode(code: string): Promise<TeacherCode | null> {
   const normalized = code.trim().toUpperCase();
-  const row = db
+  const row = (await db
     .prepare(
       `SELECT tc.*, c.title AS class_name 
        FROM teacher_codes tc 
        LEFT JOIN classes c ON tc.class_id = c.id 
        WHERE tc.code = ?`
     )
-    .get(normalized) as any;
+    .get(normalized)) as any;
   if (!row) return null;
   return mapTeacherCodeRow(row);
 }
 
-export function listTeacherCodes(isStaff: boolean = true): TeacherCode[] {
+export async function listTeacherCodes(isStaff: boolean = true): Promise<TeacherCode[]> {
   let query = `
     SELECT tc.*, c.title AS class_name 
     FROM teacher_codes tc 
@@ -954,7 +954,7 @@ export function listTeacherCodes(isStaff: boolean = true): TeacherCode[] {
     query += " WHERE tc.status = 'active'";
   }
   query += ' ORDER BY tc.created_at DESC';
-  const rows = db.prepare(query).all() as any[];
+  const rows = (await db.prepare(query).all()) as any[];
   return rows.map(mapTeacherCodeRow);
 }
 
@@ -984,12 +984,12 @@ function mapTeacherCodeRow(row: any): TeacherCode {
 /**
  * Previews code benefits for learner display before redemption.
  */
-export function previewTeacherCode(code: string): {
+export async function previewTeacherCode(code: string): Promise<{
   code: TeacherCode;
   benefits: string[];
   durationText: string;
-} {
-  const codeRow = getTeacherCodeByCode(code);
+}> {
+  const codeRow = (await getTeacherCodeByCode(code));
   if (!codeRow) throw new Error(`Code "${code}" is invalid or does not exist.`);
 
   if (codeRow.status === 'revoked') {
@@ -1032,15 +1032,15 @@ export function previewTeacherCode(code: string): {
  * Atomically redeems a teacher code for a learner.
  * Prevents race condition over-redemption through database transaction locking.
  */
-export function redeemTeacherCode(
+export async function redeemTeacherCode(
   userId: string,
   code: string
-): { success: boolean; code: TeacherCode; message: string } {
+): Promise<{ success: boolean; code: TeacherCode; message: string }> {
   const normalized = code.trim().toUpperCase();
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     // 1. Fetch code with current row lock
-    const codeRow = db.prepare('SELECT * FROM teacher_codes WHERE code = ?').get(normalized) as any;
+    const codeRow = (await db.prepare('SELECT * FROM teacher_codes WHERE code = ?').get(normalized)) as any;
     if (!codeRow) throw new Error(`Code "${code}" does not exist.`);
 
     if (codeRow.status === 'revoked') {
@@ -1048,9 +1048,9 @@ export function redeemTeacherCode(
     }
 
     // 2. Check 1 redemption per learner rule
-    const alreadyRedeemed = db
+    const alreadyRedeemed = (await db
       .prepare('SELECT id FROM teacher_code_redemptions WHERE code_id = ? AND user_id = ?')
-      .get(codeRow.id, userId);
+      .get(codeRow.id, userId));
 
     if (alreadyRedeemed) {
       throw new Error('You have already redeemed this code.');
@@ -1069,23 +1069,23 @@ export function redeemTeacherCode(
     const isNowExhausted = newRedemptionCount >= codeRow.max_redemptions;
 
     // 3. Atomically update code redemption count & status
-    db.prepare(`
+    (await db.prepare(`
       UPDATE teacher_codes
       SET redemption_count = ?,
           status = CASE WHEN ? THEN 'exhausted' ELSE status END,
           updated_at = ?
       WHERE id = ?
-    `).run(newRedemptionCount, isNowExhausted ? 1 : 0, now, codeRow.id);
+    `).run(newRedemptionCount, isNowExhausted ? 1 : 0, now, codeRow.id));
 
     // 4. Record redemption
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO teacher_code_redemptions (id, code_id, user_id, redeemed_at)
       VALUES (?, ?, ?, ?)
-    `).run(uuidv4(), codeRow.id, userId, now);
+    `).run(uuidv4(), codeRow.id, userId, now));
 
     // 5. Grant catalogue access if configured
     if (codeRow.grants_catalogue_access) {
-      const user = db.prepare('SELECT plan_type, plan_expires_at FROM users WHERE id = ?').get(userId) as any;
+      const user = (await db.prepare('SELECT plan_type, plan_expires_at FROM users WHERE id = ?').get(userId)) as any;
       let validUntilDate: Date;
       if (user?.plan_expires_at && new Date(user.plan_expires_at) > new Date()) {
         validUntilDate = new Date(new Date(user.plan_expires_at).getTime() + codeRow.access_duration_days * 86400000);
@@ -1094,9 +1094,9 @@ export function redeemTeacherCode(
       }
       const validUntilIso = validUntilDate.toISOString();
 
-      db.prepare("UPDATE users SET plan_type = 'paid_plan', plan_expires_at = ? WHERE id = ?").run(validUntilIso, userId);
+      (await db.prepare("UPDATE users SET plan_type = 'paid_plan', plan_expires_at = ? WHERE id = ?").run(validUntilIso, userId));
 
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO commercial_entitlement_grants (
           id, user_id, source_type, source_id, grant_type, amount, valid_from, valid_until, status, notes, created_at
         ) VALUES (?, ?, 'teacher_code', ?, 'catalogue_access', 1, ?, ?, 'active', ?, ?)
@@ -1108,20 +1108,20 @@ export function redeemTeacherCode(
         validUntilIso,
         `Catalogue access via Teacher Code "${codeRow.code}"`,
         now
-      );
+      ));
     }
 
     // 6. Grant Writing Allowances (Discretionary + Protected Pre/Post)
     const totalWritingToGrant = codeRow.writing_allowances + codeRow.protected_prepost_allowances;
     if (totalWritingToGrant > 0) {
-      grantTestingAllowance({
+      (await grantTestingAllowance({
         adminId: codeRow.created_by_id,
         userId,
         amount: totalWritingToGrant,
         notes: `Teacher Code "${codeRow.code}" redemption`,
-      });
+      }));
 
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO commercial_entitlement_grants (
           id, user_id, source_type, source_id, grant_type, amount, valid_from, status, notes, created_at
         ) VALUES (?, ?, 'teacher_code', ?, 'writing_allowance', ?, ?, 'active', ?, ?)
@@ -1133,20 +1133,20 @@ export function redeemTeacherCode(
         now,
         `Writing allowances via Teacher Code "${codeRow.code}"`,
         now
-      );
+      ));
     }
 
     // 7. Grant Speaking Allowances (Discretionary + Protected Pre/Post)
     const totalSpeakingToGrant = codeRow.speaking_allowances + codeRow.protected_prepost_allowances;
     if (totalSpeakingToGrant > 0) {
-      grantSpeakingAllowance({
+      (await grantSpeakingAllowance({
         adminId: codeRow.created_by_id,
         userId,
         amount: totalSpeakingToGrant,
         notes: `Teacher Code "${codeRow.code}" redemption`,
-      });
+      }));
 
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO commercial_entitlement_grants (
           id, user_id, source_type, source_id, grant_type, amount, valid_from, status, notes, created_at
         ) VALUES (?, ?, 'teacher_code', ?, 'speaking_allowance', ?, ?, 'active', ?, ?)
@@ -1158,12 +1158,12 @@ export function redeemTeacherCode(
         now,
         `Speaking allowances via Teacher Code "${codeRow.code}"`,
         now
-      );
+      ));
     }
 
     // 8. Grant Protected Pre/Post-Test Allowances (Isolated from discretionary practice)
     if (codeRow.protected_prepost_allowances > 0) {
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO commercial_entitlement_grants (
           id, user_id, source_type, source_id, grant_type, amount, valid_from, status, notes, created_at
         ) VALUES (?, ?, 'teacher_code', ?, 'protected_prepost', ?, ?, 'active', ?, ?)
@@ -1175,27 +1175,27 @@ export function redeemTeacherCode(
         now,
         `Protected Pre/Post allowances via Teacher Code "${codeRow.code}"`,
         now
-      );
+      ));
     }
 
     // 9. Auto-enrol in linked class if specified and not already enrolled
     if (codeRow.class_id) {
-      const existingEnrolment = db
+      const existingEnrolment = (await db
         .prepare('SELECT id FROM class_enrolments WHERE class_id = ? AND student_id = ?')
-        .get(codeRow.class_id, userId);
+        .get(codeRow.class_id, userId));
 
       if (!existingEnrolment) {
-        db.prepare(`
+        (await db.prepare(`
           INSERT INTO class_enrolments (id, class_id, student_id, status, joined_via, enrolled_at)
           VALUES (?, ?, ?, 'active', 'code', ?)
-        `).run(uuidv4(), codeRow.class_id, userId, now);
+        `).run(uuidv4(), codeRow.class_id, userId, now));
       }
     }
   });
 
-  tx();
+  (await tx());
 
-  const updatedCode = getTeacherCodeByCode(normalized)!;
+  const updatedCode = (await getTeacherCodeByCode(normalized))!;
   return {
     success: true,
     code: updatedCode,
@@ -1207,22 +1207,22 @@ export function redeemTeacherCode(
 // USER COMMERCIAL SUMMARY & ACCESS VERIFICATION
 // -------------------------------------------------------------
 
-export function getUserCommercialSummary(userId: string): LearnerCommercialSummary {
-  const user = db.prepare('SELECT plan_type, plan_expires_at FROM users WHERE id = ?').get(userId) as any;
+export async function getUserCommercialSummary(userId: string): Promise<LearnerCommercialSummary> {
+  const user = (await db.prepare('SELECT plan_type, plan_expires_at FROM users WHERE id = ?').get(userId)) as any;
   const isPaidActive = Boolean(user?.plan_expires_at && new Date(user.plan_expires_at) > new Date());
   const planType: PlanType = isPaidActive ? 'paid_plan' : 'free';
 
-  const writingBal = getUserAllowanceBalance(userId);
-  const speakingBal = getUserSpeakingAllowanceBalance(userId);
+  const writingBal = (await getUserAllowanceBalance(userId));
+  const speakingBal = (await getUserSpeakingAllowanceBalance(userId));
 
   // Protected allowances query
-  const protectedGrants = db
+  const protectedGrants = (await db
     .prepare(
       `SELECT SUM(amount) AS total 
        FROM commercial_entitlement_grants 
        WHERE user_id = ? AND grant_type = 'protected_prepost' AND status = 'active'`
     )
-    .get(userId) as any;
+    .get(userId)) as any;
 
   const protectedCount = protectedGrants?.total || 0;
 
@@ -1231,17 +1231,17 @@ export function getUserCommercialSummary(userId: string): LearnerCommercialSumma
   const discretionarySpeaking = Math.max(0, speakingBal.available - protectedCount);
 
   // Subscriptions
-  const subs = db
+  const subs = (await db
     .prepare('SELECT * FROM user_subscriptions WHERE user_id = ? ORDER BY created_at DESC')
-    .all(userId) as any[];
+    .all(userId)) as any[];
 
   // Orders
-  const orders = listUserOrders(userId).slice(0, 10);
+  const orders = (await listUserOrders(userId)).slice(0, 10);
 
   // Active Grants
-  const grants = db
+  const grants = (await db
     .prepare('SELECT * FROM commercial_entitlement_grants WHERE user_id = ? ORDER BY created_at DESC LIMIT 20')
-    .all(userId) as any[];
+    .all(userId)) as any[];
 
   return {
     planType,
@@ -1296,12 +1296,12 @@ export function getUserCommercialSummary(userId: string): LearnerCommercialSumma
  * 2. Paid catalogue accessible by users with active paid plan or code.
  * 3. Class assignments accessible regardless of plan (assignment grant).
  */
-export function canUserAccessTest(params: {
+export async function canUserAccessTest(params: {
   userId: string;
   isTeacherOrAdmin: boolean;
   isFreeTier?: boolean;
   assignmentId?: string;
-}): { allowed: boolean; reason?: string } {
+}): Promise<{ allowed: boolean; reason?: string }> {
   const { userId, isTeacherOrAdmin, isFreeTier, assignmentId } = params;
 
   if (isTeacherOrAdmin) return { allowed: true };
@@ -1311,19 +1311,19 @@ export function canUserAccessTest(params: {
 
   // 2. Class assignment grant (learner enrolled in assignment class)
   if (assignmentId) {
-    const isEnrolled = db
+    const isEnrolled = (await db
       .prepare(
         `SELECT 1 FROM assignments a
          JOIN class_enrolments ce ON a.class_id = ce.class_id
          WHERE a.id = ? AND ce.student_id = ? AND ce.status = 'active'`
       )
-      .get(assignmentId, userId);
+      .get(assignmentId, userId));
 
     if (isEnrolled) return { allowed: true };
   }
 
   // 3. Paid plan / Catalogue access
-  const commercial = getUserCommercialSummary(userId);
+  const commercial = (await getUserCommercialSummary(userId));
   if (commercial.hasCatalogueAccess) {
     return { allowed: true };
   }
@@ -1338,8 +1338,8 @@ export function canUserAccessTest(params: {
 // ADMIN COMMERCIAL SUMMARY & BALANCE ADJUSTMENT
 // -------------------------------------------------------------
 
-export function getAdminCommercialSummary(): AdminCommercialSummary {
-  const orders = db.prepare('SELECT * FROM commercial_orders ORDER BY created_at DESC').all() as any[];
+export async function getAdminCommercialSummary(): Promise<AdminCommercialSummary> {
+  const orders = (await db.prepare('SELECT * FROM commercial_orders ORDER BY created_at DESC').all()) as any[];
 
   const revenueByCurrency: Record<string, number> = {};
   const statusCounts: Record<string, number> = {};
@@ -1351,15 +1351,15 @@ export function getAdminCommercialSummary(): AdminCommercialSummary {
     }
   }
 
-  const activeSubs = db
+  const activeSubs = (await db
     .prepare("SELECT COUNT(*) AS c FROM user_subscriptions WHERE status = 'active' AND valid_until > datetime('now')")
-    .get() as any;
+    .get()) as any;
 
-  const products = listProducts(true);
-  const teacherCodes = listTeacherCodes(true);
-  const grants = db
+  const products = (await listProducts(true));
+  const teacherCodes = (await listTeacherCodes(true));
+  const grants = (await db
     .prepare('SELECT * FROM commercial_entitlement_grants ORDER BY created_at DESC LIMIT 30')
-    .all() as any[];
+    .all()) as any[];
 
   return {
     totalRevenueByCurrency: revenueByCurrency,
@@ -1384,13 +1384,13 @@ export function getAdminCommercialSummary(): AdminCommercialSummary {
   };
 }
 
-export function adjustUserBalance(params: {
+export async function adjustUserBalance(params: {
   adminId: string;
   userId: string;
   skill: 'writing' | 'speaking';
   amount: number;
   reason: string;
-}): { success: boolean; newBalance: number } {
+}): Promise<{ success: boolean; newBalance: number }> {
   const { adminId, userId, skill, amount, reason } = params;
   if (!reason || reason.trim().length < 5) {
     throw new Error('Mandatory reasoned explanation of at least 5 characters is required for audited balance adjustments.');
@@ -1399,13 +1399,13 @@ export function adjustUserBalance(params: {
   const now = new Date().toISOString();
 
   if (skill === 'writing') {
-    const userBal = getUserAllowanceBalance(userId);
+    const userBal = (await getUserAllowanceBalance(userId));
     const newBal = userBal.available + amount;
     if (newBal < 0) {
       throw new Error(`Cannot adjust balance below 0 (current: ${userBal.available}, adjustment: ${amount}).`);
     }
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO writing_allowance_ledger (
         id, user_id, amount, balance_after, transaction_type, notes, created_by_id, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1418,17 +1418,17 @@ export function adjustUserBalance(params: {
       `Admin adjustment: ${reason}`,
       adminId,
       now
-    );
+    ));
 
     return { success: true, newBalance: newBal };
   } else {
-    const spkBal = getUserSpeakingAllowanceBalance(userId);
+    const spkBal = (await getUserSpeakingAllowanceBalance(userId));
     const newBal = spkBal.available + amount;
     if (newBal < 0) {
       throw new Error(`Cannot adjust balance below 0 (current: ${spkBal.available}, adjustment: ${amount}).`);
     }
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO speaking_allowance_ledger (
         id, user_id, amount, balance_after, transaction_type, notes, created_by_id, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1441,7 +1441,7 @@ export function adjustUserBalance(params: {
       `Admin adjustment: ${reason}`,
       adminId,
       now
-    );
+    ));
 
     return { success: true, newBalance: newBal };
   }

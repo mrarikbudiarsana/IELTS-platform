@@ -66,7 +66,7 @@ export function validateSpeakingSetVersion(
   return errors;
 }
 
-export function createSpeakingSet(
+export async function createSpeakingSet(
   teacherId: string,
   data: {
     title: string;
@@ -75,7 +75,7 @@ export function createSpeakingSet(
     part3Discussion: SpeakingPart3Discussion;
     teacherNotes?: string;
   }
-): { set: SpeakingSet; version: SpeakingSetVersion } {
+): Promise<{ set: SpeakingSet; version: SpeakingSetVersion }> {
   if (!data.title || !data.title.trim()) {
     throw new Error('Speaking set title is required.');
   }
@@ -90,14 +90,14 @@ export function createSpeakingSet(
   const versionId = uuidv4();
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
-    db.prepare(`
+  const tx = db.transaction(async () => {
+    (await db.prepare(`
       INSERT INTO speaking_sets (
         id, title, current_version_number, status, created_by_id, created_at, updated_at
       ) VALUES (?, ?, 1, 'draft', ?, ?, ?)
-    `).run(setId, data.title.trim(), teacherId, now, now);
+    `).run(setId, data.title.trim(), teacherId, now, now));
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO speaking_set_versions (
         id, set_id, version_number, status,
         part1_topics_json, part2_cue_card_json, part3_discussion_json,
@@ -112,24 +112,24 @@ export function createSpeakingSet(
       data.teacherNotes || null,
       JSON.stringify(validationErrors),
       now
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
   return {
-    set: getSpeakingSetById(setId)!,
-    version: getSpeakingSetVersionById(versionId)!,
+    set: (await getSpeakingSetById(setId))!,
+    version: (await getSpeakingSetVersionById(versionId))!,
   };
 }
 
-export function getSpeakingSetById(setId: string): SpeakingSet | null {
-  const row = db.prepare('SELECT * FROM speaking_sets WHERE id = ?').get(setId) as any;
+export async function getSpeakingSetById(setId: string): Promise<SpeakingSet | null> {
+  const row = (await db.prepare('SELECT * FROM speaking_sets WHERE id = ?').get(setId)) as any;
   if (!row) return null;
 
-  const latestVersion = db
+  const latestVersion = (await db
     .prepare('SELECT id FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1')
-    .get(setId) as any;
+    .get(setId)) as any;
 
   return {
     id: row.id,
@@ -144,8 +144,8 @@ export function getSpeakingSetById(setId: string): SpeakingSet | null {
   };
 }
 
-export function getSpeakingSetVersionById(versionId: string): SpeakingSetVersion | null {
-  const row = db.prepare('SELECT * FROM speaking_set_versions WHERE id = ?').get(versionId) as any;
+export async function getSpeakingSetVersionById(versionId: string): Promise<SpeakingSetVersion | null> {
+  const row = (await db.prepare('SELECT * FROM speaking_set_versions WHERE id = ?').get(versionId)) as any;
   if (!row) return null;
 
   return {
@@ -163,12 +163,14 @@ export function getSpeakingSetVersionById(versionId: string): SpeakingSetVersion
   };
 }
 
-export function listSpeakingSets(): SpeakingSet[] {
-  const rows = db.prepare("SELECT * FROM speaking_sets WHERE status != 'archived' ORDER BY created_at DESC").all() as any[];
-  return rows.map((row) => {
-    const latestVersion = db
+export async function listSpeakingSets(role?: string, filter: { status?: string; includeArchived?: boolean } = {}): Promise<SpeakingSet[]> {
+  const student = role === 'student';
+  const status = student ? 'published' : filter.status;
+  const rows = await db.prepare(`SELECT * FROM speaking_sets WHERE ${status ? 'status = ?' : filter.includeArchived ? '1 = 1' : "status != 'archived'"} ORDER BY created_at DESC`).all(...(status ? [status] : []));
+  return (await Promise.all(rows.map(async (row) => {
+    const latestVersion = (await db
       .prepare('SELECT id FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1')
-      .get(row.id) as any;
+      .get(row.id)) as any;
     return {
       id: row.id,
       title: row.title,
@@ -180,10 +182,10 @@ export function listSpeakingSets(): SpeakingSet[] {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
-  });
+  })));
 }
 
-export function updateSpeakingDraftVersion(params: {
+export async function updateSpeakingDraftVersion(params: {
   setId: string;
   versionId: string;
   title?: string;
@@ -191,11 +193,11 @@ export function updateSpeakingDraftVersion(params: {
   part2CueCard: SpeakingPart2CueCard;
   part3Discussion: SpeakingPart3Discussion;
   teacherNotes?: string;
-}): { version: SpeakingSetVersion; errors: string[] } {
-  const versionRow = db.prepare('SELECT * FROM speaking_set_versions WHERE id = ? AND set_id = ?').get(
+}): Promise<{ version: SpeakingSetVersion; errors: string[] }> {
+  const versionRow = (await db.prepare('SELECT * FROM speaking_set_versions WHERE id = ? AND set_id = ?').get(
     params.versionId,
     params.setId
-  ) as any;
+  )) as any;
 
   if (!versionRow) {
     throw new Error('Speaking set version not found');
@@ -211,15 +213,15 @@ export function updateSpeakingDraftVersion(params: {
     params.part3Discussion
   );
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     if (params.title) {
-      db.prepare('UPDATE speaking_sets SET title = ?, updated_at = datetime("now") WHERE id = ?').run(
+      (await db.prepare('UPDATE speaking_sets SET title = ?, updated_at = datetime("now") WHERE id = ?').run(
         params.title.trim(),
         params.setId
-      );
+      ));
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE speaking_set_versions
       SET part1_topics_json = ?,
           part2_cue_card_json = ?,
@@ -234,22 +236,22 @@ export function updateSpeakingDraftVersion(params: {
       params.teacherNotes || null,
       JSON.stringify(validationErrors),
       params.versionId
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
   return {
-    version: getSpeakingSetVersionById(params.versionId)!,
+    version: (await getSpeakingSetVersionById(params.versionId))!,
     errors: validationErrors,
   };
 }
 
-export function publishSpeakingSetVersion(setId: string, versionId: string): void {
-  const versionRow = db.prepare('SELECT * FROM speaking_set_versions WHERE id = ? AND set_id = ?').get(
+export async function publishSpeakingSetVersion(setId: string, versionId: string): Promise<void> {
+  const versionRow = (await db.prepare('SELECT * FROM speaking_set_versions WHERE id = ? AND set_id = ?').get(
     versionId,
     setId
-  ) as any;
+  )) as any;
 
   if (!versionRow) throw new Error('Speaking set version not found');
 
@@ -264,41 +266,41 @@ export function publishSpeakingSetVersion(setId: string, versionId: string): voi
 
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     // Archive other published versions
-    db.prepare(`
+    (await db.prepare(`
       UPDATE speaking_set_versions
       SET status = 'archived'
       WHERE set_id = ? AND status = 'published'
-    `).run(setId);
+    `).run(setId));
 
     // Publish target version
-    db.prepare(`
+    (await db.prepare(`
       UPDATE speaking_set_versions
       SET status = 'published',
           published_at = ?
       WHERE id = ?
-    `).run(now, versionId);
+    `).run(now, versionId));
 
     // Update parent set status
-    db.prepare(`
+    (await db.prepare(`
       UPDATE speaking_sets
       SET status = 'published',
           updated_at = ?
       WHERE id = ?
-    `).run(now, setId);
+    `).run(now, setId));
   });
 
-  tx();
+  (await tx());
 }
 
-export function forkSpeakingDraftVersion(setId: string): SpeakingSetVersion {
-  const set = getSpeakingSetById(setId);
+export async function forkSpeakingDraftVersion(setId: string): Promise<SpeakingSetVersion> {
+  const set = (await getSpeakingSetById(setId));
   if (!set) throw new Error('Speaking set not found');
 
-  const latestVersion = db
+  const latestVersion = (await db
     .prepare('SELECT * FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1')
-    .get(setId) as any;
+    .get(setId)) as any;
 
   if (!latestVersion) throw new Error('No existing version found');
 
@@ -306,7 +308,7 @@ export function forkSpeakingDraftVersion(setId: string): SpeakingSetVersion {
   const newVersionId = uuidv4();
   const now = new Date().toISOString();
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO speaking_set_versions (
       id, set_id, version_number, status,
       part1_topics_json, part2_cue_card_json, part3_discussion_json,
@@ -322,26 +324,26 @@ export function forkSpeakingDraftVersion(setId: string): SpeakingSetVersion {
     latestVersion.teacher_notes,
     latestVersion.validation_errors_json,
     now
-  );
+  ));
 
-  db.prepare('UPDATE speaking_sets SET current_version_number = ?, updated_at = ? WHERE id = ?').run(
+  (await db.prepare('UPDATE speaking_sets SET current_version_number = ?, updated_at = ? WHERE id = ?').run(
     newVersionNumber,
     now,
     setId
-  );
+  ));
 
-  return getSpeakingSetVersionById(newVersionId)!;
+  return (await getSpeakingSetVersionById(newVersionId))!;
 }
 
-export function archiveSpeakingSet(setId: string): void {
-  db.prepare('UPDATE speaking_sets SET status = "archived", updated_at = datetime("now") WHERE id = ?').run(setId);
+export async function archiveSpeakingSet(setId: string): Promise<void> {
+  (await db.prepare('UPDATE speaking_sets SET status = "archived", updated_at = datetime("now") WHERE id = ?').run(setId));
 }
 
 // -------------------------------------------------------------
 // TEACHER-LED SPEAKING ASSESSMENTS & QUEUE
 // -------------------------------------------------------------
 
-export function recordSpeakingAssessment(
+export async function recordSpeakingAssessment(
   teacherId: string,
   data: {
     id?: string;
@@ -365,23 +367,23 @@ export function recordSpeakingAssessment(
     recordingRetentionAcknowledged?: boolean;
   },
   isAdmin = false
-): SpeakingAssessment {
+): Promise<SpeakingAssessment> {
   if (!data.studentId) {
     throw new Error('Student ID is required.');
   }
 
   // Check student existence
-  const student = db.prepare('SELECT * FROM users WHERE id = ?').get(data.studentId) as any;
+  const student = (await db.prepare('SELECT * FROM users WHERE id = ?').get(data.studentId)) as any;
   if (!student) throw new Error('Student not found.');
 
   // If classId specified, check student enrolment and teacher authority
   if (data.classId) {
-    const classRow = db.prepare('SELECT * FROM classes WHERE id = ?').get(data.classId) as any;
+    const classRow = (await db.prepare('SELECT * FROM classes WHERE id = ?').get(data.classId)) as any;
     if (!classRow) throw new Error('Class not found.');
     if (!isAdmin && classRow.teacher_id !== teacherId) {
       throw new Error('You do not have permission to assess students in this class.');
     }
-    if (!isStudentInClass(data.classId, data.studentId)) {
+    if (!(await isStudentInClass(data.classId, data.studentId))) {
       throw new Error('Student is not actively enrolled in this class.');
     }
   }
@@ -447,14 +449,14 @@ export function recordSpeakingAssessment(
   const releasedAt = data.status === 'released' ? now : null;
 
   // Check if existing assessment to update
-  const existing = db.prepare('SELECT * FROM speaking_assessments WHERE id = ?').get(assessmentId) as any;
+  const existing = (await db.prepare('SELECT * FROM speaking_assessments WHERE id = ?').get(assessmentId)) as any;
 
   if (existing) {
     if (!isAdmin && existing.teacher_id !== teacherId) {
       throw new Error('You do not have permission to edit this assessment.');
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE speaking_assessments
       SET class_id = COALESCE(?, class_id),
           assignment_id = COALESCE(?, assignment_id),
@@ -505,9 +507,9 @@ export function recordSpeakingAssessment(
       releasedAt,
       now,
       assessmentId
-    );
+    ));
   } else {
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO speaking_assessments (
         id, student_id, teacher_id, class_id, assignment_id, package_attempt_id,
         set_id, set_version_id, custom_topic, session_type, parts_covered_json,
@@ -546,27 +548,27 @@ export function recordSpeakingAssessment(
       releasedAt,
       now,
       now
-    );
+    ));
   }
 
   // If released and linked to package attempt, update package attempt
   if (data.status === 'released' && data.packageAttemptId && data.sessionType === 'complete_mock') {
-    db.prepare(`
+    (await db.prepare(`
       UPDATE package_attempts
       SET speaking_assessment_id = ?
       WHERE id = ?
-    `).run(assessmentId, data.packageAttemptId);
+    `).run(assessmentId, data.packageAttemptId));
   }
 
-  return getSpeakingAssessmentById(assessmentId, teacherId, 'teacher')!;
+  return (await getSpeakingAssessmentById(assessmentId, teacherId, 'teacher'))!;
 }
 
-export function releaseSpeakingAssessment(
+export async function releaseSpeakingAssessment(
   teacherId: string,
   assessmentId: string,
   isAdmin = false
-): SpeakingAssessment {
-  const row = db.prepare('SELECT * FROM speaking_assessments WHERE id = ?').get(assessmentId) as any;
+): Promise<SpeakingAssessment> {
+  const row = (await db.prepare('SELECT * FROM speaking_assessments WHERE id = ?').get(assessmentId)) as any;
   if (!row) throw new Error('Assessment not found');
 
   if (!isAdmin && row.teacher_id !== teacherId) {
@@ -585,27 +587,27 @@ export function releaseSpeakingAssessment(
   }
 
   const now = new Date().toISOString();
-  db.prepare(`
+  (await db.prepare(`
     UPDATE speaking_assessments
     SET status = 'released',
         released_at = ?,
         updated_at = ?
     WHERE id = ?
-  `).run(now, now, assessmentId);
+  `).run(now, now, assessmentId));
 
   // Link to package attempt if applicable
   if (row.package_attempt_id && row.session_type === 'complete_mock') {
-    db.prepare(`
+    (await db.prepare(`
       UPDATE package_attempts
       SET speaking_assessment_id = ?
       WHERE id = ?
-    `).run(assessmentId, row.package_attempt_id);
+    `).run(assessmentId, row.package_attempt_id));
   }
 
-  return getSpeakingAssessmentById(assessmentId, teacherId, 'teacher')!;
+  return (await getSpeakingAssessmentById(assessmentId, teacherId, 'teacher'))!;
 }
 
-export function correctReleasedSpeakingScores(
+export async function correctReleasedSpeakingScores(
   teacherId: string,
   assessmentId: string,
   data: {
@@ -613,8 +615,8 @@ export function correctReleasedSpeakingScores(
     reason: string;
   },
   isAdmin = false
-): SpeakingAssessment {
-  const row = db.prepare('SELECT * FROM speaking_assessments WHERE id = ?').get(assessmentId) as any;
+): Promise<SpeakingAssessment> {
+  const row = (await db.prepare('SELECT * FROM speaking_assessments WHERE id = ?').get(assessmentId)) as any;
   if (!row) throw new Error('Assessment not found');
 
   if (!isAdmin && row.teacher_id !== teacherId) {
@@ -656,9 +658,9 @@ export function correctReleasedSpeakingScores(
   const correctionId = uuidv4();
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     // 1. Audit trail record
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO speaking_score_corrections (
         id, assessment_id, teacher_id, previous_scores_json, updated_scores_json, reason, corrected_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -670,10 +672,10 @@ export function correctReleasedSpeakingScores(
       JSON.stringify({ ...data.updatedScores, overallBand: newOverallBand }),
       data.reason.trim(),
       now
-    );
+    ));
 
     // 2. Transparently update current scores
-    db.prepare(`
+    (await db.prepare(`
       UPDATE speaking_assessments
       SET criterion_fluency_coherence = ?,
           criterion_lexical_resource = ?,
@@ -690,20 +692,20 @@ export function correctReleasedSpeakingScores(
       newOverallBand,
       now,
       assessmentId
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
-  return getSpeakingAssessmentById(assessmentId, teacherId, 'teacher')!;
+  return (await getSpeakingAssessmentById(assessmentId, teacherId, 'teacher'))!;
 }
 
-export function getSpeakingAssessmentById(
+export async function getSpeakingAssessmentById(
   assessmentId: string,
   requestingUserId: string,
   requestingUserRole: string
-): SpeakingAssessment | null {
-  const row = db.prepare(`
+): Promise<SpeakingAssessment | null> {
+  const row = (await db.prepare(`
     SELECT sa.*,
       u_stud.full_name as student_name,
       u_stud.email as student_email,
@@ -718,7 +720,7 @@ export function getSpeakingAssessmentById(
     LEFT JOIN assignments a ON sa.assignment_id = a.id
     LEFT JOIN speaking_sets ss ON sa.set_id = ss.id
     WHERE sa.id = ?
-  `).get(assessmentId) as any;
+  `).get(assessmentId)) as any;
 
   if (!row) return null;
 
@@ -736,13 +738,13 @@ export function getSpeakingAssessmentById(
   }
 
   // Fetch correction history
-  const corrections = db.prepare(`
+  const corrections = (await db.prepare(`
     SELECT sc.*, u.full_name as teacher_name
     FROM speaking_score_corrections sc
     JOIN users u ON sc.teacher_id = u.id
     WHERE sc.assessment_id = ?
     ORDER BY sc.corrected_at DESC
-  `).all(assessmentId) as any[];
+  `).all(assessmentId)) as any[];
 
   const mappedCorrections: SpeakingScoreCorrection[] = corrections.map((c) => ({
     id: c.id,
@@ -801,7 +803,7 @@ export function getSpeakingAssessmentById(
   return assessment;
 }
 
-export function listTeacherAssessmentQueue(
+export async function listTeacherAssessmentQueue(
   teacherId: string,
   filters?: {
     classId?: string;
@@ -809,7 +811,7 @@ export function listTeacherAssessmentQueue(
     sessionType?: SpeakingSessionType;
   },
   isAdmin = false
-): SpeakingAssessment[] {
+): Promise<SpeakingAssessment[]> {
   let query = `
     SELECT sa.*,
       u_stud.full_name as student_name,
@@ -850,16 +852,16 @@ export function listTeacherAssessmentQueue(
 
   query += ' ORDER BY sa.updated_at DESC';
 
-  const rows = db.prepare(query).all(...params) as any[];
-  return rows.map((row) => getSpeakingAssessmentById(row.id, teacherId, 'teacher')!);
+  const rows = (await db.prepare(query).all(...params)) as any[];
+  return (await Promise.all(rows.map(async (row) => (await getSpeakingAssessmentById(row.id, teacherId, 'teacher'))!)));
 }
 
-export function listStudentSpeakingAssessments(studentId: string): SpeakingAssessment[] {
-  const rows = db.prepare(`
+export async function listStudentSpeakingAssessments(studentId: string): Promise<SpeakingAssessment[]> {
+  const rows = (await db.prepare(`
     SELECT id FROM speaking_assessments
     WHERE student_id = ? AND status = 'released'
     ORDER BY session_date DESC
-  `).all(studentId) as any[];
+  `).all(studentId)) as any[];
 
-  return rows.map((r) => getSpeakingAssessmentById(r.id, studentId, 'student')!).filter(Boolean);
+  return (await Promise.all(rows.map(async (r) => (await getSpeakingAssessmentById(r.id, studentId, 'student'))!))).filter(Boolean);
 }

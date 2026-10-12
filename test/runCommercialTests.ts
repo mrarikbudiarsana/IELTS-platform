@@ -36,7 +36,7 @@ export async function runCommercialTestSuite() {
   console.log('  RUNNING MILESTONE 7: COMMERCIAL ACCESS & PAYMENTS SUITE   ');
   console.log('=============================================================\n');
 
-  initDatabase();
+  (await initDatabase());
 
   // Setup test users
   const adminId = uuidv4();
@@ -46,17 +46,17 @@ export async function runCommercialTestSuite() {
   const learner1Email = `commercial_learner1_${Date.now()}@test.com`;
   const learner2Email = `commercial_learner2_${Date.now()}@test.com`;
 
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Admin Boss', 'admin')`).run(adminId, `admin_comm_${Date.now()}@test.com`);
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Teacher Sarah', 'teacher')`).run(teacherId, `teacher_comm_${Date.now()}@test.com`);
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Learner Dian', 'student')`).run(learnerId1, learner1Email);
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Learner Budi', 'student')`).run(learnerId2, learner2Email);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Admin Boss', 'admin')`).run(adminId, `admin_comm_${Date.now()}@test.com`));
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Teacher Sarah', 'teacher')`).run(teacherId, `teacher_comm_${Date.now()}@test.com`));
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Learner Dian', 'student')`).run(learnerId1, learner1Email));
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Learner Budi', 'student')`).run(learnerId2, learner2Email));
 
   // ---------------------------------------------------------------------
   // TEST 1: Product Configuration & Draft Status Rejection
   // Unconfigured/draft products must remain unpurchasable.
   // ---------------------------------------------------------------------
   console.log('Test 1: Product configuration & draft status rejection (unpurchasable)...');
-  const draftProduct = createProduct(adminId, {
+  const draftProduct = (await createProduct(adminId, {
     sku: `SKU-DRAFT-${Date.now()}`,
     title: 'Draft Unconfigured Bundle',
     description: 'Not yet finalized product',
@@ -68,7 +68,7 @@ export async function runCommercialTestSuite() {
     speakingAllowances: 1,
     grantsCatalogueAccess: true,
     renewalType: 'manual',
-  });
+  }));
 
   assert.strictEqual(draftProduct.status, 'draft', 'Newly created product must be in draft status');
 
@@ -82,8 +82,8 @@ export async function runCommercialTestSuite() {
   assert.strictEqual(draftOrderThrew, true, 'Draft product cannot be purchased');
 
   // Publish product for subsequent tests
-  publishProduct(adminId, draftProduct.id);
-  const publishedProduct = getProductById(draftProduct.id)!;
+  (await publishProduct(adminId, draftProduct.id));
+  const publishedProduct = (await getProductById(draftProduct.id))!;
   assert.strictEqual(publishedProduct.status, 'published', 'Product should now be published');
   console.log('✓ Passed: Draft products rejected from order creation; published successfully.');
 
@@ -91,7 +91,7 @@ export async function runCommercialTestSuite() {
   // TEST 2: Server-Side Price Calculation & Pre-Payment Checkout Disclosure
   // ---------------------------------------------------------------------
   console.log('\nTest 2: Server-side price calculation & pre-payment checkout disclosure...');
-  const preview = getCheckoutPreview(learnerId1, draftProduct.id);
+  const preview = (await getCheckoutPreview(learnerId1, draftProduct.id));
   assert.strictEqual(preview.product.id, draftProduct.id, 'Preview matches product');
   assert.strictEqual(preview.product.priceAmount, 150000, 'Server calculated price matches');
   assert.strictEqual(preview.currency, 'IDR', 'Currency matches IDR');
@@ -127,12 +127,12 @@ export async function runCommercialTestSuite() {
   const sha512Signature = crypto.createHash('sha512').update(rawSignatureString).digest('hex');
 
   // Insert mock order to verify webhook processing on Midtrans
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO commercial_orders (
       id, user_id, product_id, product_sku, product_title, gross_amount,
       currency, payment_provider, status, created_at, updated_at
     ) VALUES (?, ?, ?, 'SKU-TEST', 'Midtrans Plan', ?, 'IDR', 'midtrans', 'pending', datetime('now'), datetime('now'))
-  `).run(midtransOrderId, learnerId2, draftProduct.id, midtransGross);
+  `).run(midtransOrderId, learnerId2, draftProduct.id, midtransGross));
 
   const midtransTransactionId = `midtrans-txn-${midtransOrderId}`;
   const midtransWebhookResult = await processPaymentWebhook('midtrans', {
@@ -148,7 +148,7 @@ export async function runCommercialTestSuite() {
   assert.strictEqual(midtransWebhookResult.success, true, 'Midtrans webhook successfully processed');
   assert.strictEqual(midtransWebhookResult.status, 'paid', 'Order transitioned to paid');
 
-  const paidOrder = getOrderById(midtransOrderId)!;
+  const paidOrder = (await getOrderById(midtransOrderId))!;
   assert.strictEqual(paidOrder.status, 'paid', 'Database record transitioned to paid');
   assert.strictEqual(paidOrder.paymentMethod, 'qris', 'Payment method saved');
 
@@ -182,7 +182,7 @@ export async function runCommercialTestSuite() {
   });
 
   assert.strictEqual(latePendingResult.success, true);
-  const stillPaidOrder = getOrderById(midtransOrderId)!;
+  const stillPaidOrder = (await getOrderById(midtransOrderId))!;
   assert.strictEqual(stillPaidOrder.status, 'paid', 'Order remains paid; late pending status ignored');
   console.log('✓ Passed: Out-of-order pending notification did not regress paid status.');
 
@@ -204,7 +204,7 @@ export async function runCommercialTestSuite() {
   // Verify plan duration, catalogue access, and allowance ledger credits.
   // ---------------------------------------------------------------------
   console.log('\nTest 7: Entitlement & allowance activation for paid practice plan...');
-  const learnerCommercial = getUserCommercialSummary(learnerId1);
+  const learnerCommercial = (await getUserCommercialSummary(learnerId1));
   assert.strictEqual(learnerCommercial.planType, 'paid_plan', 'User plan_type upgraded to paid_plan');
   assert.strictEqual(learnerCommercial.hasCatalogueAccess, true, 'User has full catalogue access');
   assert(learnerCommercial.planExpiresAt !== undefined, 'User plan expiry date set');
@@ -212,7 +212,7 @@ export async function runCommercialTestSuite() {
   assert(learnerCommercial.speakingBalance.total >= 1, 'Speaking allowances credited');
 
   // Verify ledgers have idempotency keys
-  const writingLedger = db.prepare('SELECT * FROM writing_allowance_ledger WHERE user_id = ?').all(learnerId1) as any[];
+  const writingLedger = (await db.prepare('SELECT * FROM writing_allowance_ledger WHERE user_id = ?').all(learnerId1)) as any[];
   assert(writingLedger.some((e) => e.idempotency_key && e.idempotency_key.includes(pendingOrderRes.order.id)), 'Writing ledger recorded with order idempotency key');
   console.log('✓ Passed: Subscriptions and ledger entries activated with idempotency protection.');
 
@@ -220,7 +220,7 @@ export async function runCommercialTestSuite() {
   // TEST 8: Individual Assessment Purchases (No Full Catalogue Access)
   // ---------------------------------------------------------------------
   console.log('\nTest 8: Individual assessment purchases (credits without catalogue access)...');
-  const individualWritingProduct = createProduct(adminId, {
+  const individualWritingProduct = (await createProduct(adminId, {
     sku: `SKU-W-SINGLE-${Date.now()}`,
     title: 'Single AI Writing Assessment',
     description: 'Evaluate one Task 1 or Task 2 essay',
@@ -232,11 +232,11 @@ export async function runCommercialTestSuite() {
     speakingAllowances: 0,
     grantsCatalogueAccess: false,
     renewalType: 'manual',
-  });
-  publishProduct(adminId, individualWritingProduct.id);
+  }));
+  (await publishProduct(adminId, individualWritingProduct.id));
 
   const freshLearnerId = uuidv4();
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Fresh Learner', 'student')`).run(freshLearnerId, `fresh_${Date.now()}@test.com`);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Fresh Learner', 'student')`).run(freshLearnerId, `fresh_${Date.now()}@test.com`));
 
   const singleOrderRes = await createOrder(freshLearnerId, individualWritingProduct.id, 'mock');
   await processPaymentWebhook('mock', {
@@ -246,7 +246,7 @@ export async function runCommercialTestSuite() {
     gross_amount: 49000,
   });
 
-  const freshCommercial = getUserCommercialSummary(freshLearnerId);
+  const freshCommercial = (await getUserCommercialSummary(freshLearnerId));
   assert.strictEqual(freshCommercial.planType, 'free', 'Plan remains free');
   assert.strictEqual(freshCommercial.hasCatalogueAccess, false, 'Catalogue access remains false');
   assert.strictEqual(freshCommercial.writingBalance.total, 1, 'Exactly 1 writing allowance granted');
@@ -257,7 +257,7 @@ export async function runCommercialTestSuite() {
   // TEST 9: Atomic Teacher Code Redemption & Max Redemptions Enforcement
   // ---------------------------------------------------------------------
   console.log('\nTest 9: Atomic teacher code redemption & max limit enforcement...');
-  const cohortCode = createTeacherCode(teacherId, {
+  const cohortCode = (await createTeacherCode(teacherId, {
     code: `PILOT-LIMIT-2-${Date.now()}`,
     label: 'Pilot Cohort 2 Seats',
     description: 'Strict 2-seat limit',
@@ -267,33 +267,33 @@ export async function runCommercialTestSuite() {
     writingAllowances: 3,
     speakingAllowances: 1,
     protectedPrepostAllowances: 2,
-  });
+  }));
 
   assert.strictEqual(cohortCode.maxRedemptions, 2);
   assert.strictEqual(cohortCode.redemptionCount, 0);
 
   // Seat 1 redemption
   const seat1User = uuidv4();
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Seat 1 User', 'student')`).run(seat1User, `seat1_${Date.now()}@test.com`);
-  const redeem1 = redeemTeacherCode(seat1User, cohortCode.code);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Seat 1 User', 'student')`).run(seat1User, `seat1_${Date.now()}@test.com`));
+  const redeem1 = (await redeemTeacherCode(seat1User, cohortCode.code));
   assert.strictEqual(redeem1.success, true, 'First redemption succeeded');
   assert.strictEqual(redeem1.code.redemptionCount, 1, 'Redemption count is 1');
   assert.strictEqual(redeem1.code.status, 'active', 'Code remains active');
 
   // Seat 2 redemption (hits limit)
   const seat2User = uuidv4();
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Seat 2 User', 'student')`).run(seat2User, `seat2_${Date.now()}@test.com`);
-  const redeem2 = redeemTeacherCode(seat2User, cohortCode.code);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Seat 2 User', 'student')`).run(seat2User, `seat2_${Date.now()}@test.com`));
+  const redeem2 = (await redeemTeacherCode(seat2User, cohortCode.code));
   assert.strictEqual(redeem2.success, true, 'Second redemption succeeded');
   assert.strictEqual(redeem2.code.redemptionCount, 2, 'Redemption count is 2');
   assert.strictEqual(redeem2.code.status, 'exhausted', 'Code automatically transitioned to exhausted');
 
   // Seat 3 redemption (must reject)
   const seat3User = uuidv4();
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Seat 3 User', 'student')`).run(seat3User, `seat3_${Date.now()}@test.com`);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Seat 3 User', 'student')`).run(seat3User, `seat3_${Date.now()}@test.com`));
   let seat3Threw = false;
   try {
-    redeemTeacherCode(seat3User, cohortCode.code);
+    (await redeemTeacherCode(seat3User, cohortCode.code));
   } catch (err: any) {
     seat3Threw = true;
     assert(err.message.includes('exhausted') || err.message.includes('maximum'), 'Rejection message reflects exhaustion');
@@ -307,7 +307,7 @@ export async function runCommercialTestSuite() {
   console.log('\nTest 10: One-redemption-per-learner rule & revoked code rejection...');
   let duplicateRedeemThrew = false;
   try {
-    redeemTeacherCode(seat1User, cohortCode.code);
+    (await redeemTeacherCode(seat1User, cohortCode.code));
   } catch (err: any) {
     duplicateRedeemThrew = true;
     assert(err.message.includes('already redeemed'), 'Rejects duplicate redemption by same learner');
@@ -315,18 +315,18 @@ export async function runCommercialTestSuite() {
   assert.strictEqual(duplicateRedeemThrew, true, 'Learner cannot redeem the same code twice');
 
   // Revoke code test
-  const revokableCode = createTeacherCode(teacherId, {
+  const revokableCode = (await createTeacherCode(teacherId, {
     code: `REVOKE-TEST-${Date.now()}`,
     label: 'Revokable Test Code',
     maxRedemptions: 10,
     accessDurationDays: 7,
     grantsCatalogueAccess: true,
-  });
-  revokeTeacherCode(teacherId, revokableCode.id);
+  }));
+  (await revokeTeacherCode(teacherId, revokableCode.id));
 
   let revokedRedeemThrew = false;
   try {
-    redeemTeacherCode(seat3User, revokableCode.code);
+    (await redeemTeacherCode(seat3User, revokableCode.code));
   } catch (err: any) {
     revokedRedeemThrew = true;
     assert(err.message.includes('revoked') || err.message.includes('inactive'), 'Rejection reflects revoked status');
@@ -339,9 +339,9 @@ export async function runCommercialTestSuite() {
   // ---------------------------------------------------------------------
   console.log('\nTest 11: Protected pre/post-test allowance isolation...');
   const protectedUser = uuidv4();
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Protected Cohort User', 'student')`).run(protectedUser, `protected_${Date.now()}@test.com`);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Protected Cohort User', 'student')`).run(protectedUser, `protected_${Date.now()}@test.com`));
 
-  const codeWithProtected = createTeacherCode(teacherId, {
+  const codeWithProtected = (await createTeacherCode(teacherId, {
     code: `PROTECTED-${Date.now()}`,
     label: 'Protected Test Package Code',
     maxRedemptions: 5,
@@ -350,10 +350,10 @@ export async function runCommercialTestSuite() {
     writingAllowances: 4, // Discretionary
     speakingAllowances: 2, // Discretionary
     protectedPrepostAllowances: 2, // 2 Protected pre/post slots
-  });
+  }));
 
-  redeemTeacherCode(protectedUser, codeWithProtected.code);
-  const commSummary = getUserCommercialSummary(protectedUser);
+  (await redeemTeacherCode(protectedUser, codeWithProtected.code));
+  const commSummary = (await getUserCommercialSummary(protectedUser));
 
   // Both writing and speaking total must include the 2 protected slots
   assert.strictEqual(commSummary.writingBalance.protectedPrepost, 2, '2 protected pre/post writing slots identified');
@@ -369,9 +369,9 @@ export async function runCommercialTestSuite() {
   // ---------------------------------------------------------------------
   console.log('\nTest 12: Compensating ledger refunds without deleting history...');
   const refundLearnerId = uuidv4();
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Refund User', 'student')`).run(refundLearnerId, `refund_${Date.now()}@test.com`);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Refund User', 'student')`).run(refundLearnerId, `refund_${Date.now()}@test.com`));
 
-  const refundableProduct = createProduct(adminId, {
+  const refundableProduct = (await createProduct(adminId, {
     sku: `SKU-REF-${Date.now()}`,
     title: 'Refundable Plan',
     productType: 'paid_plan',
@@ -382,8 +382,8 @@ export async function runCommercialTestSuite() {
     speakingAllowances: 2,
     grantsCatalogueAccess: true,
     renewalType: 'manual',
-  });
-  publishProduct(adminId, refundableProduct.id);
+  }));
+  (await publishProduct(adminId, refundableProduct.id));
 
   const orderToRefund = await createOrder(refundLearnerId, refundableProduct.id, 'mock');
   await processPaymentWebhook('mock', {
@@ -394,17 +394,17 @@ export async function runCommercialTestSuite() {
   });
 
   // Verify initial balances before refund
-  const beforeRefundCommercial = getUserCommercialSummary(refundLearnerId);
+  const beforeRefundCommercial = (await getUserCommercialSummary(refundLearnerId));
   assert.strictEqual(beforeRefundCommercial.writingBalance.total, 4);
   assert.strictEqual(beforeRefundCommercial.speakingBalance.total, 2);
   assert.strictEqual(beforeRefundCommercial.hasCatalogueAccess, true);
 
   // Consume 1 writing allowance before refund
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO writing_allowance_ledger (
       id, user_id, amount, balance_after, transaction_type, notes, created_at
     ) VALUES (?, ?, -1, 3, 'consumption', 'Student essay evaluated', datetime('now'))
-  `).run(uuidv4(), refundLearnerId);
+  `).run(uuidv4(), refundLearnerId));
 
   // Execute compensating refund
   const refundResult = await refundOrder({
@@ -418,13 +418,13 @@ export async function runCommercialTestSuite() {
   assert.strictEqual(refundResult.refundAudit.remainingSpeakingAllowancesRevoked, 2, 'Revoked remaining 2 speaking allowances');
   assert.strictEqual(refundResult.refundAudit.consumedAllowancesRevoked, 1, 'Audited 1 consumed allowance');
 
-  const afterRefundCommercial = getUserCommercialSummary(refundLearnerId);
+  const afterRefundCommercial = (await getUserCommercialSummary(refundLearnerId));
   assert.strictEqual(afterRefundCommercial.writingBalance.total, 0, 'Writing balance returned to 0 (no negative balance)');
   assert.strictEqual(afterRefundCommercial.speakingBalance.total, 0, 'Speaking balance returned to 0');
   assert.strictEqual(afterRefundCommercial.hasCatalogueAccess, false, 'Catalogue access revoked');
 
   // Verify ledger retains complete immutable audit history
-  const refundLedgerEntries = db.prepare('SELECT * FROM writing_allowance_ledger WHERE user_id = ?').all(refundLearnerId) as any[];
+  const refundLedgerEntries = (await db.prepare('SELECT * FROM writing_allowance_ledger WHERE user_id = ?').all(refundLearnerId)) as any[];
   assert(refundLedgerEntries.some((e) => e.notes && e.notes.includes('Compensating')), 'Ledger contains explicit compensating entry');
   console.log('✓ Passed: Compensating refund processed safely without negative balances or history loss.');
 
@@ -434,58 +434,58 @@ export async function runCommercialTestSuite() {
   console.log('\nTest 13: Separation of class assignment access from commercial plan access...');
   const freeLearner = uuidv4();
   const freeEmail = `free_learner_${Date.now()}@test.com`;
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Free Learner', 'student')`).run(freeLearner, freeEmail);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Free Learner', 'student')`).run(freeLearner, freeEmail));
 
   // Non-free practice test
   const testId = uuidv4();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO reading_tests (id, title, test_type, category, is_free_tier, created_by_id, created_at, updated_at)
     VALUES (?, 'Exclusive Academic Mock 10', 'academic', 'mock', 0, ?, datetime('now'), datetime('now'))
-  `).run(testId, teacherId);
+  `).run(testId, teacherId));
 
   // 1. Direct catalogue access without paid plan -> DENIED
-  const directAccess = canUserAccessTest({
+  const directAccess = (await canUserAccessTest({
     userId: freeLearner,
     isTeacherOrAdmin: false,
     isFreeTier: false,
-  });
+  }));
   assert.strictEqual(directAccess.allowed, false, 'Free learner cannot access non-free catalogue item directly');
   assert(directAccess.reason?.includes('Paid Practice Plan'), 'Rejection message explains plan requirement');
 
   // 2. Class teacher assigns this test to a class and enrols free learner
-  const testClass = createClass(teacherId, {
+  const testClass = (await createClass(teacherId, {
     title: 'IELTS Band 7 Class',
     testType: 'academic',
-  });
-  enrolStudentByEmail(teacherId, testClass.id, freeEmail);
+  }));
+  (await enrolStudentByEmail(teacherId, testClass.id, freeEmail));
 
-  const { assignment: classAssignment } = createAssignment(teacherId, testClass.id, {
+  const { assignment: classAssignment } = (await createAssignment(teacherId, testClass.id, {
     title: 'Mandatory Reading Mock',
     purpose: 'practice',
     skill: 'reading',
     testId,
-  });
+  }));
 
   // 3. Free learner accesses test via assignment -> ALLOWED!
-  const assignmentAccess = canUserAccessTest({
+  const assignmentAccess = (await canUserAccessTest({
     userId: freeLearner,
     isTeacherOrAdmin: false,
     isFreeTier: false,
     assignmentId: classAssignment.id,
-  });
+  }));
   assert.strictEqual(assignmentAccess.allowed, true, 'Enrolled student accesses assignment test regardless of plan');
 
   // 4. Free tier test -> ALLOWED for everyone
-  const freeTierAccess = canUserAccessTest({
+  const freeTierAccess = (await canUserAccessTest({
     userId: freeLearner,
     isTeacherOrAdmin: false,
     isFreeTier: true,
-  });
+  }));
   assert.strictEqual(freeTierAccess.allowed, true, 'Free tier test accessible by any registered learner');
 
   // Clean up temporary mock test
-  db.prepare('DELETE FROM assignments WHERE test_id = ?').run(testId);
-  db.prepare('DELETE FROM reading_tests WHERE id = ?').run(testId);
+  (await db.prepare('DELETE FROM assignments WHERE test_id = ?').run(testId));
+  (await db.prepare('DELETE FROM reading_tests WHERE id = ?').run(testId));
 
   console.log('✓ Passed: Class assignments and free-tier items strictly separated from commercial plan rules.');
 
@@ -493,22 +493,22 @@ export async function runCommercialTestSuite() {
   // ADMIN SUMMARY & AUDITED ADJUSTMENT VERIFICATION
   // ---------------------------------------------------------------------
   console.log('\nAdmin Commercial Summary & Balance Adjustment check...');
-  const adminSummary = getAdminCommercialSummary();
+  const adminSummary = (await getAdminCommercialSummary());
   assert(adminSummary.activeSubscribersCount >= 1, 'Active subscribers tallied');
   assert(adminSummary.totalRevenueByCurrency['IDR'] > 0, 'Revenue by currency aggregated');
   assert(adminSummary.teacherCodes.length > 0, 'Teacher codes listed in admin summary');
 
   // Staff audited balance adjustment
-  const adjResult = adjustUserBalance({
+  const adjResult = (await adjustUserBalance({
     adminId,
     userId: freeLearner,
     skill: 'writing',
     amount: 2,
     reason: 'Compensation for technical outage during mock exam',
-  });
+  }));
   assert.strictEqual(adjResult.success, true);
   assert.strictEqual(adjResult.newBalance, 2);
-  const updatedFreeBal = getUserAllowanceBalance(freeLearner);
+  const updatedFreeBal = (await getUserAllowanceBalance(freeLearner));
   assert.strictEqual(updatedFreeBal.available, 2, 'Free learner received audited adjustment');
   console.log('✓ Passed: Admin commercial summary and audited balance adjustments verified.');
 
@@ -518,9 +518,11 @@ export async function runCommercialTestSuite() {
 }
 
 // Allow direct CLI execution
-if (require.main === module) {
-  runCommercialTestSuite().catch((err) => {
-    console.error('Test suite failed:', err);
-    process.exit(1);
-  });
+async function runEntryPoint() {
+if (require.main === module || process.env.NODE_ENV === 'test') {
+  await runCommercialTestSuite();
 }
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

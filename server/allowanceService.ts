@@ -5,14 +5,14 @@ import { WritingAllowanceBalance, WritingAllowanceLedger } from '../shared/types
 /**
  * Calculates user's allowance balance from the immutable ledger.
  */
-export function getUserAllowanceBalance(userId: string): WritingAllowanceBalance {
-  const rows = db
+export async function getUserAllowanceBalance(userId: string): Promise<WritingAllowanceBalance> {
+  const rows = (await db
     .prepare(
       `SELECT transaction_type, amount 
        FROM writing_allowance_ledger 
        WHERE user_id = ?`
     )
-    .all(userId) as { transaction_type: string; amount: number }[];
+    .all(userId)) as { transaction_type: string; amount: number }[];
 
   let totalGranted = 0;
   let totalReserved = 0;
@@ -50,28 +50,28 @@ export function getUserAllowanceBalance(userId: string): WritingAllowanceBalance
  * Grants testing allowances to a student (Admin/Authorized teacher operation).
  * Does not invent commercial pricing - used for pilot testing, class allocations, and trials.
  */
-export function grantTestingAllowance(params: {
+export async function grantTestingAllowance(params: {
   adminId: string;
   userId: string;
   amount: number;
   notes?: string;
   idempotencyKey?: string;
-}): WritingAllowanceLedger {
+}): Promise<WritingAllowanceLedger> {
   const { adminId, userId, amount, notes, idempotencyKey } = params;
 
   if (amount <= 0 || !Number.isInteger(amount)) {
     throw new Error('Allowance grant amount must be a positive integer.');
   }
 
-  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId);
+  const user = (await db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId));
   if (!user) {
     throw new Error('Target user does not exist.');
   }
 
   if (idempotencyKey) {
-    const existing = db
+    const existing = (await db
       .prepare('SELECT * FROM writing_allowance_ledger WHERE idempotency_key = ?')
-      .get(idempotencyKey) as any;
+      .get(idempotencyKey)) as any;
     if (existing) {
       return {
         id: existing.id,
@@ -89,23 +89,23 @@ export function grantTestingAllowance(params: {
     }
   }
 
-  const txn = db.transaction(() => {
-    const currentBalance = getUserAllowanceBalance(userId);
+  const txn = db.transaction(async () => {
+    const currentBalance = (await getUserAllowanceBalance(userId));
     const newAvailable = currentBalance.available + amount;
     const ledgerId = uuidv4();
 
-    db.prepare(
+    (await db.prepare(
       `INSERT INTO writing_allowance_ledger (
         id, user_id, amount, balance_after, transaction_type, notes, created_by_id, idempotency_key
       ) VALUES (?, ?, ?, ?, 'grant', ?, ?, ?)`
-    ).run(ledgerId, userId, amount, newAvailable, notes || 'Pilot testing grant', adminId, idempotencyKey || null);
+    ).run(ledgerId, userId, amount, newAvailable, notes || 'Pilot testing grant', adminId, idempotencyKey || null));
 
-    return db
+    return (await db
       .prepare('SELECT * FROM writing_allowance_ledger WHERE id = ?')
-      .get(ledgerId) as any;
+      .get(ledgerId)) as any;
   });
 
-  return txn();
+  return (await txn());
 }
 
 /**
@@ -113,27 +113,27 @@ export function grantTestingAllowance(params: {
  * Throws an error if insufficient allowance.
  * Uses idempotencyKey to prevent duplicate reservations.
  */
-export function reserveAllowance(params: {
+export async function reserveAllowance(params: {
   userId: string;
   assessmentId: string;
   responseId: string;
   idempotencyKey?: string;
   notes?: string;
-}): WritingAllowanceLedger {
+}): Promise<WritingAllowanceLedger> {
   const { userId, assessmentId, responseId, idempotencyKey, notes } = params;
 
   // Check idempotency first
   if (idempotencyKey) {
-    const existing = db
+    const existing = (await db
       .prepare('SELECT * FROM writing_allowance_ledger WHERE idempotency_key = ?')
-      .get(idempotencyKey) as any;
+      .get(idempotencyKey)) as any;
     if (existing) {
       return mapLedgerRow(existing);
     }
   }
 
-  const txn = db.transaction(() => {
-    const currentBalance = getUserAllowanceBalance(userId);
+  const txn = db.transaction(async () => {
+    const currentBalance = (await getUserAllowanceBalance(userId));
     if (currentBalance.available < 1) {
       throw new Error(
         'Insufficient writing assessment allowance. Available balance: ' + currentBalance.available
@@ -143,7 +143,7 @@ export function reserveAllowance(params: {
     const ledgerId = uuidv4();
     const newAvailable = currentBalance.available - 1;
 
-    db.prepare(
+    (await db.prepare(
       `INSERT INTO writing_allowance_ledger (
         id, user_id, amount, balance_after, transaction_type, assessment_id, response_id, idempotency_key, notes
       ) VALUES (?, ?, -1, ?, 'reservation', ?, ?, ?, ?)`
@@ -155,101 +155,101 @@ export function reserveAllowance(params: {
       responseId,
       idempotencyKey || null,
       notes || 'AI assessment reserved'
-    );
+    ));
 
-    return db
+    return (await db
       .prepare('SELECT * FROM writing_allowance_ledger WHERE id = ?')
-      .get(ledgerId) as any;
+      .get(ledgerId)) as any;
   });
 
-  return mapLedgerRow(txn());
+  return mapLedgerRow((await txn()));
 }
 
 /**
  * Consumes a reserved allowance upon successful assessment completion.
  */
-export function consumeAllowance(params: {
+export async function consumeAllowance(params: {
   userId: string;
   assessmentId: string;
   responseId: string;
   notes?: string;
-}): void {
+}): Promise<void> {
   const { userId, assessmentId, responseId, notes } = params;
 
   // Verify reservation exists
-  const reservation = db
+  const reservation = (await db
     .prepare(
       `SELECT id FROM writing_allowance_ledger 
        WHERE user_id = ? AND assessment_id = ? AND transaction_type = 'reservation'`
     )
-    .get(userId, assessmentId);
+    .get(userId, assessmentId));
 
   if (!reservation) {
     return; // Already processed or no reservation
   }
 
   // Check if already consumed
-  const existingConsumption = db
+  const existingConsumption = (await db
     .prepare(
       `SELECT id FROM writing_allowance_ledger 
        WHERE user_id = ? AND assessment_id = ? AND transaction_type = 'consumption'`
     )
-    .get(userId, assessmentId);
+    .get(userId, assessmentId));
 
   if (existingConsumption) {
     return;
   }
 
-  const currentBalance = getUserAllowanceBalance(userId);
+  const currentBalance = (await getUserAllowanceBalance(userId));
   const ledgerId = uuidv4();
 
-  db.prepare(
+  (await db.prepare(
     `INSERT INTO writing_allowance_ledger (
       id, user_id, amount, balance_after, transaction_type, assessment_id, response_id, notes
     ) VALUES (?, ?, 0, ?, 'consumption', ?, ?, ?)`
-  ).run(ledgerId, userId, currentBalance.available, assessmentId, responseId, notes || 'AI assessment completed');
+  ).run(ledgerId, userId, currentBalance.available, assessmentId, responseId, notes || 'AI assessment completed'));
 }
 
 /**
  * Releases a reserved allowance back to the student if the AI assessment fails or is cancelled.
  */
-export function releaseAllowance(params: {
+export async function releaseAllowance(params: {
   userId: string;
   assessmentId: string;
   responseId: string;
   reason?: string;
-}): void {
+}): Promise<void> {
   const { userId, assessmentId, responseId, reason } = params;
 
   // Check if reserved
-  const reservation = db
+  const reservation = (await db
     .prepare(
       `SELECT id FROM writing_allowance_ledger 
        WHERE user_id = ? AND assessment_id = ? AND transaction_type = 'reservation'`
     )
-    .get(userId, assessmentId);
+    .get(userId, assessmentId));
 
   if (!reservation) {
     return;
   }
 
   // Check if already released or consumed
-  const existingRelease = db
+  const existingRelease = (await db
     .prepare(
       `SELECT id FROM writing_allowance_ledger 
        WHERE user_id = ? AND assessment_id = ? AND transaction_type IN ('release', 'consumption')`
     )
-    .get(userId, assessmentId);
+    .get(userId, assessmentId));
 
   if (existingRelease) {
     return;
   }
 
-  const currentBalance = getUserAllowanceBalance(userId);
+  const currentBalance = (await getUserAllowanceBalance(userId));
   const ledgerId = uuidv4();
   const restoredAvailable = currentBalance.available + 1;
 
-  db.prepare(
+  (await db.prepare(
     `INSERT INTO writing_allowance_ledger (
       id, user_id, amount, balance_after, transaction_type, assessment_id, response_id, notes
     ) VALUES (?, ?, 1, ?, 'release', ?, ?, ?)`
@@ -260,20 +260,20 @@ export function releaseAllowance(params: {
     assessmentId,
     responseId,
     reason ? `Released: ${reason}` : 'Assessment failed/released'
-  );
+  ));
 }
 
 /**
  * Lists the allowance ledger history for a user.
  */
-export function listAllowanceLedger(userId: string): WritingAllowanceLedger[] {
-  const rows = db
+export async function listAllowanceLedger(userId: string): Promise<WritingAllowanceLedger[]> {
+  const rows = (await db
     .prepare(
       `SELECT * FROM writing_allowance_ledger 
        WHERE user_id = ? 
        ORDER BY created_at DESC`
     )
-    .all(userId) as any[];
+    .all(userId)) as any[];
 
   return rows.map(mapLedgerRow);
 }

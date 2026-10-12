@@ -38,40 +38,41 @@ console.log('\n======================================================');
 console.log('  RUNNING IELTS CLASS & JOURNEY VERIFICATION SUITE   ');
 console.log('======================================================\n');
 
-initDatabase();
+async function runEntryPoint() {
+(await initDatabase());
 
 // -----------------------------------------------------------------
 // Test Helper: Provision Users
 // -----------------------------------------------------------------
 const testTeacherId = uuidv4();
 const testTeacherEmail = `teacher_${Date.now()}@test.com`;
-db.prepare(`
+(await db.prepare(`
   INSERT INTO users (id, email, password_hash, full_name, role, test_type_preference, created_at)
   VALUES (?, ?, ?, 'Teacher Testington', 'teacher', 'academic', datetime('now'))
-`).run(testTeacherId, testTeacherEmail, hashPassword('Pass1234!'));
+`).run(testTeacherId, testTeacherEmail, hashPassword('Pass1234!')));
 
 const otherTeacherId = uuidv4();
-db.prepare(`
+(await db.prepare(`
   INSERT INTO users (id, email, password_hash, full_name, role, test_type_preference, created_at)
   VALUES (?, ?, ?, 'Other Instructor', 'teacher', 'academic', datetime('now'))
-`).run(otherTeacherId, `other_${Date.now()}@test.com`, hashPassword('Pass1234!'));
+`).run(otherTeacherId, `other_${Date.now()}@test.com`, hashPassword('Pass1234!')));
 
 const student1Id = uuidv4();
 const student1Email = `student1_${Date.now()}@test.com`;
-db.prepare(`
+(await db.prepare(`
   INSERT INTO users (id, email, password_hash, full_name, role, test_type_preference, created_at)
   VALUES (?, ?, ?, 'Alice Learner', 'student', 'academic', datetime('now'))
-`).run(student1Id, student1Email, hashPassword('Pass1234!'));
+`).run(student1Id, student1Email, hashPassword('Pass1234!')));
 
 const student2Id = uuidv4();
 const student2Email = `student2_${Date.now()}@test.com`;
-db.prepare(`
+(await db.prepare(`
   INSERT INTO users (id, email, password_hash, full_name, role, test_type_preference, created_at)
   VALUES (?, ?, ?, 'Bob Learner', 'student', 'academic', datetime('now'))
-`).run(student2Id, student2Email, hashPassword('Pass1234!'));
+`).run(student2Id, student2Email, hashPassword('Pass1234!')));
 
 // Helper: Provision distinct test materials for Pre and Post
-const preReadingRes = createReadingTest({
+const preReadingRes = (await createReadingTest({
   title: `Pre-Test Reading ${Date.now()}`,
   testType: 'academic',
   category: 'mock',
@@ -104,10 +105,10 @@ const preReadingRes = createReadingTest({
       ],
     },
   ],
-});
-publishTestVersion(preReadingRes.test.id, preReadingRes.version.id);
+}));
+(await publishTestVersion(preReadingRes.test.id, preReadingRes.version.id));
 
-const postReadingRes = createReadingTest({
+const postReadingRes = (await createReadingTest({
   title: `Post-Test Reading ${Date.now()}`,
   testType: 'academic',
   category: 'mock',
@@ -140,10 +141,10 @@ const postReadingRes = createReadingTest({
       ],
     },
   ],
-});
-publishTestVersion(postReadingRes.test.id, postReadingRes.version.id);
+}));
+(await publishTestVersion(postReadingRes.test.id, postReadingRes.version.id));
 
-const preListeningRes = createListeningTest({
+const preListeningRes = (await createListeningTest({
   title: `Pre-Test Listening ${Date.now()}`,
   category: 'mock',
   audioMode: 'part_audios',
@@ -177,10 +178,10 @@ const preListeningRes = createListeningTest({
       ],
     },
   ],
-});
-publishListeningTestVersion(preListeningRes.test.id, preListeningRes.version.id);
+}));
+(await publishListeningTestVersion(preListeningRes.test.id, preListeningRes.version.id));
 
-const postListeningRes = createListeningTest({
+const postListeningRes = (await createListeningTest({
   title: `Post-Test Listening ${Date.now()}`,
   category: 'mock',
   audioMode: 'part_audios',
@@ -214,18 +215,18 @@ const postListeningRes = createListeningTest({
       ],
     },
   ],
-});
-publishListeningTestVersion(postListeningRes.test.id, postListeningRes.version.id);
+}));
+(await publishListeningTestVersion(postListeningRes.test.id, postListeningRes.version.id));
 
 // -----------------------------------------------------------------
 // Check 1: Class Creation & Permission Isolation
 // -----------------------------------------------------------------
 console.log('CHECK 1: Class Creation & Teacher Role Authorization');
-const class1 = createClass(testTeacherId, {
+const class1 = (await createClass(testTeacherId, {
   title: 'IELTS Academic Cohort Alpha',
   description: '8-week intensive preparation program',
   testType: 'academic',
-});
+}));
 
 assert.ok(class1.id, 'Class ID must be generated');
 assert.strictEqual(class1.teacherId, testTeacherId, 'Teacher ID must match creator');
@@ -235,7 +236,7 @@ assert.strictEqual(class1.testType, 'academic', 'Test type must be academic');
 // Update class permissions: other teacher cannot edit class1
 let errorThrown = false;
 try {
-  updateClass(class1.id, otherTeacherId, { title: 'Unauthorized Edit' });
+  (await updateClass(class1.id, otherTeacherId, { title: 'Unauthorized Edit' }));
 } catch (e: any) {
   errorThrown = true;
   assert.ok(e.message.includes('permission'), 'Must reject unauthorized teacher update');
@@ -243,9 +244,9 @@ try {
 assert.ok(errorThrown, 'Should block unauthorized update');
 
 // Teacher list filtering
-const teacher1Classes = listTeacherClasses(testTeacherId);
+const teacher1Classes = (await listTeacherClasses(testTeacherId));
 assert.strictEqual(teacher1Classes.length, 1, 'Teacher 1 should have exactly 1 class');
-const teacher2Classes = listTeacherClasses(otherTeacherId);
+const teacher2Classes = (await listTeacherClasses(otherTeacherId));
 assert.strictEqual(teacher2Classes.length, 0, 'Teacher 2 should have 0 classes');
 console.log('  ✔ Class creation, invitation codes, and teacher permissions verified.');
 
@@ -255,35 +256,35 @@ console.log('  ✔ Class creation, invitation codes, and teacher permissions ver
 console.log('CHECK 2: Protected Enrolment, Code Joining, and Non-destructive Removal');
 
 // Student 1 joins via invitation code
-const joinedClass = enrolStudentByCode(student1Id, class1.invitationCode);
+const joinedClass = (await enrolStudentByCode(student1Id, class1.invitationCode));
 assert.strictEqual(joinedClass.id, class1.id, 'Joined class ID must match');
-assert.ok(isStudentInClass(class1.id, student1Id), 'Student 1 must be confirmed in class');
+assert.ok((await isStudentInClass(class1.id, student1Id)), 'Student 1 must be confirmed in class');
 
 // Teacher invites Student 2 by email
-const enrolment2 = enrolStudentByEmail(testTeacherId, class1.id, student2Email);
+const enrolment2 = (await enrolStudentByEmail(testTeacherId, class1.id, student2Email));
 assert.strictEqual(enrolment2.studentId, student2Id, 'Enrolled student ID matches student 2');
-assert.ok(isStudentInClass(class1.id, student2Id), 'Student 2 must be confirmed in class');
+assert.ok((await isStudentInClass(class1.id, student2Id)), 'Student 2 must be confirmed in class');
 
 // Student class visibility
-const student1Classes = listStudentClasses(student1Id);
+const student1Classes = (await listStudentClasses(student1Id));
 assert.strictEqual(student1Classes.length, 1, 'Student 1 should see enrolled class');
 assert.strictEqual(student1Classes[0].id, class1.id);
 
 // Roster verification
-const roster = listClassEnrolments(testTeacherId, class1.id);
+const roster = (await listClassEnrolments(testTeacherId, class1.id));
 assert.strictEqual(roster.length, 2, 'Roster must contain 2 enrolled students');
 
 // Non-destructive removal: remove Student 2
-removeStudentFromClass(testTeacherId, class1.id, student2Id);
-assert.strictEqual(isStudentInClass(class1.id, student2Id), false, 'Student 2 must not be active');
+(await removeStudentFromClass(testTeacherId, class1.id, student2Id));
+assert.strictEqual((await isStudentInClass(class1.id, student2Id)), false, 'Student 2 must not be active');
 
 // Verify student account still exists intact!
-const student2User = db.prepare('SELECT * FROM users WHERE id = ?').get(student2Id) as any;
+const student2User = (await db.prepare('SELECT * FROM users WHERE id = ?').get(student2Id)) as any;
 assert.ok(student2User, 'Student 2 user account must NOT be deleted upon class removal');
 
 // Re-enrol Student 2 for upcoming tests
-enrolStudentByEmail(testTeacherId, class1.id, student2Email);
-assert.ok(isStudentInClass(class1.id, student2Id), 'Student 2 re-enroled');
+(await enrolStudentByEmail(testTeacherId, class1.id, student2Email));
+assert.ok((await isStudentInClass(class1.id, student2Id)), 'Student 2 re-enroled');
 console.log('  ✔ Enrolment by code and email verified; student removal preserves user account.');
 
 // -----------------------------------------------------------------
@@ -291,26 +292,26 @@ console.log('  ✔ Enrolment by code and email verified; student removal preserv
 // -----------------------------------------------------------------
 console.log('CHECK 3: Multi-Skill Test Packages & Skill Slot Specification');
 
-const prePackage = createTestPackage(testTeacherId, {
+const prePackage = (await createTestPackage(testTeacherId, {
   title: 'Diagnostic Pre-Test Package',
   packageType: 'pre_test',
   testType: 'academic',
   readingTestId: preReadingRes.test.id,
   listeningTestId: preListeningRes.test.id,
-});
+}));
 
 assert.strictEqual(prePackage.writingStatus, 'not_implemented', 'Writing slot must be not_implemented');
 assert.strictEqual(prePackage.speakingStatus, 'not_implemented', 'Speaking slot must be not_implemented');
 assert.strictEqual(prePackage.readingTestId, preReadingRes.test.id);
 assert.strictEqual(prePackage.listeningTestId, preListeningRes.test.id);
 
-const postPackage = createTestPackage(testTeacherId, {
+const postPackage = (await createTestPackage(testTeacherId, {
   title: 'Final Exit Post-Test Package',
   packageType: 'post_test',
   testType: 'academic',
   readingTestId: postReadingRes.test.id,
   listeningTestId: postListeningRes.test.id,
-});
+}));
 
 assert.strictEqual(postPackage.packageType, 'post_test');
 assert.strictEqual(postPackage.writingStatus, 'not_implemented');
@@ -323,39 +324,39 @@ console.log('  ✔ Multi-skill test packages and unsimulated Writing/Speaking sl
 console.log('CHECK 4: Material Overlap Detection Between Pre and Post Tests');
 
 // Assign Pre-test first
-const { assignment: preAssignment } = createAssignment(testTeacherId, class1.id, {
+const { assignment: preAssignment } = (await createAssignment(testTeacherId, class1.id, {
   title: 'Diagnostic Pre-Test Exam Rehearsal',
   purpose: 'pre_test',
   packageId: prePackage.id,
   mode: 'mock',
   attemptLimit: 1,
   isReleased: true,
-});
+}));
 assert.strictEqual(preAssignment.purpose, 'pre_test');
 
 // Attempt to assign Post-Test using the SAME pre-test package -> must trigger warning!
-const overlappingResult = createAssignment(testTeacherId, class1.id, {
+const overlappingResult = (await createAssignment(testTeacherId, class1.id, {
   title: 'Invalid Overlapping Post-Test',
   purpose: 'post_test',
   packageId: prePackage.id,
   mode: 'mock',
   attemptLimit: 1,
   isReleased: false,
-});
+}));
 assert.ok(overlappingResult.warning, 'Warning must be returned when materials overlap');
 assert.ok(overlappingResult.warning.includes('Overlapping material detected'), 'Warning text matches pedagogical policy');
 // Clean up the invalid overlapping test assignment so it doesn't reserve prePackage materials
-db.prepare('DELETE FROM assignments WHERE id = ?').run(overlappingResult.assignment.id);
+(await db.prepare('DELETE FROM assignments WHERE id = ?').run(overlappingResult.assignment.id));
 
 // Now create the proper distinct Post-Test assignment (initially unreleased)
-const { assignment: postAssignment, warning: noWarning } = createAssignment(testTeacherId, class1.id, {
+const { assignment: postAssignment, warning: noWarning } = (await createAssignment(testTeacherId, class1.id, {
   title: 'Final Exit Post-Test Exam Rehearsal',
   purpose: 'post_test',
   packageId: postPackage.id,
   mode: 'mock',
   attemptLimit: 1,
   isReleased: false, // Protected unreleased state
-});
+}));
 assert.strictEqual(noWarning, undefined, 'No warning when post-test uses distinct materials');
 assert.strictEqual(postAssignment.isReleased, false, 'Post-test must initially be unreleased');
 console.log('  ✔ Content overlap detection and non-equivalence warnings verified.');
@@ -366,18 +367,18 @@ console.log('  ✔ Content overlap detection and non-equivalence warnings verifi
 console.log('CHECK 5: Protected Post-Test Isolation (Catalogue & Direct Access Guards)');
 
 // Check reservation detector
-assert.strictEqual(isTestReservedInUnreleasedPostTest(postReadingRes.test.id), true, 'Post reading test must be identified as reserved');
-assert.strictEqual(isTestReservedInUnreleasedPostTest(postListeningRes.test.id), true, 'Post listening test must be identified as reserved');
-assert.strictEqual(isTestReservedInUnreleasedPostTest(preReadingRes.test.id), false, 'Pre reading test is released, not reserved unreleased');
+assert.strictEqual((await isTestReservedInUnreleasedPostTest(postReadingRes.test.id)), true, 'Post reading test must be identified as reserved');
+assert.strictEqual((await isTestReservedInUnreleasedPostTest(postListeningRes.test.id)), true, 'Post listening test must be identified as reserved');
+assert.strictEqual((await isTestReservedInUnreleasedPostTest(preReadingRes.test.id)), false, 'Pre reading test is released, not reserved unreleased');
 
 // Direct attempt start on post-reading test by learner must be blocked!
 let postReadingBlocked = false;
 try {
-  startOrResumeAttempt({
+  (await startOrResumeAttempt({
     userId: student1Id,
     testId: postReadingRes.test.id,
     modeOverride: 'mock',
-  });
+  }));
 } catch (e: any) {
   postReadingBlocked = true;
   assert.ok(e.message.includes('reserved') || e.message.includes('unreleased'), 'Rejects direct start of reserved test');
@@ -387,11 +388,11 @@ assert.ok(postReadingBlocked, 'Learner direct start of unreleased post reading m
 // Direct attempt start on post-listening test by learner must be blocked!
 let postListeningBlocked = false;
 try {
-  startOrResumeListeningAttempt({
+  (await startOrResumeListeningAttempt({
     userId: student1Id,
     testId: postListeningRes.test.id,
     modeOverride: 'mock',
-  });
+  }));
 } catch (e: any) {
   postListeningBlocked = true;
   assert.ok(e.message.includes('reserved') || e.message.includes('unreleased'), 'Rejects direct start of reserved listening test');
@@ -401,7 +402,7 @@ assert.ok(postListeningBlocked, 'Learner direct start of unreleased post listeni
 // Starting package attempt on unreleased post-test must be blocked!
 let packageStartBlocked = false;
 try {
-  startOrResumePackageAttempt(postAssignment.id, student1Id);
+  (await startOrResumePackageAttempt(postAssignment.id, student1Id));
 } catch (e: any) {
   packageStartBlocked = true;
   assert.ok(e.message.includes('not been released'), 'Rejects package start when unreleased');
@@ -415,63 +416,63 @@ console.log('  ✔ Reserved post-test content is strictly inaccessible to learne
 console.log('CHECK 6: Pre-Test Package Attempt Execution & Skill Linking');
 
 // Student 1 starts pre-test package
-const prePkgAttemptResult = startOrResumePackageAttempt(preAssignment.id, student1Id, 'exam_rehearsal');
+const prePkgAttemptResult = (await startOrResumePackageAttempt(preAssignment.id, student1Id, 'exam_rehearsal'));
 const prePkgAttemptId = prePkgAttemptResult.packageAttempt.id;
 assert.ok(prePkgAttemptId, 'Pre-test package attempt started');
 assert.strictEqual(prePkgAttemptResult.packageAttempt.status, 'in_progress');
 
 // Student 1 takes pre-test Reading attempt under this assignment & package
-const preReadAttemptResult = startOrResumeAttempt({
+const preReadAttemptResult = (await startOrResumeAttempt({
   userId: student1Id,
   testId: preReadingRes.test.id,
   modeOverride: 'mock',
   assignmentId: preAssignment.id,
   packageAttemptId: prePkgAttemptId,
-});
-saveStudentAnswer({
+}));
+(await saveStudentAnswer({
   attemptId: preReadAttemptResult.attempt.id,
   userId: student1Id,
   questionNumber: 1,
   questionId: 'pre_q1',
   userAnswer: 'TRUE',
-});
+}));
 // Submit reading attempt with correct answer (1/1)
-const submittedReadAttempt = submitAttempt({
+const submittedReadAttempt = (await submitAttempt({
   attemptId: preReadAttemptResult.attempt.id,
   userId: student1Id,
-});
+}));
 assert.strictEqual(submittedReadAttempt.rawScore, 1);
 
 // Link to package
-linkSkillToPackageAttempt(prePkgAttemptId, 'reading', submittedReadAttempt.id);
+(await linkSkillToPackageAttempt(prePkgAttemptId, 'reading', submittedReadAttempt.id));
 
 // Student 1 takes pre-test Listening attempt under this assignment & package
-const preListAttemptResult = startOrResumeListeningAttempt({
+const preListAttemptResult = (await startOrResumeListeningAttempt({
   userId: student1Id,
   testId: preListeningRes.test.id,
   modeOverride: 'mock',
   assignmentId: preAssignment.id,
   packageAttemptId: prePkgAttemptId,
-});
-saveListeningAnswer({
+}));
+(await saveListeningAnswer({
   attemptId: preListAttemptResult.attempt.id,
   userId: student1Id,
   questionNumber: 1,
   questionId: 'pre_l_q1',
   userAnswer: 'Smith',
-});
+}));
 // Submit listening attempt with correct answer (1/1)
-const submittedListAttempt = submitListeningAttempt({
+const submittedListAttempt = (await submitListeningAttempt({
   attemptId: preListAttemptResult.attempt.id,
   userId: student1Id,
-});
+}));
 assert.strictEqual(submittedListAttempt.rawScore, 1);
 
 // Link to package
-linkSkillToPackageAttempt(prePkgAttemptId, 'listening', submittedListAttempt.id);
+(await linkSkillToPackageAttempt(prePkgAttemptId, 'listening', submittedListAttempt.id));
 
 // Verify package attempt reflects linked skills and completion
-const updatedPrePkgAttempt = getPackageAttemptById(prePkgAttemptId, student1Id);
+const updatedPrePkgAttempt = (await getPackageAttemptById(prePkgAttemptId, student1Id));
 assert.strictEqual(updatedPrePkgAttempt.readingAttemptId, submittedReadAttempt.id);
 assert.strictEqual(updatedPrePkgAttempt.listeningAttemptId, submittedListAttempt.id);
 assert.strictEqual(updatedPrePkgAttempt.status, 'completed', 'Package attempt should auto-complete when executable skills are finished');
@@ -485,7 +486,7 @@ console.log('CHECK 7: Server-Side Attempt Limit Enforcement');
 let attemptLimitBlocked = false;
 try {
   // Pre-test had attemptLimit = 1; second attempt must be rejected!
-  startOrResumePackageAttempt(preAssignment.id, student1Id);
+  (await startOrResumePackageAttempt(preAssignment.id, student1Id));
 } catch (e: any) {
   attemptLimitBlocked = true;
   assert.ok(e.message.includes('Attempt limit reached'), 'Must throw attempt limit reached');
@@ -499,57 +500,57 @@ console.log('  ✔ Strict server-side assignment attempt limit verified.');
 console.log('CHECK 8: Explicit Teacher Release and Post-Test Execution');
 
 // Teacher explicitly releases post-test
-const releasedPostAssignment = releasePostTestAssignment(testTeacherId, postAssignment.id);
+const releasedPostAssignment = (await releasePostTestAssignment(testTeacherId, postAssignment.id));
 assert.strictEqual(releasedPostAssignment.isReleased, true, 'Post-test must now be marked released');
 
 // Now student can start post-test package attempt!
-const postPkgAttemptResult = startOrResumePackageAttempt(postAssignment.id, student1Id, 'exam_rehearsal');
+const postPkgAttemptResult = (await startOrResumePackageAttempt(postAssignment.id, student1Id, 'exam_rehearsal'));
 const postPkgAttemptId = postPkgAttemptResult.packageAttempt.id;
 assert.ok(postPkgAttemptId, 'Post-test package attempt started after teacher release');
 
 // Student completes post-test reading
-const postReadAttemptResult = startOrResumeAttempt({
+const postReadAttemptResult = (await startOrResumeAttempt({
   userId: student1Id,
   testId: postReadingRes.test.id,
   modeOverride: 'mock',
   assignmentId: postAssignment.id,
   packageAttemptId: postPkgAttemptId,
-});
-saveStudentAnswer({
+}));
+(await saveStudentAnswer({
   attemptId: postReadAttemptResult.attempt.id,
   userId: student1Id,
   questionNumber: 1,
   questionId: 'post_q1',
   userAnswer: 'TRUE',
-});
-const submittedPostRead = submitAttempt({
+}));
+const submittedPostRead = (await submitAttempt({
   attemptId: postReadAttemptResult.attempt.id,
   userId: student1Id,
-});
-linkSkillToPackageAttempt(postPkgAttemptId, 'reading', submittedPostRead.id);
+}));
+(await linkSkillToPackageAttempt(postPkgAttemptId, 'reading', submittedPostRead.id));
 
 // Student completes post-test listening
-const postListAttemptResult = startOrResumeListeningAttempt({
+const postListAttemptResult = (await startOrResumeListeningAttempt({
   userId: student1Id,
   testId: postListeningRes.test.id,
   modeOverride: 'mock',
   assignmentId: postAssignment.id,
   packageAttemptId: postPkgAttemptId,
-});
-saveListeningAnswer({
+}));
+(await saveListeningAnswer({
   attemptId: postListAttemptResult.attempt.id,
   userId: student1Id,
   questionNumber: 1,
   questionId: 'post_l_q1',
   userAnswer: 'IELTS',
-});
-const submittedPostList = submitListeningAttempt({
+}));
+const submittedPostList = (await submitListeningAttempt({
   attemptId: postListAttemptResult.attempt.id,
   userId: student1Id,
-});
-linkSkillToPackageAttempt(postPkgAttemptId, 'listening', submittedPostList.id);
+}));
+(await linkSkillToPackageAttempt(postPkgAttemptId, 'listening', submittedPostList.id));
 
-const updatedPostPkg = getPackageAttemptById(postPkgAttemptId, student1Id);
+const updatedPostPkg = (await getPackageAttemptById(postPkgAttemptId, student1Id));
 assert.strictEqual(updatedPostPkg.status, 'completed');
 console.log('  ✔ Post-test explicit release and execution verified.');
 
@@ -558,7 +559,7 @@ console.log('  ✔ Post-test explicit release and execution verified.');
 // -----------------------------------------------------------------
 console.log('CHECK 9: Diagnostic Pre/Post Comparison Report & Pedagogical Disclaimer');
 
-const comparisonReport = getPrePostComparison(class1.id, student1Id, student1Id, 'student');
+const comparisonReport = (await getPrePostComparison(class1.id, student1Id, student1Id, 'student'));
 assert.strictEqual(comparisonReport.studentId, student1Id);
 assert.strictEqual(comparisonReport.preTest.skills.reading.status, 'completed');
 assert.strictEqual(comparisonReport.preTest.skills.listening.status, 'completed');
@@ -589,7 +590,7 @@ assert.ok(
 );
 
 // Verify Overview Diagnostics for Teacher
-const overview = getClassOverview(class1.id, testTeacherId);
+const overview = (await getClassOverview(class1.id, testTeacherId));
 assert.strictEqual(overview.classId, class1.id);
 assert.ok(overview.totalStudents >= 2, 'Overview reflects enrolled students');
 assert.ok(overview.assignments.length >= 2, 'Overview reflects assignments');
@@ -603,14 +604,20 @@ console.log('======================================================\n');
 const testIdsToClean = [preReadingRes.test.id, postReadingRes.test.id];
 const listeningIdsToClean = [preListeningRes.test.id, postListeningRes.test.id];
 
-db.pragma('foreign_keys = OFF');
-db.prepare(`DELETE FROM reading_answers WHERE attempt_id IN (SELECT id FROM reading_attempts WHERE test_id IN (?, ?))`).run(...testIdsToClean);
-db.prepare(`DELETE FROM reading_attempts WHERE test_id IN (?, ?)`).run(...testIdsToClean);
-db.prepare(`DELETE FROM reading_test_versions WHERE test_id IN (?, ?)`).run(...testIdsToClean);
-db.prepare(`DELETE FROM reading_tests WHERE id IN (?, ?)`).run(...testIdsToClean);
+if (process.env.DATABASE_PROVIDER === 'sqlite') {
+(await db.pragma('foreign_keys = OFF'));
+(await db.prepare(`DELETE FROM reading_answers WHERE attempt_id IN (SELECT id FROM reading_attempts WHERE test_id IN (?, ?))`).run(...testIdsToClean));
+(await db.prepare(`DELETE FROM reading_attempts WHERE test_id IN (?, ?)`).run(...testIdsToClean));
+(await db.prepare(`DELETE FROM reading_test_versions WHERE test_id IN (?, ?)`).run(...testIdsToClean));
+(await db.prepare(`DELETE FROM reading_tests WHERE id IN (?, ?)`).run(...testIdsToClean));
 
-db.prepare(`DELETE FROM listening_answers WHERE attempt_id IN (SELECT id FROM listening_attempts WHERE test_id IN (?, ?))`).run(...listeningIdsToClean);
-db.prepare(`DELETE FROM listening_attempts WHERE test_id IN (?, ?)`).run(...listeningIdsToClean);
-db.prepare(`DELETE FROM listening_test_versions WHERE test_id IN (?, ?)`).run(...listeningIdsToClean);
-db.prepare(`DELETE FROM listening_tests WHERE id IN (?, ?)`).run(...listeningIdsToClean);
-db.pragma('foreign_keys = ON');
+(await db.prepare(`DELETE FROM listening_answers WHERE attempt_id IN (SELECT id FROM listening_attempts WHERE test_id IN (?, ?))`).run(...listeningIdsToClean));
+(await db.prepare(`DELETE FROM listening_attempts WHERE test_id IN (?, ?)`).run(...listeningIdsToClean));
+(await db.prepare(`DELETE FROM listening_test_versions WHERE test_id IN (?, ?)`).run(...listeningIdsToClean));
+(await db.prepare(`DELETE FROM listening_tests WHERE id IN (?, ?)`).run(...listeningIdsToClean));
+(await db.pragma('foreign_keys = ON'));
+}
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

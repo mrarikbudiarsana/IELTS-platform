@@ -1,10 +1,20 @@
 [build]
-  base = "client"
-  publish = "dist"
-  command = "npm run build"
+  publish = "client/dist"
+  command = "npm ci --prefix client --include=dev && npm run build"
+  functions = "netlify/functions"
 
 [build.environment]
-  SECRETS_SCAN_ENABLED = "false"
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["better-sqlite3"]
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/api/:splat"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/*"

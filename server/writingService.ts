@@ -56,7 +56,7 @@ export function validateWritingTaskVersion(data: Partial<WritingTaskVersion>): s
 /**
  * Creates a new Writing Task and initial draft version.
  */
-export function createWritingTask(params: {
+export async function createWritingTask(params: {
   createdById: string;
   title: string;
   taskType: WritingTaskType;
@@ -72,20 +72,20 @@ export function createWritingTask(params: {
   teacherVisualDescription?: string;
   modelResponse?: string;
   teacherAssessmentGuidance?: string;
-}): WritingTask {
+}): Promise<WritingTask> {
   const taskId = uuidv4();
   const versionId = uuidv4();
   const minWords = params.minWords || (params.taskNumber === 1 ? 150 : 250);
   const suggestedTime = params.suggestedTimeMinutes || (params.taskNumber === 1 ? 20 : 40);
 
-  const txn = db.transaction(() => {
-    db.prepare(
+  const txn = db.transaction(async () => {
+    (await db.prepare(
       `INSERT INTO writing_tasks (
         id, title, task_type, task_number, test_type, current_version_number, status, created_by_id
       ) VALUES (?, ?, ?, ?, ?, 1, 'draft', ?)`
-    ).run(taskId, params.title, params.taskType, params.taskNumber, params.testType, params.createdById);
+    ).run(taskId, params.title, params.taskType, params.taskNumber, params.testType, params.createdById));
 
-    db.prepare(
+    (await db.prepare(
       `INSERT INTO writing_task_versions (
         id, task_id, version_number, status, task_type, task_number, test_type,
         subtype, title, prompt, instructions, min_words, suggested_time_minutes,
@@ -109,27 +109,27 @@ export function createWritingTask(params: {
       params.teacherVisualDescription || null,
       params.modelResponse || null,
       params.teacherAssessmentGuidance || null
-    );
+    ));
 
-    return getWritingTaskById(taskId, 'teacher')!;
+    return (await getWritingTaskById(taskId, 'teacher'))!;
   });
 
-  return txn();
+  return (await txn());
 }
 
 /**
  * Updates a draft Writing Task version.
  */
-export function updateWritingTaskDraft(
+export async function updateWritingTaskDraft(
   taskId: string,
   params: Partial<WritingTaskVersion>
-): WritingTask {
-  const task = db.prepare('SELECT * FROM writing_tasks WHERE id = ?').get(taskId) as any;
+): Promise<WritingTask> {
+  const task = (await db.prepare('SELECT * FROM writing_tasks WHERE id = ?').get(taskId)) as any;
   if (!task) throw new Error('Writing task not found.');
 
-  const draftVersion = db
+  const draftVersion = (await db
     .prepare('SELECT * FROM writing_task_versions WHERE task_id = ? AND status = ?')
-    .get(taskId, 'draft') as any;
+    .get(taskId, 'draft')) as any;
 
   if (!draftVersion) {
     throw new Error('No draft version available to edit. Fork a new version first.');
@@ -163,14 +163,14 @@ export function updateWritingTaskDraft(
       ? params.teacherAssessmentGuidance
       : draftVersion.teacher_assessment_guidance;
 
-  const txn = db.transaction(() => {
-    db.prepare(
+  const txn = db.transaction(async () => {
+    (await db.prepare(
       `UPDATE writing_tasks 
        SET title = ?, updated_at = datetime('now')
        WHERE id = ?`
-    ).run(updatedTitle, taskId);
+    ).run(updatedTitle, taskId));
 
-    db.prepare(
+    (await db.prepare(
       `UPDATE writing_task_versions
        SET title = ?, prompt = ?, instructions = ?, min_words = ?,
            suggested_time_minutes = ?, subtype = ?, images_json = ?,
@@ -190,24 +190,24 @@ export function updateWritingTaskDraft(
       updatedModelResponse,
       updatedGuidance,
       draftVersion.id
-    );
+    ));
 
-    return getWritingTaskById(taskId, 'teacher')!;
+    return (await getWritingTaskById(taskId, 'teacher'))!;
   });
 
-  return txn();
+  return (await txn());
 }
 
 /**
  * Publishes a draft Writing Task version.
  */
-export function publishWritingTask(taskId: string): WritingTask {
-  const task = db.prepare('SELECT * FROM writing_tasks WHERE id = ?').get(taskId) as any;
+export async function publishWritingTask(taskId: string): Promise<WritingTask> {
+  const task = (await db.prepare('SELECT * FROM writing_tasks WHERE id = ?').get(taskId)) as any;
   if (!task) throw new Error('Writing task not found.');
 
-  const draftVersion = db
+  const draftVersion = (await db
     .prepare('SELECT * FROM writing_task_versions WHERE task_id = ? AND status = ?')
-    .get(taskId, 'draft') as any;
+    .get(taskId, 'draft')) as any;
 
   if (!draftVersion) {
     throw new Error('No draft version found to publish.');
@@ -219,53 +219,53 @@ export function publishWritingTask(taskId: string): WritingTask {
     throw new Error(`Validation failed: ${validationErrors.join('; ')}`);
   }
 
-  const txn = db.transaction(() => {
-    db.prepare(
+  const txn = db.transaction(async () => {
+    (await db.prepare(
       `UPDATE writing_task_versions 
        SET status = 'published', published_at = datetime('now'), validation_errors_json = NULL
        WHERE id = ?`
-    ).run(draftVersion.id);
+    ).run(draftVersion.id));
 
-    db.prepare(
+    (await db.prepare(
       `UPDATE writing_tasks
        SET status = 'published', updated_at = datetime('now')
        WHERE id = ?`
-    ).run(taskId);
+    ).run(taskId));
 
-    return getWritingTaskById(taskId, 'teacher')!;
+    return (await getWritingTaskById(taskId, 'teacher'))!;
   });
 
-  return txn();
+  return (await txn());
 }
 
 /**
  * Forks a new draft version from the latest published version.
  */
-export function forkWritingTaskVersion(taskId: string): WritingTask {
-  const task = db.prepare('SELECT * FROM writing_tasks WHERE id = ?').get(taskId) as any;
+export async function forkWritingTaskVersion(taskId: string): Promise<WritingTask> {
+  const task = (await db.prepare('SELECT * FROM writing_tasks WHERE id = ?').get(taskId)) as any;
   if (!task) throw new Error('Writing task not found.');
 
-  const existingDraft = db
+  const existingDraft = (await db
     .prepare('SELECT id FROM writing_task_versions WHERE task_id = ? AND status = ?')
-    .get(taskId, 'draft');
+    .get(taskId, 'draft'));
 
   if (existingDraft) {
     throw new Error('A draft version already exists for this task.');
   }
 
-  const latest = db
+  const latest = (await db
     .prepare(
       'SELECT * FROM writing_task_versions WHERE task_id = ? ORDER BY version_number DESC LIMIT 1'
     )
-    .get(taskId) as any;
+    .get(taskId)) as any;
 
   if (!latest) throw new Error('No existing versions found to fork.');
 
   const newVersionNumber = latest.version_number + 1;
   const newVersionId = uuidv4();
 
-  const txn = db.transaction(() => {
-    db.prepare(
+  const txn = db.transaction(async () => {
+    (await db.prepare(
       `INSERT INTO writing_task_versions (
         id, task_id, version_number, status, task_type, task_number, test_type,
         subtype, title, prompt, instructions, min_words, suggested_time_minutes,
@@ -290,39 +290,39 @@ export function forkWritingTaskVersion(taskId: string): WritingTask {
       latest.teacher_visual_description,
       latest.model_response,
       latest.teacher_assessment_guidance
-    );
+    ));
 
-    db.prepare(
+    (await db.prepare(
       `UPDATE writing_tasks
        SET current_version_number = ?, updated_at = datetime('now')
        WHERE id = ?`
-    ).run(newVersionNumber, taskId);
+    ).run(newVersionNumber, taskId));
 
-    return getWritingTaskById(taskId, 'teacher')!;
+    return (await getWritingTaskById(taskId, 'teacher'))!;
   });
 
-  return txn();
+  return (await txn());
 }
 
 /**
  * Archives a Writing task.
  */
-export function archiveWritingTask(taskId: string): WritingTask {
-  db.prepare(`UPDATE writing_tasks SET status = 'archived', updated_at = datetime('now') WHERE id = ?`).run(taskId);
-  return getWritingTaskById(taskId, 'teacher')!;
+export async function archiveWritingTask(taskId: string): Promise<WritingTask> {
+  (await db.prepare(`UPDATE writing_tasks SET status = 'archived', updated_at = datetime('now') WHERE id = ?`).run(taskId));
+  return (await getWritingTaskById(taskId, 'teacher'))!;
 }
 
 /**
  * Retrieves a Writing task by ID.
  * When accessed by students, scrubs confidential teacher assessment guidance and unreleased model answers.
  */
-export function getWritingTaskById(taskId: string, userRole: 'student' | 'teacher' | 'admin'): WritingTask | null {
-  const row = db.prepare('SELECT * FROM writing_tasks WHERE id = ?').get(taskId) as any;
+export async function getWritingTaskById(taskId: string, userRole: 'student' | 'teacher' | 'admin'): Promise<WritingTask | null> {
+  const row = (await db.prepare('SELECT * FROM writing_tasks WHERE id = ?').get(taskId)) as any;
   if (!row) return null;
 
-  const versionRows = db
+  const versionRows = (await db
     .prepare('SELECT * FROM writing_task_versions WHERE task_id = ? ORDER BY version_number ASC')
-    .all(taskId) as any[];
+    .all(taskId)) as any[];
 
   const versions = versionRows.map((v) => mapVersionRow(v, userRole));
   const latestVersion = versions[versions.length - 1];
@@ -347,13 +347,13 @@ export function getWritingTaskById(taskId: string, userRole: 'student' | 'teache
 /**
  * Lists Writing tasks with optional filters.
  */
-export function listWritingTasks(filter: {
+export async function listWritingTasks(filter: {
   status?: PublicationStatus;
   taskType?: WritingTaskType;
   testType?: WritingTestType;
   taskNumber?: WritingTaskNumber;
   userRole: 'student' | 'teacher' | 'admin';
-}): WritingTask[] {
+}): Promise<WritingTask[]> {
   let query = 'SELECT * FROM writing_tasks WHERE 1=1';
   const params: any[] = [];
 
@@ -381,8 +381,8 @@ export function listWritingTasks(filter: {
 
   query += ' ORDER BY created_at DESC';
 
-  const rows = db.prepare(query).all(...params) as any[];
-  return rows.map((r) => getWritingTaskById(r.id, filter.userRole)!);
+  const rows = (await db.prepare(query).all(...params)) as any[];
+  return (await Promise.all(rows.map(async (r) => (await getWritingTaskById(r.id, filter.userRole))!)));
 }
 
 // -------------------------------------------------------------
@@ -394,14 +394,14 @@ export function listWritingTasks(filter: {
  * For full mocks (Task 1 + Task 2), sets a shared server deadline of 60 minutes.
  * Handles autosaved response draft persistence.
  */
-export function startOrResumeWritingAttempt(params: {
+export async function startOrResumeWritingAttempt(params: {
   userId: string;
   mode: TestMode;
   task1Id?: string;
   task2Id?: string;
   assignmentId?: string;
   packageAttemptId?: string;
-}): WritingAttempt {
+}): Promise<WritingAttempt> {
   const { userId, mode, task1Id, task2Id, assignmentId, packageAttemptId } = params;
 
   if (!task1Id && !task2Id) {
@@ -435,7 +435,7 @@ export function startOrResumeWritingAttempt(params: {
     }
   }
 
-  const existingAttempt = db.prepare(existingQuery).get(...existingParams) as any;
+  const existingAttempt = (await db.prepare(existingQuery).get(...existingParams)) as any;
 
   if (existingAttempt) {
     // Check if timed attempt has expired
@@ -444,10 +444,10 @@ export function startOrResumeWritingAttempt(params: {
       const now = Date.now();
       if (now > deadline) {
         // Automatically submit expired attempt
-        return submitWritingAttempt(existingAttempt.id, userId);
+        return (await submitWritingAttempt(existingAttempt.id, userId));
       }
     }
-    return getWritingAttemptById(existingAttempt.id)!;
+    return (await getWritingAttemptById(existingAttempt.id))!;
   }
 
   // Determine latest published versions for the tasks
@@ -456,25 +456,25 @@ export function startOrResumeWritingAttempt(params: {
   let durationMinutes = 60; // Standard for full mock
 
   if (task1Id) {
-    const t1v = db
+    const t1v = (await db
       .prepare(
         `SELECT id FROM writing_task_versions 
          WHERE task_id = ? AND status = 'published' 
          ORDER BY version_number DESC LIMIT 1`
       )
-      .get(task1Id) as any;
+      .get(task1Id)) as any;
     if (!t1v) throw new Error(`Task 1 (${task1Id}) does not have a published version.`);
     task1VersionId = t1v.id;
   }
 
   if (task2Id) {
-    const t2v = db
+    const t2v = (await db
       .prepare(
         `SELECT id FROM writing_task_versions 
          WHERE task_id = ? AND status = 'published' 
          ORDER BY version_number DESC LIMIT 1`
       )
-      .get(task2Id) as any;
+      .get(task2Id)) as any;
     if (!t2v) throw new Error(`Task 2 (${task2Id}) does not have a published version.`);
     task2VersionId = t2v.id;
   }
@@ -491,8 +491,8 @@ export function startOrResumeWritingAttempt(params: {
     deadlineAt = deadlineDate.toISOString();
   }
 
-  const txn = db.transaction(() => {
-    db.prepare(
+  const txn = db.transaction(async () => {
+    (await db.prepare(
       `INSERT INTO writing_attempts (
         id, user_id, mode, assignment_id, package_attempt_id,
         task1_id, task1_version_id, task2_id, task2_version_id,
@@ -511,51 +511,51 @@ export function startOrResumeWritingAttempt(params: {
       durationMinutes,
       deadlineAt,
       startedAt
-    );
+    ));
 
     // Initial response slots
     if (task1Id && task1VersionId) {
-      db.prepare(
+      (await db.prepare(
         `INSERT INTO writing_responses (
           id, attempt_id, task_id, task_version_id, task_number, response_text, word_count, version, is_locked
         ) VALUES (?, ?, ?, ?, 1, '', 0, 1, 0)`
-      ).run(uuidv4(), attemptId, task1Id, task1VersionId);
+      ).run(uuidv4(), attemptId, task1Id, task1VersionId));
     }
 
     if (task2Id && task2VersionId) {
-      db.prepare(
+      (await db.prepare(
         `INSERT INTO writing_responses (
           id, attempt_id, task_id, task_version_id, task_number, response_text, word_count, version, is_locked
         ) VALUES (?, ?, ?, ?, 2, '', 0, 1, 0)`
-      ).run(uuidv4(), attemptId, task2Id, task2VersionId);
+      ).run(uuidv4(), attemptId, task2Id, task2VersionId));
     }
 
     // Link into package_attempt if part of pre/post package
     if (packageAttemptId) {
-      db.prepare(`UPDATE package_attempts SET writing_attempt_id = ? WHERE id = ?`).run(
+      (await db.prepare(`UPDATE package_attempts SET writing_attempt_id = ? WHERE id = ?`).run(
         attemptId,
         packageAttemptId
-      );
+      ));
     }
 
-    return getWritingAttemptById(attemptId)!;
+    return (await getWritingAttemptById(attemptId))!;
   });
 
-  return txn();
+  return (await txn());
 }
 
 /**
  * Autosaves student response draft for Task 1 or Task 2.
  */
-export function saveWritingDraftResponse(params: {
+export async function saveWritingDraftResponse(params: {
   attemptId: string;
   taskNumber: WritingTaskNumber;
   responseText: string;
   userId: string;
-}): { responseId: string; wordCount: number; lastSavedAt: string } {
+}): Promise<{ responseId: string; wordCount: number; lastSavedAt: string }> {
   const { attemptId, taskNumber, responseText, userId } = params;
 
-  const attempt = db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId) as any;
+  const attempt = (await db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId)) as any;
   if (!attempt) throw new Error('Writing attempt not found.');
   if (attempt.user_id !== userId) throw new Error('Unauthorized attempt access.');
 
@@ -567,19 +567,19 @@ export function saveWritingDraftResponse(params: {
   if (attempt.deadline_at) {
     const deadline = new Date(attempt.deadline_at).getTime();
     if (Date.now() > deadline) {
-      submitWritingAttempt(attemptId, userId);
+      (await submitWritingAttempt(attemptId, userId));
       throw new Error('Time has expired for this test. Your work has been submitted.');
     }
   }
 
   // Find the active (unlocked, latest version) response for this taskNumber
-  const response = db
+  const response = (await db
     .prepare(
       `SELECT * FROM writing_responses 
        WHERE attempt_id = ? AND task_number = ? 
        ORDER BY version DESC LIMIT 1`
     )
-    .get(attemptId, taskNumber) as any;
+    .get(attemptId, taskNumber)) as any;
 
   if (!response) {
     throw new Error(`No response record found for task ${taskNumber}.`);
@@ -592,11 +592,11 @@ export function saveWritingDraftResponse(params: {
   const wordCount = countWords(responseText);
   const now = new Date().toISOString();
 
-  db.prepare(
+  (await db.prepare(
     `UPDATE writing_responses 
      SET response_text = ?, word_count = ?, last_saved_at = ?, updated_at = ?
      WHERE id = ?`
-  ).run(responseText, wordCount, now, now, response.id);
+  ).run(responseText, wordCount, now, now, response.id));
 
   return {
     responseId: response.id,
@@ -608,54 +608,54 @@ export function saveWritingDraftResponse(params: {
 /**
  * Submits a Writing attempt, locking the responses.
  */
-export function submitWritingAttempt(attemptId: string, userId: string): WritingAttempt {
-  const attempt = db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId) as any;
+export async function submitWritingAttempt(attemptId: string, userId: string): Promise<WritingAttempt> {
+  const attempt = (await db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId)) as any;
   if (!attempt) throw new Error('Writing attempt not found.');
   if (attempt.user_id !== userId) throw new Error('Unauthorized attempt access.');
 
   const now = new Date().toISOString();
 
-  const txn = db.transaction(() => {
+  const txn = db.transaction(async () => {
     // Lock all responses for this attempt
-    db.prepare(`UPDATE writing_responses SET is_locked = 1, updated_at = ? WHERE attempt_id = ?`).run(
+    (await db.prepare(`UPDATE writing_responses SET is_locked = 1, updated_at = ? WHERE attempt_id = ?`).run(
       now,
       attemptId
-    );
+    ));
 
     // Update attempt status
-    db.prepare(
+    (await db.prepare(
       `UPDATE writing_attempts 
        SET status = 'submitted', submitted_at = ?, updated_at = ? 
        WHERE id = ?`
-    ).run(now, now, attemptId);
+    ).run(now, now, attemptId));
 
-    return getWritingAttemptById(attemptId)!;
+    return (await getWritingAttemptById(attemptId))!;
   });
 
-  return txn();
+  return (await txn());
 }
 
 /**
  * Creates a new response revision draft for practice review without altering original assessed work.
  */
-export function createResponseRevision(params: {
+export async function createResponseRevision(params: {
   attemptId: string;
   taskNumber: WritingTaskNumber;
   userId: string;
-}): WritingResponse {
+}): Promise<WritingResponse> {
   const { attemptId, taskNumber, userId } = params;
 
-  const attempt = db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId) as any;
+  const attempt = (await db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId)) as any;
   if (!attempt) throw new Error('Writing attempt not found.');
   if (attempt.user_id !== userId) throw new Error('Unauthorized attempt access.');
 
-  const latestResponse = db
+  const latestResponse = (await db
     .prepare(
       `SELECT * FROM writing_responses 
        WHERE attempt_id = ? AND task_number = ? 
        ORDER BY version DESC LIMIT 1`
     )
-    .get(attemptId, taskNumber) as any;
+    .get(attemptId, taskNumber)) as any;
 
   if (!latestResponse) {
     throw new Error('No previous response found to revise.');
@@ -665,7 +665,7 @@ export function createResponseRevision(params: {
   const newVersion = latestResponse.version + 1;
   const now = new Date().toISOString();
 
-  db.prepare(
+  (await db.prepare(
     `INSERT INTO writing_responses (
       id, attempt_id, task_id, task_version_id, task_number, response_text,
       word_count, version, parent_response_id, is_locked, last_saved_at, created_at, updated_at
@@ -683,51 +683,51 @@ export function createResponseRevision(params: {
     now,
     now,
     now
-  );
+  ));
 
-  return mapResponseRow(
-    db.prepare('SELECT * FROM writing_responses WHERE id = ?').get(newResponseId) as any
-  );
+  return (await mapResponseRow(
+    (await db.prepare('SELECT * FROM writing_responses WHERE id = ?').get(newResponseId)) as any
+  ));
 }
 
 /**
  * Retrieves a full Writing Attempt by ID including responses and assessments.
  */
-export function getWritingAttemptById(attemptId: string): WritingAttempt | null {
-  const row = db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId) as any;
+export async function getWritingAttemptById(attemptId: string): Promise<WritingAttempt | null> {
+  const row = (await db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId)) as any;
   if (!row) return null;
 
-  const user = db.prepare('SELECT full_name FROM users WHERE id = ?').get(row.user_id) as any;
+  const user = (await db.prepare('SELECT full_name FROM users WHERE id = ?').get(row.user_id)) as any;
 
   // Retrieve responses (latest version for each task number)
-  const task1ResponseRow = db
+  const task1ResponseRow = (await db
     .prepare(
       `SELECT * FROM writing_responses 
        WHERE attempt_id = ? AND task_number = 1 
        ORDER BY version DESC LIMIT 1`
     )
-    .get(attemptId) as any;
+    .get(attemptId)) as any;
 
-  const task2ResponseRow = db
+  const task2ResponseRow = (await db
     .prepare(
       `SELECT * FROM writing_responses 
        WHERE attempt_id = ? AND task_number = 2 
        ORDER BY version DESC LIMIT 1`
     )
-    .get(attemptId) as any;
+    .get(attemptId)) as any;
 
-  const task1Response = task1ResponseRow ? mapResponseRow(task1ResponseRow) : undefined;
-  const task2Response = task2ResponseRow ? mapResponseRow(task2ResponseRow) : undefined;
+  const task1Response = task1ResponseRow ? (await mapResponseRow(task1ResponseRow)) : undefined;
+  const task2Response = task2ResponseRow ? (await mapResponseRow(task2ResponseRow)) : undefined;
 
   // Task titles
   let task1Title: string | undefined;
   let task2Title: string | undefined;
   if (row.task1_id) {
-    const t = db.prepare('SELECT title FROM writing_tasks WHERE id = ?').get(row.task1_id) as any;
+    const t = (await db.prepare('SELECT title FROM writing_tasks WHERE id = ?').get(row.task1_id)) as any;
     if (t) task1Title = t.title;
   }
   if (row.task2_id) {
-    const t = db.prepare('SELECT title FROM writing_tasks WHERE id = ?').get(row.task2_id) as any;
+    const t = (await db.prepare('SELECT title FROM writing_tasks WHERE id = ?').get(row.task2_id)) as any;
     if (t) task2Title = t.title;
   }
 
@@ -765,21 +765,21 @@ export function getWritingAttemptById(attemptId: string): WritingAttempt | null 
 /**
  * Retrieves all Writing attempts for a specific student.
  */
-export function listUserWritingAttempts(userId: string): WritingAttempt[] {
-  const rows = db
+export async function listUserWritingAttempts(userId: string): Promise<WritingAttempt[]> {
+  const rows = (await db
     .prepare('SELECT id FROM writing_attempts WHERE user_id = ? ORDER BY started_at DESC')
-    .all(userId) as any[];
+    .all(userId)) as any[];
 
-  return rows.map((r) => getWritingAttemptById(r.id)!).filter(Boolean);
+  return (await Promise.all(rows.map(async (r) => (await getWritingAttemptById(r.id))!))).filter(Boolean);
 }
 
 /**
  * Retrieves a response by ID.
  */
-export function getWritingResponseById(responseId: string): WritingResponse | null {
-  const row = db.prepare('SELECT * FROM writing_responses WHERE id = ?').get(responseId) as any;
+export async function getWritingResponseById(responseId: string): Promise<WritingResponse | null> {
+  const row = (await db.prepare('SELECT * FROM writing_responses WHERE id = ?').get(responseId)) as any;
   if (!row) return null;
-  return mapResponseRow(row);
+  return (await mapResponseRow(row));
 }
 
 // -------------------------------------------------------------
@@ -816,11 +816,11 @@ function mapVersionRow(row: any, userRole: 'student' | 'teacher' | 'admin'): Wri
   };
 }
 
-function mapResponseRow(row: any): WritingResponse {
+async function mapResponseRow(row: any): Promise<WritingResponse> {
   // Check if AI assessment exists for this response
-  const assessmentRow = db
+  const assessmentRow = (await db
     .prepare('SELECT * FROM writing_assessments WHERE response_id = ?')
-    .get(row.id) as any;
+    .get(row.id)) as any;
 
   let aiAssessment = undefined;
   if (assessmentRow) {

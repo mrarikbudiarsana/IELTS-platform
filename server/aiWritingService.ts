@@ -1,5 +1,7 @@
 import { db } from './db';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from './auth';
 import {
   WritingAiAssessment,
   WritingResponse,
@@ -30,17 +32,17 @@ export async function requestAiWritingAssessment(params: {
   const { responseId, userId } = params;
 
   // Retrieve response and verify ownership
-  const response = db
+  const response = (await db
     .prepare('SELECT * FROM writing_responses WHERE id = ?')
-    .get(responseId) as any;
+    .get(responseId)) as any;
 
   if (!response) {
     throw new Error('Writing response not found.');
   }
 
-  const attempt = db
+  const attempt = (await db
     .prepare('SELECT * FROM writing_attempts WHERE id = ?')
-    .get(response.attempt_id) as any;
+    .get(response.attempt_id)) as any;
 
   if (!attempt) {
     throw new Error('Parent writing attempt not found.');
@@ -55,40 +57,40 @@ export async function requestAiWritingAssessment(params: {
   }
 
   // Check if assessment already exists for this response
-  const existing = db
-    .prepare('SELECT * FROM writing_assessments WHERE response_id = ?')
-    .get(responseId) as any;
+  const existing = (await db
+    .prepare("SELECT * FROM writing_assessments WHERE response_id = ? ORDER BY CASE status WHEN 'completed' THEN 0 WHEN 'processing' THEN 1 WHEN 'queued' THEN 2 ELSE 3 END, created_at DESC LIMIT 1")
+    .get(responseId)) as any;
 
   if (existing) {
-    if (existing.status === 'completed' || existing.status === 'processing') {
+    if (existing.status === 'completed' || existing.status === 'processing' || existing.status === 'queued') {
       return mapAssessmentRow(existing);
     }
     // If previous was failed, we can retry with a new assessment
   }
 
   // Determine task details
-  const taskVersion = db
+  const taskVersion = (await db
     .prepare('SELECT * FROM writing_task_versions WHERE id = ?')
-    .get(response.task_version_id) as any;
+    .get(response.task_version_id)) as any;
 
   if (!taskVersion) {
     throw new Error('Associated writing task version not found.');
   }
 
   const assessmentId = uuidv4();
-  const idempotencyKey = `assess-${responseId}`;
+  const idempotencyKey = `assess-${responseId}-${assessmentId}`;
 
   // Reserve allowance atomically (throws if insufficient)
-  reserveAllowance({
+  (await reserveAllowance({
     userId,
     assessmentId,
     responseId,
     idempotencyKey,
     notes: `AI assessment for ${taskVersion.task_type} (task ${response.task_number})`,
-  });
+  }));
 
   // Create queued assessment record
-  db.prepare(
+  (await db.prepare(
     `INSERT INTO writing_assessments (
       id, response_id, attempt_id, task_number, status, task_type
     ) VALUES (?, ?, ?, ?, 'queued', ?)`
@@ -98,17 +100,29 @@ export async function requestAiWritingAssessment(params: {
     attempt.id,
     response.task_number,
     taskVersion.task_type
-  );
+  ));
 
-  // Trigger processing asynchronously in background
-  setImmediate(() => {
-    processAssessmentJob(assessmentId).catch((err) => {
-      console.error('Background assessment job error:', err);
-    });
-  });
+  if (process.env.NETLIFY) {
+    try {
+      const origin = process.env.DEPLOY_PRIME_URL || process.env.URL;
+      if (!origin) throw new Error('Netlify deployment URL is unavailable.');
+      const token = jwt.sign({ assessmentId }, JWT_SECRET, { algorithm: 'HS256', audience: 'writing-worker', expiresIn: '10m' });
+      const dispatched = await fetch(new URL('/.netlify/functions/grade-writing-background', origin), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ assessmentId }), signal: AbortSignal.timeout(10000),
+      });
+      if (!dispatched.ok) throw new Error('Could not dispatch writing assessment.');
+    } catch (error) {
+      await db.prepare("UPDATE writing_assessments SET status = 'failed' WHERE id = ?").run(assessmentId);
+      await releaseAllowance({ userId, assessmentId, responseId, reason: 'Background dispatch failed' });
+      throw error;
+    }
+  } else {
+    setImmediate(() => { processAssessmentJob(assessmentId).catch(error => console.error('Background assessment failed:', error.message)); });
+  }
 
   return mapAssessmentRow(
-    db.prepare('SELECT * FROM writing_assessments WHERE id = ?').get(assessmentId) as any
+    (await db.prepare('SELECT * FROM writing_assessments WHERE id = ?').get(assessmentId)) as any
   );
 }
 
@@ -116,30 +130,31 @@ export async function requestAiWritingAssessment(params: {
  * Background processor for queued assessment.
  */
 export async function processAssessmentJob(assessmentId: string): Promise<void> {
-  const assessment = db
+  const assessment = (await db
     .prepare('SELECT * FROM writing_assessments WHERE id = ?')
-    .get(assessmentId) as any;
+    .get(assessmentId)) as any;
 
   if (!assessment || assessment.status === 'completed') {
     return;
   }
 
-  // Set status to processing
-  db.prepare(`UPDATE writing_assessments SET status = 'processing' WHERE id = ?`).run(
+  // Only one worker may claim a queued assessment.
+  const claim = (await db.prepare(`UPDATE writing_assessments SET status = 'processing' WHERE id = ? AND status = 'queued'`).run(
     assessmentId
-  );
+  ));
+  if (!claim.changes) return;
 
-  const response = db
+  const response = (await db
     .prepare('SELECT * FROM writing_responses WHERE id = ?')
-    .get(assessment.response_id) as any;
+    .get(assessment.response_id)) as any;
 
-  const attempt = db
+  const attempt = (await db
     .prepare('SELECT * FROM writing_attempts WHERE id = ?')
-    .get(assessment.attempt_id) as any;
+    .get(assessment.attempt_id)) as any;
 
-  const taskVersion = db
+  const taskVersion = (await db
     .prepare('SELECT * FROM writing_task_versions WHERE id = ?')
-    .get(response.task_version_id) as any;
+    .get(response.task_version_id)) as any;
 
   try {
     const evaluation = await runAiEvaluation({
@@ -171,9 +186,9 @@ export async function processAssessmentJob(assessmentId: string): Promise<void> 
 
     const now = new Date().toISOString();
 
-    const txn = db.transaction(() => {
+    const txn = db.transaction(async () => {
       // Update assessment record
-      db.prepare(
+      (await db.prepare(
         `UPDATE writing_assessments
          SET status = 'completed',
              task_band = ?,
@@ -211,63 +226,63 @@ export async function processAssessmentJob(assessmentId: string): Promise<void> 
         evaluation.is_simulated ? 1 : 0,
         now,
         assessmentId
-      );
+      ));
 
       // Consume allowance on success
-      consumeAllowance({
+      (await consumeAllowance({
         userId: attempt.user_id,
         assessmentId,
         responseId: response.id,
-      });
+      }));
 
       // Update attempt scores
-      syncAttemptBands(attempt.id);
+      (await syncAttemptBands(attempt.id));
     });
 
-    txn();
+    (await txn());
   } catch (err: any) {
     console.error('Assessment execution failed:', err);
     // Mark failed and release reserved allowance so user is not penalized
-    db.prepare(
+    (await db.prepare(
       `UPDATE writing_assessments
        SET status = 'failed',
            error_message = ?,
            completed_at = datetime('now')
        WHERE id = ?`
-    ).run(err.message || 'Unknown evaluation failure', assessmentId);
+    ).run(err.message || 'Unknown evaluation failure', assessmentId));
 
-    releaseAllowance({
+    (await releaseAllowance({
       userId: attempt.user_id,
       assessmentId,
       responseId: response.id,
       reason: err.message || 'Evaluation process failed',
-    });
+    }));
   }
 }
 
 /**
  * Calculates and synchronizes overall writing band scores for the attempt.
  */
-export function syncAttemptBands(attemptId: string): void {
-  const attempt = db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId) as any;
+export async function syncAttemptBands(attemptId: string): Promise<void> {
+  const attempt = (await db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId)) as any;
   if (!attempt) return;
 
   // Find assessments for task 1 and task 2
-  const task1Assessment = db
+  const task1Assessment = (await db
     .prepare(
       `SELECT a.task_band FROM writing_assessments a
        WHERE a.attempt_id = ? AND a.task_number = 1 AND a.status = 'completed'
        ORDER BY a.created_at DESC LIMIT 1`
     )
-    .get(attemptId) as any;
+    .get(attemptId)) as any;
 
-  const task2Assessment = db
+  const task2Assessment = (await db
     .prepare(
       `SELECT a.task_band FROM writing_assessments a
        WHERE a.attempt_id = ? AND a.task_number = 2 AND a.status = 'completed'
        ORDER BY a.created_at DESC LIMIT 1`
     )
-    .get(attemptId) as any;
+    .get(attemptId)) as any;
 
   const task1Band = task1Assessment ? task1Assessment.task_band : null;
   const task2Band = task2Assessment ? task2Assessment.task_band : null;
@@ -281,11 +296,11 @@ export function syncAttemptBands(attemptId: string): void {
     overallBand = task2Band;
   }
 
-  db.prepare(
+  (await db.prepare(
     `UPDATE writing_attempts
      SET task1_band = ?, task2_band = ?, overall_writing_band = ?, updated_at = datetime('now')
      WHERE id = ?`
-  ).run(task1Band, task2Band, overallBand, attemptId);
+  ).run(task1Band, task2Band, overallBand, attemptId));
 }
 
 // -------------------------------------------------------------

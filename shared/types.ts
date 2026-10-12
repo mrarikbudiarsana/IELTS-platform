@@ -175,7 +175,7 @@ export interface QuestionGroup {
   mapData?: {
     imageUrl: string;
     caption?: string;
-    locations: MapLocationPin[];
+    locations?: MapLocationPin[];
   };
   formData?: {
     formTitle: string;
@@ -254,6 +254,8 @@ export interface ListeningPart {
 export interface ListeningAudioConfig {
   audioMode: 'single_audio' | 'part_audios';
   masterAudioUrl?: string;
+  overallAudioUrl?: string;
+  parts?: { partNumber: number; audioUrl: string; durationSeconds: number }[];
   totalAudioDurationSeconds?: number;
   postTestCheckTimeSeconds: number; // 120s official computer-delivered review time
 }
@@ -701,7 +703,7 @@ export type SpeakingAiSessionStage =
 export interface SpeakingAudioTurn {
   id: string;
   sessionId: string;
-  part: SpeakingPart;
+  part: 1 | 2 | 3;
   turnNumber: number;
   speaker: 'examiner' | 'candidate';
   text: string;
@@ -723,7 +725,7 @@ export interface SpeakingAiSession {
   setTitle?: string;
   mode: TestMode;
   stage: SpeakingAiSessionStage;
-  currentPart: SpeakingPart;
+  currentPart: 1 | 2 | 3;
   currentQuestionIndex: number;
   part2Notes?: string;
   durationSeconds: number;

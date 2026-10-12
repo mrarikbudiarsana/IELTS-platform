@@ -19,31 +19,31 @@ import {
 } from '../shared/scoring';
 import { canUserAccessTest } from './commercialService';
 
-export function startOrResumeListeningAttempt(params: {
+export async function startOrResumeListeningAttempt(params: {
   userId: string;
   testId: string;
   modeOverride?: 'practice' | 'mock';
   isReconnection?: boolean;
   assignmentId?: string;
   packageAttemptId?: string;
-}): { attempt: ListeningAttempt; testVersion: any } {
+}): Promise<{ attempt: ListeningAttempt; testVersion: any }> {
   // If attempting independently without assignment, ensure test is not reserved in an unreleased post-test
   if (!params.assignmentId) {
-    const isReserved = db.prepare(`
+    const isReserved = (await db.prepare(`
       SELECT 1 FROM assignments a
       LEFT JOIN test_packages tp ON a.package_id = tp.id
       WHERE a.purpose = 'post_test'
         AND (a.is_released = 0 OR a.release_at > datetime('now'))
         AND (a.test_id = ? OR tp.listening_test_id = ?)
       LIMIT 1
-    `).get(params.testId, params.testId);
+    `).get(params.testId, params.testId));
 
     if (isReserved) {
       throw new Error('This test material is reserved for a protected post-test and has not been released by your teacher.');
     }
   }
 
-  const test = getListeningTestById(params.testId);
+  const test = (await getListeningTestById(params.testId));
   if (!test) throw new Error('Listening test not found');
   if (test.status !== 'published') {
     throw new Error('Test is not published');
@@ -51,43 +51,43 @@ export function startOrResumeListeningAttempt(params: {
 
   // Commercial tier check: free tier vs paid plan vs assignment grant
   if (!params.assignmentId && !test.isFreeTier) {
-    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(params.userId) as any;
+    const user = (await db.prepare('SELECT role FROM users WHERE id = ?').get(params.userId)) as any;
     const isStaff = user?.role === 'teacher' || user?.role === 'admin';
     if (!isStaff) {
-      const accessCheck = canUserAccessTest({
+      const accessCheck = (await canUserAccessTest({
         userId: params.userId,
         isTeacherOrAdmin: isStaff,
         isFreeTier: Boolean(test.isFreeTier),
         assignmentId: params.assignmentId,
-      });
+      }));
       if (!accessCheck.allowed) {
         throw new Error(accessCheck.reason || 'This practice material requires an active Paid Practice Plan or Teacher Code.');
       }
     }
   }
 
-  const latestVersion = getListeningVersionById(test.latestVersionId);
+  const latestVersion = (await getListeningVersionById(test.latestVersionId));
   if (!latestVersion) throw new Error('Published test version not found');
 
   // Check if active in_progress attempt exists
-  const existingRow = db
+  const existingRow = (await db
     .prepare(`
       SELECT * FROM listening_attempts
       WHERE user_id = ? AND test_id = ? AND status = 'in_progress'
       ORDER BY started_at DESC LIMIT 1
     `)
-    .get(params.userId, params.testId) as any;
+    .get(params.userId, params.testId)) as any;
 
   if (existingRow) {
     const now = new Date();
     // Check server deadline
     if (existingRow.deadline_at && new Date(existingRow.deadline_at) < now) {
-      submitListeningAttempt({
+      (await submitListeningAttempt({
         attemptId: existingRow.id,
         userId: params.userId,
         forceExpired: true,
-      });
-      return startNewListeningAttempt(params, test, latestVersion);
+      }));
+      return (await startNewListeningAttempt(params, test, latestVersion));
     }
 
     // Attempt is being resumed: record interruption if this was a refresh/reconnect
@@ -98,15 +98,15 @@ export function startOrResumeListeningAttempt(params: {
       detail: 'Session reconnected / page refreshed during active attempt',
     });
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE listening_attempts
       SET was_interrupted = 1,
           interruption_count = interruption_count + 1,
           interruption_events_json = ?
       WHERE id = ?
-    `).run(JSON.stringify(currentEvents), existingRow.id);
+    `).run(JSON.stringify(currentEvents), existingRow.id));
 
-    const attempt = getListeningAttemptById(existingRow.id, params.userId)!;
+    const attempt = (await getListeningAttemptById(existingRow.id, params.userId))!;
     const sanitized = sanitizeListeningForStudent(
       latestVersion.questionGroups,
       latestVersion.parts
@@ -122,10 +122,10 @@ export function startOrResumeListeningAttempt(params: {
     };
   }
 
-  return startNewListeningAttempt(params, test, latestVersion);
+  return (await startNewListeningAttempt(params, test, latestVersion));
 }
 
-function startNewListeningAttempt(
+async function startNewListeningAttempt(
   params: {
     userId: string;
     testId: string;
@@ -150,16 +150,16 @@ function startNewListeningAttempt(
   }
 
   // Check if first attempt
-  const pastAttemptsCount = db
+  const pastAttemptsCount = (await db
     .prepare(`
       SELECT COUNT(*) as count FROM listening_attempts
       WHERE user_id = ? AND test_id = ? AND status IN ('submitted', 'expired')
     `)
-    .get(params.userId, params.testId) as any;
+    .get(params.userId, params.testId)) as any;
 
   const isFirstAttempt = pastAttemptsCount.count === 0 ? 1 : 0;
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO listening_attempts (
       id, user_id, test_id, version_id, test_title,
       mode, status, started_at, deadline_at, duration_seconds,
@@ -179,18 +179,18 @@ function startNewListeningAttempt(
     isFirstAttempt,
     params.assignmentId || null,
     now.toISOString()
-  );
+  ));
 
   // If package attempt provided, link it
   if (params.packageAttemptId) {
-    db.prepare(`
+    (await db.prepare(`
       UPDATE package_attempts
       SET listening_attempt_id = ?
       WHERE id = ?
-    `).run(attemptId, params.packageAttemptId);
+    `).run(attemptId, params.packageAttemptId));
   }
 
-  const attempt = getListeningAttemptById(attemptId, params.userId)!;
+  const attempt = (await getListeningAttemptById(attemptId, params.userId))!;
   const sanitized = sanitizeListeningForStudent(
     version.questionGroups,
     version.parts
@@ -206,16 +206,16 @@ function startNewListeningAttempt(
   };
 }
 
-export function recordListeningInterruption(params: {
+export async function recordListeningInterruption(params: {
   attemptId: string;
   userId: string;
   type: 'disconnect' | 'reload' | 'audio_error' | 'manual_pause_recovered';
   detail?: string;
   didReplay?: boolean;
-}): { success: boolean } {
-  const row = db
+}): Promise<{ success: boolean }> {
+  const row = (await db
     .prepare('SELECT * FROM listening_attempts WHERE id = ? AND user_id = ?')
-    .get(params.attemptId, params.userId) as any;
+    .get(params.attemptId, params.userId)) as any;
 
   if (!row || row.status !== 'in_progress') return { success: false };
 
@@ -228,29 +228,29 @@ export function recordListeningInterruption(params: {
 
   const replayIncrement = params.didReplay ? 1 : 0;
 
-  db.prepare(`
+  (await db.prepare(`
     UPDATE listening_attempts
     SET was_interrupted = 1,
         interruption_count = interruption_count + 1,
         replay_count = replay_count + ?,
         interruption_events_json = ?
     WHERE id = ?
-  `).run(replayIncrement, JSON.stringify(events), params.attemptId);
+  `).run(replayIncrement, JSON.stringify(events), params.attemptId));
 
   return { success: true };
 }
 
-export function saveListeningAnswer(params: {
+export async function saveListeningAnswer(params: {
   attemptId: string;
   userId: string;
   questionNumber: number;
   questionId: string;
   userAnswer: string | string[];
   isFlagged?: boolean;
-}): { saved: boolean; isExpired?: boolean } {
-  const attemptRow = db
+}): Promise<{ saved: boolean; isExpired?: boolean }> {
+  const attemptRow = (await db
     .prepare('SELECT * FROM listening_attempts WHERE id = ? AND user_id = ?')
-    .get(params.attemptId, params.userId) as any;
+    .get(params.attemptId, params.userId)) as any;
 
   if (!attemptRow) throw new Error('Attempt not found or access forbidden');
 
@@ -260,7 +260,7 @@ export function saveListeningAnswer(params: {
 
   // Check server-enforced deadline
   if (attemptRow.deadline_at && new Date(attemptRow.deadline_at) < new Date()) {
-    submitListeningAttempt({ attemptId: params.attemptId, userId: params.userId, forceExpired: true });
+    (await submitListeningAttempt({ attemptId: params.attemptId, userId: params.userId, forceExpired: true }));
     return { saved: false, isExpired: true };
   }
 
@@ -269,7 +269,7 @@ export function saveListeningAnswer(params: {
   const answerJson = JSON.stringify(params.userAnswer);
   const flagged = params.isFlagged ? 1 : 0;
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO listening_answers (
       id, attempt_id, question_id, question_number, user_answer_json, is_flagged, saved_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -285,27 +285,27 @@ export function saveListeningAnswer(params: {
     answerJson,
     flagged,
     now
-  );
+  ));
 
   return { saved: true };
 }
 
-export function submitListeningAttempt(params: {
+export async function submitListeningAttempt(params: {
   attemptId: string;
   userId: string;
   forceExpired?: boolean;
-}): ListeningAttempt {
-  const attemptRow = db
+}): Promise<ListeningAttempt> {
+  const attemptRow = (await db
     .prepare('SELECT * FROM listening_attempts WHERE id = ? AND user_id = ?')
-    .get(params.attemptId, params.userId) as any;
+    .get(params.attemptId, params.userId)) as any;
 
   if (!attemptRow) throw new Error('Attempt not found or access forbidden');
 
   if (attemptRow.status === 'submitted' || attemptRow.status === 'expired') {
-    return getListeningAttemptById(params.attemptId, params.userId)!;
+    return (await getListeningAttemptById(params.attemptId, params.userId))!;
   }
 
-  const version = getListeningVersionById(attemptRow.version_id);
+  const version = (await getListeningVersionById(attemptRow.version_id));
   if (!version) throw new Error('Listening test version not found');
 
   const now = new Date();
@@ -320,9 +320,9 @@ export function submitListeningAttempt(params: {
     }
   }
 
-  const answerRows = db
+  const answerRows = (await db
     .prepare('SELECT * FROM listening_answers WHERE attempt_id = ?')
-    .all(params.attemptId) as any[];
+    .all(params.attemptId)) as any[];
 
   const studentAnswersMap = new Map<number, any>();
   for (const row of answerRows) {
@@ -339,7 +339,7 @@ export function submitListeningAttempt(params: {
     WHERE attempt_id = ? AND question_number = ?
   `);
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     for (const [qNum, { question, group }] of questionMap.entries()) {
       const studentAnsRow = studentAnswersMap.get(qNum);
       const studentAns = studentAnsRow ? JSON.parse(studentAnsRow.user_answer_json) : '';
@@ -355,19 +355,19 @@ export function submitListeningAttempt(params: {
       });
 
       if (studentAnsRow) {
-        updateAnswerMark.run(
+        (await updateAnswerMark.run(
           markResult.isCorrect ? 1 : 0,
           markResult.mark,
           params.attemptId,
           qNum
-        );
+        ));
       } else {
-        db.prepare(`
+        (await db.prepare(`
           INSERT INTO listening_answers (
             id, attempt_id, question_id, question_number, user_answer_json,
             is_flagged, is_correct, mark, saved_at
           ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, datetime('now'))
-        `).run(uuidv4(), params.attemptId, question.id, qNum, JSON.stringify(''));
+        `).run(uuidv4(), params.attemptId, question.id, qNum, JSON.stringify('')));
       }
 
       totalRawScore += markResult.mark;
@@ -404,7 +404,7 @@ export function submitListeningAttempt(params: {
       version.totalQuestions
     );
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE listening_attempts
       SET status = ?,
           submitted_at = ?,
@@ -419,24 +419,24 @@ export function submitListeningAttempt(params: {
       totalRawScore,
       estimatedBand,
       params.attemptId
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
-  return getListeningAttemptById(params.attemptId, params.userId)!;
+  return (await getListeningAttemptById(params.attemptId, params.userId))!;
 }
 
-export function getListeningAttemptById(attemptId: string, userId: string): ListeningAttempt | null {
-  const attemptRow = db
+export async function getListeningAttemptById(attemptId: string, userId: string): Promise<ListeningAttempt | null> {
+  const attemptRow = (await db
     .prepare('SELECT * FROM listening_attempts WHERE id = ? AND user_id = ?')
-    .get(attemptId, userId) as any;
+    .get(attemptId, userId)) as any;
 
   if (!attemptRow) return null;
 
-  const answerRows = db
+  const answerRows = (await db
     .prepare('SELECT * FROM listening_answers WHERE attempt_id = ?')
-    .all(attemptId) as any[];
+    .all(attemptId)) as any[];
 
   const answers: Record<number, StudentAnswer> = {};
   for (const row of answerRows) {
@@ -454,7 +454,7 @@ export function getListeningAttemptById(attemptId: string, userId: string): List
 
   // Answers, transcripts, and explanations ONLY delivered after submission or expiry!
   if (attemptRow.status === 'submitted' || attemptRow.status === 'expired') {
-    const version = getListeningVersionById(attemptRow.version_id);
+    const version = (await getListeningVersionById(attemptRow.version_id));
     if (version) {
       const questionMap = new Map<number, { question: QuestionItem; group: QuestionGroup }>();
       for (const g of version.questionGroups) {
@@ -525,10 +525,10 @@ export function getListeningAttemptById(attemptId: string, userId: string): List
   };
 }
 
-export function listUserListeningAttempts(userId: string): ListeningAttempt[] {
-  const rows = db
+export async function listUserListeningAttempts(userId: string): Promise<ListeningAttempt[]> {
+  const rows = (await db
     .prepare('SELECT * FROM listening_attempts WHERE user_id = ? ORDER BY started_at DESC')
-    .all(userId) as any[];
+    .all(userId)) as any[];
 
   return rows.map((r) => ({
     id: r.id,

@@ -879,12 +879,12 @@ An alternative source of natural rubber
   };
 }
 
-export function ingestCambridge21ListeningTest1(authorId?: string): {
+export async function ingestCambridge21ListeningTest1(authorId?: string): Promise<{
   testId: string;
   versionId: string;
   status: string;
   totalQuestions: number;
-} {
+}> {
   const data = getCambridge21ListeningTest1Data();
   const errors = validateListeningTestVersion(data.parts, data.questionGroups, data.audioConfig);
   if (errors.length > 0) {
@@ -893,13 +893,13 @@ export function ingestCambridge21ListeningTest1(authorId?: string): {
 
   let resolvedAuthorId = authorId;
   if (!resolvedAuthorId) {
-    const admin = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get() as any;
+    const admin = (await db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get()) as any;
     resolvedAuthorId = admin ? admin.id : 'admin';
   }
 
-  const existing = db
+  const existing = (await db
     .prepare("SELECT id FROM listening_tests WHERE title LIKE '%Cambridge%21%Listening%Test 1%'")
-    .get() as any;
+    .get()) as any;
 
   const now = new Date().toISOString();
   let testId: string;
@@ -907,13 +907,13 @@ export function ingestCambridge21ListeningTest1(authorId?: string): {
 
   if (existing) {
     testId = existing.id;
-    const latestVerRow = db
+    const latestVerRow = (await db
       .prepare(`SELECT id, version_number FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1`)
-      .get(testId) as any;
+      .get(testId)) as any;
 
     if (latestVerRow) {
       versionId = latestVerRow.id;
-      db.prepare(`
+      (await db.prepare(`
         UPDATE listening_test_versions
         SET parts_json = ?,
             question_groups_json = ?,
@@ -926,10 +926,10 @@ export function ingestCambridge21ListeningTest1(authorId?: string): {
         JSON.stringify(data.questionGroups),
         JSON.stringify(data.audioConfig),
         versionId
-      );
+      ));
     } else {
       versionId = uuidv4();
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO listening_test_versions (
           id, test_id, version_number, status, parts_json,
           question_groups_json, total_questions, audio_config_json, validation_errors_json, published_at, created_at
@@ -942,21 +942,21 @@ export function ingestCambridge21ListeningTest1(authorId?: string): {
         JSON.stringify(data.audioConfig),
         now,
         now
-      );
+      ));
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE listening_tests
       SET status = 'published',
           is_free_tier = 1,
           updated_at = ?
       WHERE id = ?
-    `).run(now, testId);
+    `).run(now, testId));
   } else {
     testId = uuidv4();
     versionId = uuidv4();
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO listening_tests (
         id, title, category, audio_mode, time_limit_minutes,
         current_version_number, status, created_by_id, is_free_tier, created_at, updated_at
@@ -970,9 +970,9 @@ export function ingestCambridge21ListeningTest1(authorId?: string): {
       resolvedAuthorId,
       now,
       now
-    );
+    ));
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO listening_test_versions (
         id, test_id, version_number, status, parts_json,
         question_groups_json, total_questions, audio_config_json, validation_errors_json, published_at, created_at
@@ -985,7 +985,7 @@ export function ingestCambridge21ListeningTest1(authorId?: string): {
       JSON.stringify(data.audioConfig),
       now,
       now
-    );
+    ));
   }
 
   return {

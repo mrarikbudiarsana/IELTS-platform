@@ -42,7 +42,7 @@ async function runAiSpeakingTestSuite() {
   console.log('  RUNNING MILESTONE 6: LIVE AI SPEAKING & ASSESSMENT SUITE   ');
   console.log('=============================================================\n');
 
-  initDatabase();
+  (await initDatabase());
 
   // ---------------------------------------------------------------------
   // TEST USERS SETUP
@@ -52,16 +52,16 @@ async function runAiSpeakingTestSuite() {
   const adminId = uuidv4();
   const studentEmail = `leo_spk_${Date.now()}@test.com`;
 
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Teacher Sarah', 'teacher')`).run(teacherId, `sarah_spk_${Date.now()}@test.com`);
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Student Leo', 'student')`).run(studentId, studentEmail);
-  db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Admin Boss', 'admin')`).run(adminId, `admin_spk_${Date.now()}@test.com`);
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Teacher Sarah', 'teacher')`).run(teacherId, `sarah_spk_${Date.now()}@test.com`));
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Student Leo', 'student')`).run(studentId, studentEmail));
+  (await db.prepare(`INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'dummy', 'Admin Boss', 'admin')`).run(adminId, `admin_spk_${Date.now()}@test.com`));
 
   // ---------------------------------------------------------------------
   // TEST 1: Voice Trial & Acoustic Pre-flight Health Check (Zero Allowance)
   // ---------------------------------------------------------------------
   console.log('TEST 1: Voice Trial & Acoustic Pre-flight Health Check (Zero Allowance)');
   {
-    const initialBalance = getUserSpeakingAllowanceBalance(studentId);
+    const initialBalance = (await getUserSpeakingAllowanceBalance(studentId));
 
     // 1a. Test with synthetic buffer (speech amplitude)
     const syntheticBuffer = Buffer.alloc(16000);
@@ -88,7 +88,7 @@ async function runAiSpeakingTestSuite() {
     assert.ok(trialRes.measuredCosts?.totalTurnCostUsd! > 0, 'Measured costs should be calculated');
 
     // Verify zero allowances consumed
-    const balanceAfter = getUserSpeakingAllowanceBalance(studentId);
+    const balanceAfter = (await getUserSpeakingAllowanceBalance(studentId));
     assert.strictEqual(balanceAfter.available, initialBalance.available, 'Voice trial must NEVER consume student allowances');
     console.log('  ✔ Pre-flight acoustic check, silence detection, and 0-allowance invariant verified.');
   }
@@ -110,46 +110,46 @@ async function runAiSpeakingTestSuite() {
   console.log('TEST 3: Dedicated Speaking Allowance Ledger & Invariants');
   {
     // 3a. Grant allowances
-    const grant = grantSpeakingAllowance({
+    const grant = (await grantSpeakingAllowance({
       adminId,
       userId: studentId,
       amount: 10,
       notes: 'Test allowance grant',
-    });
+    }));
     assert.strictEqual(grant.amount, 10, 'Grant amount should be 10');
 
-    const bal1 = getUserSpeakingAllowanceBalance(studentId);
+    const bal1 = (await getUserSpeakingAllowanceBalance(studentId));
     assert.strictEqual(bal1.available, 10, 'Available balance should be 10');
 
     // 3b. Reserve allowance
     const testSessionId = uuidv4();
-    const resEntry = reserveSpeakingAllowance({
+    const resEntry = (await reserveSpeakingAllowance({
       userId: studentId,
       sessionId: testSessionId,
       idempotencyKey: `test-res-${testSessionId}`,
-    });
+    }));
     assert.strictEqual(resEntry.amount, -1, 'Reservation amount should be -1');
 
-    const bal2 = getUserSpeakingAllowanceBalance(studentId);
+    const bal2 = (await getUserSpeakingAllowanceBalance(studentId));
     assert.strictEqual(bal2.available, 9, 'Available balance should be decremented to 9');
     assert.strictEqual(bal2.totalReserved, 1, 'Total reserved should be 1');
 
     // 3c. Idempotent reservation with same key should not deduct again
-    reserveSpeakingAllowance({
+    (await reserveSpeakingAllowance({
       userId: studentId,
       sessionId: testSessionId,
       idempotencyKey: `test-res-${testSessionId}`,
-    });
-    const bal2b = getUserSpeakingAllowanceBalance(studentId);
+    }));
+    const bal2b = (await getUserSpeakingAllowanceBalance(studentId));
     assert.strictEqual(bal2b.available, 9, 'Idempotent reservation must not deduct duplicate allowance');
 
     // 3d. Safe refund on session abandon
-    releaseSpeakingAllowance({
+    (await releaseSpeakingAllowance({
       userId: studentId,
       sessionId: testSessionId,
       reason: 'Test cancellation',
-    });
-    const bal3 = getUserSpeakingAllowanceBalance(studentId);
+    }));
+    const bal3 = (await getUserSpeakingAllowanceBalance(studentId));
     assert.strictEqual(bal3.available, 10, 'Released reservation must restore available balance to 10');
     assert.strictEqual(bal3.totalReserved, 0, 'Total reserved should return to 0');
 
@@ -163,7 +163,7 @@ async function runAiSpeakingTestSuite() {
   let testSetId = '';
   let testVersionId = '';
   {
-    const set = createSpeakingSet(teacherId, {
+    const set = (await createSpeakingSet(teacherId, {
       title: 'Climate Science & Global Environmental Policy',
       part1Topics: [
         {
@@ -195,9 +195,9 @@ async function runAiSpeakingTestSuite() {
           'Do you think developed nations have a greater responsibility to fund green transitions?',
         ],
       },
-    });
+    }));
 
-    publishSpeakingSetVersion(set.set.id, set.version.id);
+    (await publishSpeakingSetVersion(set.set.id, set.version.id));
     testSetId = set.set.id;
     testVersionId = set.version.id;
     console.log('  ✔ Speaking set created and published with complete 3-part official structure.');
@@ -210,12 +210,12 @@ async function runAiSpeakingTestSuite() {
   let activeSessionId = '';
   {
     // Start session (should reserve 1 allowance)
-    const session = startOrRecoverSpeakingSession({
+    const session = (await startOrRecoverSpeakingSession({
       userId: studentId,
       setId: testSetId,
       setVersionId: testVersionId,
       mode: 'mock',
-    });
+    }));
 
     activeSessionId = session.id;
     assert.strictEqual(session.stage, 'setup', 'Initial stage should be setup');
@@ -235,26 +235,26 @@ async function runAiSpeakingTestSuite() {
     assert.ok(turnResult.examinerTurn.text.length > 0, 'Examiner must respond with legitimate test progression');
 
     // Valid stage transition: setup -> part_1
-    const sPart1 = advanceSessionStage(activeSessionId, studentId, 'part_1');
+    const sPart1 = (await advanceSessionStage(activeSessionId, studentId, 'part_1'));
     assert.strictEqual(sPart1.stage, 'part_1', 'Session should advance to part_1');
 
     // Invalid stage transition: part_1 -> completed (illegal jump)
-    assert.throws(() => {
-      advanceSessionStage(activeSessionId, studentId, 'completed');
-    }, /Invalid stage transition/, 'Illegal stage progression must be rejected by server');
+    (await assert.rejects(async () => {
+      (await advanceSessionStage(activeSessionId, studentId, 'completed'));
+    }, /Invalid stage transition/, 'Illegal stage progression must be rejected by server'));
 
     // Advance to Part 2 prep
-    const sPart2Prep = advanceSessionStage(activeSessionId, studentId, 'part_2_prep');
+    const sPart2Prep = (await advanceSessionStage(activeSessionId, studentId, 'part_2_prep'));
     assert.strictEqual(sPart2Prep.stage, 'part_2_prep', 'Session should advance to part_2_prep');
     assert.strictEqual(sPart2Prep.currentPart, 2, 'Current part should be 2');
 
     // Candidate saves Part 2 scratchpad notes
-    savePart2ScratchpadNotes(activeSessionId, studentId, '- Renewable wind farms\n- Solar subsidy policy\n- Long term decarbonisation');
-    const sessionWithNotes = getSpeakingSessionById(activeSessionId);
+    (await savePart2ScratchpadNotes(activeSessionId, studentId, '- Renewable wind farms\n- Solar subsidy policy\n- Long term decarbonisation'));
+    const sessionWithNotes = (await getSpeakingSessionById(activeSessionId));
     assert.ok(sessionWithNotes?.part2Notes?.includes('Renewable wind farms'), 'Part 2 scratchpad notes must be preserved');
 
     // Advance to Part 2 speaking
-    const sPart2Spk = advanceSessionStage(activeSessionId, studentId, 'part_2_speaking');
+    const sPart2Spk = (await advanceSessionStage(activeSessionId, studentId, 'part_2_speaking'));
     assert.strictEqual(sPart2Spk.stage, 'part_2_speaking', 'Session should advance to part_2_speaking');
 
     // Candidate delivers Part 2 long turn
@@ -266,7 +266,7 @@ async function runAiSpeakingTestSuite() {
     });
 
     // Advance to Part 3
-    const sPart3 = advanceSessionStage(activeSessionId, studentId, 'part_3');
+    const sPart3 = (await advanceSessionStage(activeSessionId, studentId, 'part_3'));
     assert.strictEqual(sPart3.stage, 'part_3', 'Session should advance to part_3');
     assert.strictEqual(sPart3.currentPart, 3, 'Current part should be 3');
 
@@ -286,20 +286,20 @@ async function runAiSpeakingTestSuite() {
   // ---------------------------------------------------------------------
   console.log('TEST 6: Bounded Reconnection & Recovery Invariants');
   {
-    const balBefore = getUserSpeakingAllowanceBalance(studentId);
+    const balBefore = (await getUserSpeakingAllowanceBalance(studentId));
 
     // Re-calling startOrRecoverSpeakingSession recovers the active session
-    const recoveredSession = startOrRecoverSpeakingSession({
+    const recoveredSession = (await startOrRecoverSpeakingSession({
       userId: studentId,
       setId: testSetId,
       mode: 'mock',
-    });
+    }));
 
     assert.strictEqual(recoveredSession.id, activeSessionId, 'Should recover the identical active session');
     assert.strictEqual(recoveredSession.wasInterrupted, true, 'Recovered session must be flagged as wasInterrupted');
     assert.ok(recoveredSession.interruptionCount >= 1, 'Interruption count should increment');
 
-    const balAfter = getUserSpeakingAllowanceBalance(studentId);
+    const balAfter = (await getUserSpeakingAllowanceBalance(studentId));
     assert.strictEqual(balAfter.available, balBefore.available, 'Reconnecting must NOT consume additional allowances');
     console.log('  ✔ Session recovery, interruption tracking, and zero duplicate charges verified.');
   }
@@ -337,7 +337,7 @@ async function runAiSpeakingTestSuite() {
     assert.strictEqual(assessment.wasInterrupted, true, 'Assessment must record that session was interrupted');
 
     // Verify allowance was consumed
-    const sessionFinal = getSpeakingSessionById(activeSessionId);
+    const sessionFinal = (await getSpeakingSessionById(activeSessionId));
     assert.strictEqual(sessionFinal?.allowanceConsumed, true, 'Session allowance must be marked consumed');
 
     console.log('  ✔ Audio-grounded evaluation across FC, LR, GRA, P, evidence quotes, and acoustic metrics verified.');
@@ -349,22 +349,22 @@ async function runAiSpeakingTestSuite() {
   console.log('TEST 8: Pre/Post Journey Integration, Class Assignment & 4-Skill Band');
   {
     // Create class
-    const cls = createClass(teacherId, {
+    const cls = (await createClass(teacherId, {
       title: 'IELTS Intensive Speaking Masterclass',
       testType: 'academic',
-    });
+    }));
 
-    enrolStudentByEmail(teacherId, cls.id, studentEmail);
+    (await enrolStudentByEmail(teacherId, cls.id, studentEmail));
 
     // Create Assignment with speakingRoute
-    const assignResult = createAssignment(teacherId, cls.id, {
+    const assignResult = (await createAssignment(teacherId, cls.id, {
       title: 'Diagnostic Pre-Test Speaking Session',
       purpose: 'pre_test',
       skill: 'speaking',
       testId: testSetId,
       mode: 'mock',
       speakingRoute: 'ai',
-    });
+    }));
 
     assert.strictEqual(assignResult.assignment.speakingRoute, 'ai', 'Assignment should preserve speakingRoute');
 
@@ -381,7 +381,9 @@ async function runAiSpeakingTestSuite() {
   console.log('=============================================================\n');
 }
 
-runAiSpeakingTestSuite().catch((err) => {
-  console.error('\n❌ AI Speaking Test Suite Failed:', err);
-  process.exit(1);
-});
+async function runEntryPoint() {
+await runAiSpeakingTestSuite();
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

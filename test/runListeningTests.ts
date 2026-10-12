@@ -31,18 +31,18 @@ console.log('  RUNNING IELTS LISTENING PLATFORM VERIFICATION SUITE ');
 console.log('======================================================\n');
 
 async function runListeningTests() {
-  initDatabase();
-  seedListeningDatabase();
+  (await initDatabase());
+  (await seedListeningDatabase());
 
   // ---------------------------------------------------------------
   // TEST 1: User & Learner Isolation for Listening
   // ---------------------------------------------------------------
   console.log('TEST 1: Listening Catalogue Access & Role Isolation');
-  const studentTests = listListeningTests({ isTeacherOrAdmin: false });
+  const studentTests = (await listListeningTests({ isTeacherOrAdmin: false }));
   for (const t of studentTests) {
     assert.strictEqual(t.status, 'published', 'Student must only see published listening tests');
   }
-  const teacherTests = listListeningTests({ isTeacherOrAdmin: true });
+  const teacherTests = (await listListeningTests({ isTeacherOrAdmin: true }));
   assert.ok(teacherTests.length >= studentTests.length, 'Teacher sees drafts and published');
   console.log(`  ✔ Content visibility filtered: Students see ${studentTests.length} published listening tests.`);
 
@@ -57,16 +57,16 @@ async function runListeningTests() {
   // ---------------------------------------------------------------
   console.log('TEST 2: Answer-Key & Transcript Protection During In-Progress Attempts');
   const testStudentId = uuidv4();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO users (id, email, password_hash, full_name, role, plan_type, plan_expires_at, created_at)
     VALUES (?, ?, ?, ?, 'student', 'paid_plan', datetime('now', '+30 days'), datetime('now'))
-  `).run(testStudentId, `listen_student_${Date.now()}@test.com`, hashPassword('Pass123!'), 'Listening Student');
+  `).run(testStudentId, `listen_student_${Date.now()}@test.com`, hashPassword('Pass123!'), 'Listening Student'));
 
-  const { attempt, testVersion: sanitizedTest } = startOrResumeListeningAttempt({
+  const { attempt, testVersion: sanitizedTest } = (await startOrResumeListeningAttempt({
     userId: testStudentId,
     testId: publishedMock.id,
     modeOverride: 'mock',
-  });
+  }));
 
   assert.strictEqual(attempt.status, 'in_progress', 'Attempt must be in_progress');
 
@@ -263,30 +263,30 @@ async function runListeningTests() {
   const isC21 = publishedMock.title.includes('Cambridge') || publishedMock.title.includes('21');
   const testQ1Answer = isC21 ? '10' : 'Campbell';
 
-  saveListeningAnswer({
+  (await saveListeningAnswer({
     attemptId: attempt.id,
     userId: testStudentId,
     questionNumber: 1,
     questionId: sanitizedTest.questionGroups[0].questions[0].id,
     userAnswer: testQ1Answer,
     isFlagged: false,
-  });
+  }));
 
-  saveListeningAnswer({
+  (await saveListeningAnswer({
     attemptId: attempt.id,
     userId: testStudentId,
     questionNumber: 11,
     questionId: sanitizedTest.questionGroups[2].questions[0].id,
     userAnswer: 'A',
     isFlagged: true,
-  });
+  }));
 
   // Reconnect / resume
-  const resumed = startOrResumeListeningAttempt({
+  const resumed = (await startOrResumeListeningAttempt({
     userId: testStudentId,
     testId: publishedMock.id,
     isReconnection: true,
-  });
+  }));
 
   assert.strictEqual(resumed.attempt.id, attempt.id, 'Resumed attempt must match ID');
   assert.strictEqual(resumed.attempt.answers[1].userAnswer, testQ1Answer, 'Q1 restored');
@@ -302,15 +302,15 @@ async function runListeningTests() {
   assert.ok(resumed.attempt.interruptionCount >= 1, 'Interruption count must increment');
 
   // Record an audio playback error event
-  recordListeningInterruption({
+  (await recordListeningInterruption({
     attemptId: attempt.id,
     userId: testStudentId,
     type: 'audio_error',
     detail: 'Audio playback stalled due to packet drop; recovery initiated',
     didReplay: true,
-  });
+  }));
 
-  const interruptedAttempt = getListeningAttemptById(attempt.id, testStudentId)!;
+  const interruptedAttempt = (await getListeningAttemptById(attempt.id, testStudentId))!;
   assert.strictEqual(interruptedAttempt.wasInterrupted, true);
   assert.strictEqual(interruptedAttempt.replayCount, 1, 'Replay count tracked');
   assert.ok(interruptedAttempt.interruptionEvents.length >= 2, 'Events logged with detail');
@@ -320,10 +320,10 @@ async function runListeningTests() {
   // TEST 7: Submission & Results Analytics with Transcript Excerpts
   // ---------------------------------------------------------------
   console.log('TEST 7: Submission & Performance by Question Type');
-  const submitted = submitListeningAttempt({
+  const submitted = (await submitListeningAttempt({
     attemptId: attempt.id,
     userId: testStudentId,
-  });
+  }));
 
   assert.strictEqual(submitted.status, 'submitted');
   assert.ok(submitted.results && submitted.results.length === 40, 'All 40 results returned');
@@ -345,12 +345,12 @@ async function runListeningTests() {
   // TEST 8: Versioning Immutability
   // ---------------------------------------------------------------
   console.log('TEST 8: Listening Content Versioning Immutability');
-  const beforeTest = getListeningTestById(publishedMock.id)!;
-  const forked = forkNewListeningDraftVersion(publishedMock.id);
+  const beforeTest = (await getListeningTestById(publishedMock.id))!;
+  const forked = (await forkNewListeningDraftVersion(publishedMock.id));
   assert.strictEqual(forked.versionNumber, beforeTest.currentVersionNumber + 1);
   assert.strictEqual(forked.status, 'draft');
 
-  const pastAttempt = getListeningAttemptById(attempt.id, testStudentId)!;
+  const pastAttempt = (await getListeningAttemptById(attempt.id, testStudentId))!;
   assert.strictEqual(pastAttempt.versionId, publishedMock.latestVersionId, 'Past attempt preserves original version');
   console.log('  ✔ Published listening tests remain immutable; new drafts preserve attempt histories.');
 
@@ -359,7 +359,9 @@ async function runListeningTests() {
   console.log('======================================================\n');
 }
 
-runListeningTests().catch((err) => {
-  console.error('Listening verification failed:', err);
-  process.exit(1);
-});
+async function runEntryPoint() {
+await runListeningTests();
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

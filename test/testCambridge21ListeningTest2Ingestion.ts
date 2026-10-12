@@ -28,7 +28,7 @@ async function runTests() {
 
   // Step 2: Ingest into database
   console.log('\n2. Ingesting into platform database...');
-  const result = ingestCambridge21ListeningTest2();
+  const result = (await ingestCambridge21ListeningTest2());
   assert(result.testId, 'Test ID must be generated');
   assert(result.versionId, 'Version ID must be generated');
   assert(result.status === 'published', 'Must be published');
@@ -37,13 +37,13 @@ async function runTests() {
 
   // Step 3: Verify DB retrieval
   console.log('\n3. Verifying database records...');
-  const testRecord = getListeningTestById(result.testId);
+  const testRecord = (await getListeningTestById(result.testId));
   assert(testRecord !== null, 'Test record must exist in DB');
   assert(testRecord!.title === 'Cambridge IELTS 21 Academic Listening Test 2', 'Title must match');
   assert(testRecord!.isFreeTier === true, 'Test should be accessible in free tier');
   assert(testRecord!.status === 'published', 'Status must be published');
 
-  const versionRecord = getListeningVersionById(result.versionId);
+  const versionRecord = (await getListeningVersionById(result.versionId));
   assert(versionRecord !== null, 'Version record must exist in DB');
   assert(versionRecord!.parts.length === 4, 'Must have 4 parts in version');
   assert(versionRecord!.questionGroups.length === 9, 'Must have 9 question groups');
@@ -94,7 +94,7 @@ async function runTests() {
 
   // Step 7: Verify Catalogue Listing
   console.log('\n7. Verifying student catalogue visibility...');
-  const studentCatalogue = listListeningTests({ isTeacherOrAdmin: false });
+  const studentCatalogue = (await listListeningTests({ isTeacherOrAdmin: false }));
   const foundInCatalogue = studentCatalogue.find((t) => t.id === result.testId);
   assert(foundInCatalogue !== undefined, 'Ingested test must appear in catalogue list');
   console.log(`   ✓ Test visible in published catalogue: "${foundInCatalogue!.title}"`);
@@ -127,7 +127,9 @@ async function runTests() {
   console.log('\n>>> ALL CAMBRIDGE IELTS 21 LISTENING TEST 2 VERIFICATION TESTS PASSED SUCCESSFULLY! <<<\n');
 }
 
-runTests().catch((err) => {
-  console.error('\n❌ Test suite failed:', err);
-  process.exit(1);
-});
+async function runEntryPoint() {
+await runTests();
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

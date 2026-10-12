@@ -49,7 +49,8 @@ console.log('   ✓ Chronological order verified: Cambridge 21 (Test 4 -> Test 2
 
 // 3. Verify actual reading service output
 console.log('\n3. Verifying actual Reading catalogue order from server readingService...');
-const readingTests = listTests({ isTeacherOrAdmin: false });
+async function runEntryPoint() {
+const readingTests = (await listTests({ isTeacherOrAdmin: false }));
 const c21ReadingTitles = readingTests
   .map((t) => t.title)
   .filter((title) => title.includes('Cambridge'));
@@ -63,7 +64,7 @@ console.log('   ✓ Actual Reading catalogue order is strictly Test 4 -> Test 3 
 
 // 4. Verify actual listening service output
 console.log('\n4. Verifying actual Listening catalogue order from server listeningService...');
-const listeningTests = listListeningTests({ isTeacherOrAdmin: false });
+const listeningTests = (await listListeningTests({ isTeacherOrAdmin: false }));
 const c21ListeningTitles = listeningTests
   .map((t) => t.title)
   .filter((title) => title.includes('Cambridge'));
@@ -78,3 +79,7 @@ console.log('   ✓ Actual Listening catalogue order is strictly Test 4 -> Test 
 console.log('\n======================================================');
 console.log('🎉 ALL CHRONOLOGICAL TEST ORDER VERIFICATIONS PASSED! 🎉');
 console.log('======================================================\n');
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

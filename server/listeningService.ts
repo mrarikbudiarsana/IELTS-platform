@@ -1,3 +1,4 @@
+import { asyncFilter } from './asyncCollections';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import {
@@ -134,7 +135,7 @@ export function sanitizeListeningForStudent(
   return { questionGroups: sanitizedGroups, parts: sanitizedParts };
 }
 
-export function createListeningTest(params: {
+export async function createListeningTest(params: {
   title: string;
   category: TestMode;
   audioMode?: 'single_audio' | 'part_audios';
@@ -143,7 +144,7 @@ export function createListeningTest(params: {
   parts: ListeningPart[];
   questionGroups: QuestionGroup[];
   audioConfig?: ListeningAudioConfig;
-}): { test: ListeningTest; version: ListeningTestVersion } {
+}): Promise<{ test: ListeningTest; version: ListeningTestVersion }> {
   const testId = uuidv4();
   const versionId = uuidv4();
   const now = new Date().toISOString();
@@ -178,8 +179,8 @@ export function createListeningTest(params: {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const tx = db.transaction(() => {
-    insertTest.run(
+  const tx = db.transaction(async () => {
+    (await insertTest.run(
       testId,
       params.title,
       params.category,
@@ -190,9 +191,9 @@ export function createListeningTest(params: {
       params.createdById,
       now,
       now
-    );
+    ));
 
-    insertVersion.run(
+    (await insertVersion.run(
       versionId,
       testId,
       1,
@@ -203,10 +204,10 @@ export function createListeningTest(params: {
       JSON.stringify(audioConfig),
       JSON.stringify(validationErrors),
       now
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
   const test: ListeningTest = {
     id: testId,
@@ -239,7 +240,7 @@ export function createListeningTest(params: {
   return { test, version };
 }
 
-export function updateListeningDraftVersion(params: {
+export async function updateListeningDraftVersion(params: {
   testId: string;
   versionId: string;
   title?: string;
@@ -247,11 +248,11 @@ export function updateListeningDraftVersion(params: {
   questionGroups: QuestionGroup[];
   audioConfig?: ListeningAudioConfig;
   timeLimitMinutes?: number;
-}): { version: ListeningTestVersion; errors: string[] } {
-  const versionRow = db.prepare('SELECT * FROM listening_test_versions WHERE id = ? AND test_id = ?').get(
+}): Promise<{ version: ListeningTestVersion; errors: string[] }> {
+  const versionRow = (await db.prepare('SELECT * FROM listening_test_versions WHERE id = ? AND test_id = ?').get(
     params.versionId,
     params.testId
-  ) as any;
+  )) as any;
 
   if (!versionRow) {
     throw new Error('Listening test version not found');
@@ -269,18 +270,18 @@ export function updateListeningDraftVersion(params: {
   const audioConfig = params.audioConfig || JSON.parse(versionRow.audio_config_json);
   const validationErrors = validateListeningTestVersion(params.parts, params.questionGroups, audioConfig);
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     if (params.title || params.timeLimitMinutes) {
-      db.prepare(`
+      (await db.prepare(`
         UPDATE listening_tests
         SET title = COALESCE(?, title),
             time_limit_minutes = COALESCE(?, time_limit_minutes),
             updated_at = datetime('now')
         WHERE id = ?
-      `).run(params.title || null, params.timeLimitMinutes || null, params.testId);
+      `).run(params.title || null, params.timeLimitMinutes || null, params.testId));
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE listening_test_versions
       SET parts_json = ?,
           question_groups_json = ?,
@@ -295,10 +296,10 @@ export function updateListeningDraftVersion(params: {
       JSON.stringify(audioConfig),
       JSON.stringify(validationErrors),
       params.versionId
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
   return {
     version: {
@@ -317,13 +318,13 @@ export function updateListeningDraftVersion(params: {
   };
 }
 
-export function forkNewListeningDraftVersion(testId: string): ListeningTestVersion {
-  const test = db.prepare('SELECT * FROM listening_tests WHERE id = ?').get(testId) as any;
+export async function forkNewListeningDraftVersion(testId: string): Promise<ListeningTestVersion> {
+  const test = (await db.prepare('SELECT * FROM listening_tests WHERE id = ?').get(testId)) as any;
   if (!test) throw new Error('Listening test not found');
 
-  const latestVersion = db
+  const latestVersion = (await db
     .prepare('SELECT * FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-    .get(testId) as any;
+    .get(testId)) as any;
 
   if (!latestVersion) throw new Error('No existing versions found');
 
@@ -331,7 +332,7 @@ export function forkNewListeningDraftVersion(testId: string): ListeningTestVersi
   const newVersionId = uuidv4();
   const now = new Date().toISOString();
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO listening_test_versions (
       id, test_id, version_number, status, parts_json,
       question_groups_json, total_questions, audio_config_json, validation_errors_json, created_at
@@ -346,14 +347,14 @@ export function forkNewListeningDraftVersion(testId: string): ListeningTestVersi
     latestVersion.audio_config_json,
     latestVersion.validation_errors_json,
     now
-  );
+  ));
 
-  db.prepare(`
+  (await db.prepare(`
     UPDATE listening_tests
     SET current_version_number = ?,
         updated_at = ?
     WHERE id = ?
-  `).run(newVersionNumber, now, testId);
+  `).run(newVersionNumber, now, testId));
 
   return {
     id: newVersionId,
@@ -369,11 +370,11 @@ export function forkNewListeningDraftVersion(testId: string): ListeningTestVersi
   };
 }
 
-export function publishListeningTestVersion(testId: string, versionId: string): void {
-  const versionRow = db.prepare('SELECT * FROM listening_test_versions WHERE id = ? AND test_id = ?').get(
+export async function publishListeningTestVersion(testId: string, versionId: string): Promise<void> {
+  const versionRow = (await db.prepare('SELECT * FROM listening_test_versions WHERE id = ? AND test_id = ?').get(
     versionId,
     testId
-  ) as any;
+  )) as any;
 
   if (!versionRow) throw new Error('Version not found');
 
@@ -388,42 +389,42 @@ export function publishListeningTestVersion(testId: string, versionId: string): 
 
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
-    db.prepare(`
+  const tx = db.transaction(async () => {
+    (await db.prepare(`
       UPDATE listening_test_versions
       SET status = 'published',
           published_at = ?
       WHERE id = ?
-    `).run(now, versionId);
+    `).run(now, versionId));
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE listening_tests
       SET status = 'published',
           current_version_number = ?,
           updated_at = ?
       WHERE id = ?
-    `).run(versionRow.version_number, now, testId);
+    `).run(versionRow.version_number, now, testId));
   });
 
-  tx();
+  (await tx());
 }
 
-export function archiveListeningTest(testId: string): void {
-  db.prepare(`
+export async function archiveListeningTest(testId: string): Promise<void> {
+  (await db.prepare(`
     UPDATE listening_tests
     SET status = 'archived',
         updated_at = datetime('now')
     WHERE id = ?
-  `).run(testId);
+  `).run(testId));
 }
 
-export function getListeningTestById(testId: string): ListeningTest | null {
-  const row = db.prepare('SELECT * FROM listening_tests WHERE id = ?').get(testId) as any;
+export async function getListeningTestById(testId: string): Promise<ListeningTest | null> {
+  const row = (await db.prepare('SELECT * FROM listening_tests WHERE id = ?').get(testId)) as any;
   if (!row) return null;
 
-  const latestVersion = db
+  const latestVersion = (await db
     .prepare('SELECT * FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-    .get(testId) as any;
+    .get(testId)) as any;
 
   let partCount = 0;
   let questionGroupsSummary: any[] = [];
@@ -464,10 +465,10 @@ export function getListeningTestById(testId: string): ListeningTest | null {
   };
 }
 
-export function listListeningTests(params: {
+export async function listListeningTests(params: {
   isTeacherOrAdmin: boolean;
   category?: TestMode;
-}): ListeningTest[] {
+}): Promise<ListeningTest[]> {
   let query = 'SELECT * FROM listening_tests WHERE 1=1';
   const args: any[] = [];
 
@@ -482,28 +483,27 @@ export function listListeningTests(params: {
 
   query += ' ORDER BY created_at DESC';
 
-  const rows = db.prepare(query).all(...args) as any[];
+  const rows = (await db.prepare(query).all(...args)) as any[];
 
-  const tests = rows
-    .filter((row) => {
+  const tests = (await Promise.all((await asyncFilter(rows, async (row) => {
       if (params.isTeacherOrAdmin) return true;
       // Filter out scratch automated test titles with epoch timestamps
       if (/\b\d{10,}\b/.test(row.title)) return false;
       // Protected post-test check: hide if reserved in an unreleased post-test
-      const isReserved = db.prepare(`
+      const isReserved = (await db.prepare(`
         SELECT 1 FROM assignments a
         LEFT JOIN test_packages tp ON a.package_id = tp.id
         WHERE a.purpose = 'post_test'
           AND (a.is_released = 0 OR a.release_at > datetime('now'))
           AND (a.test_id = ? OR tp.listening_test_id = ?)
         LIMIT 1
-      `).get(row.id, row.id);
+      `).get(row.id, row.id));
       return !isReserved;
-    })
-    .map((row) => {
-      const latestVersion = db
+    }))
+    .map(async (row) => {
+      const latestVersion = (await db
         .prepare('SELECT * FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-        .get(row.id) as any;
+        .get(row.id)) as any;
 
       let partCount = 0;
       let questionGroupsSummary: any[] = [];
@@ -542,13 +542,13 @@ export function listListeningTests(params: {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
-    });
+    })));
 
   return sortTestsChronological(tests);
 }
 
-export function getListeningVersionById(versionId: string): ListeningTestVersion | null {
-  const row = db.prepare('SELECT * FROM listening_test_versions WHERE id = ?').get(versionId) as any;
+export async function getListeningVersionById(versionId: string): Promise<ListeningTestVersion | null> {
+  const row = (await db.prepare('SELECT * FROM listening_test_versions WHERE id = ?').get(versionId)) as any;
   if (!row) return null;
 
   return {

@@ -28,7 +28,7 @@ async function runTests() {
 
   // Step 2: Ingest into database
   console.log('\n2. Ingesting into platform database...');
-  const result = ingestCambridge21ListeningTest1();
+  const result = (await ingestCambridge21ListeningTest1());
   assert(result.testId, 'Test ID must be generated');
   assert(result.versionId, 'Version ID must be generated');
   assert(result.status === 'published', 'Must be published');
@@ -37,13 +37,13 @@ async function runTests() {
 
   // Step 3: Verify DB retrieval
   console.log('\n3. Verifying database records...');
-  const testRecord = getListeningTestById(result.testId);
+  const testRecord = (await getListeningTestById(result.testId));
   assert(testRecord !== null, 'Test record must exist in DB');
   assert(testRecord!.title === 'Cambridge IELTS 21 Academic Listening Test 1', 'Title must match');
   assert(testRecord!.isFreeTier === true, 'Test should be accessible in free tier');
   assert(testRecord!.status === 'published', 'Status must be published');
 
-  const versionRecord = getListeningVersionById(result.versionId);
+  const versionRecord = (await getListeningVersionById(result.versionId));
   assert(versionRecord !== null, 'Version record must exist in DB');
   assert(versionRecord!.parts.length === 4, 'Must have 4 parts in version');
   assert(versionRecord!.questionGroups.length === 8, 'Must have 8 question groups');
@@ -165,7 +165,9 @@ async function runTests() {
   console.log('======================================================\n');
 }
 
-runTests().catch((err) => {
-  console.error('\nVerification failed:', err);
-  process.exit(1);
-});
+async function runEntryPoint() {
+await runTests();
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

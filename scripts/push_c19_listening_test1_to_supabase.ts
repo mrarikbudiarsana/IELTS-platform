@@ -1,4 +1,5 @@
-﻿import { Client } from 'pg';
+import '../server/legacySqliteEnvironment';
+import { Client } from 'pg';
 import fs from 'fs';
 import path from 'path';
 import { getCambridge19ListeningTest1Data, ingestCambridge19ListeningTest1 } from '../server/ingestCambridge19ListeningTest1';
@@ -17,7 +18,7 @@ envFile.split('\n').forEach(line => {
 
 async function main() {
   console.log('--- 1. Ingesting Cambridge 19 Listening Test 1 into local SQLite ---');
-  const localResult = ingestCambridge19ListeningTest1();
+  const localResult = (await ingestCambridge19ListeningTest1());
   console.log('Local SQLite ingestion successful:', localResult);
 
   console.log('\n--- 2. Connecting to Supabase PostgreSQL ---');
@@ -153,8 +154,12 @@ async function main() {
   console.log('\n>>> Successfully pushed Cambridge 19 Academic Listening Test 1 to Supabase! <<<');
 }
 
-main().catch(err => {
+async function runEntryPoint() {
+(main()).catch(err => {
   console.error('Error pushing Cambridge 19 Listening Test 1 to Supabase:', err);
   process.exit(1);
 });
 
+
+}
+runEntryPoint().catch(error => { console.error(error); process.exitCode = 1; });

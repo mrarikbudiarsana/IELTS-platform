@@ -2,10 +2,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { db, initDatabase } from './db';
 import { hashPassword } from './auth';
 
-export function seedDatabase() {
-  initDatabase();
+export async function seedDatabase() {
+  (await initDatabase());
 
-  const existingUsers = db.prepare('SELECT COUNT(*) as count FROM users').get() as any;
+  const existingUsers = (await db.prepare('SELECT COUNT(*) as count FROM users').get()) as any;
   if (existingUsers.count > 0) {
     console.log('Database already has users, skipping user seed.');
     return;
@@ -15,7 +15,7 @@ export function seedDatabase() {
 
   // 1. Seed Teacher / Admin User
   const adminId = uuidv4();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO users (id, email, password_hash, full_name, role, test_type_preference, created_at)
     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(
@@ -25,11 +25,11 @@ export function seedDatabase() {
     'Arik B (Teacher & Admin)',
     'admin',
     'academic'
-  );
+  ));
 
   // 2. Seed Student Users
   const student1Id = uuidv4();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO users (id, email, password_hash, full_name, role, test_type_preference, target_band, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(
@@ -40,10 +40,10 @@ export function seedDatabase() {
     'student',
     'academic',
     7.5
-  );
+  ));
 
   const student2Id = uuidv4();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO users (id, email, password_hash, full_name, role, test_type_preference, target_band, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(
@@ -54,7 +54,7 @@ export function seedDatabase() {
     'student',
     'general',
     7.0
-  );
+  ));
 
   console.log('Core platform users seeded successfully.');
 }

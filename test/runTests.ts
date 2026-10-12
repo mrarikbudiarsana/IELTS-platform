@@ -30,7 +30,7 @@ console.log('  RUNNING IELTS READING PLATFORM VERIFICATION SUITE ');
 console.log('====================================================\n');
 
 async function runAllTests() {
-  initDatabase();
+  (await initDatabase());
 
   // ---------------------------------------------------------------
   // TEST 1: Password Hashing & Role Authorization Isolation
@@ -42,12 +42,12 @@ async function runAllTests() {
   assert.strictEqual(verifyPassword('WrongPassword', hash), false, 'Wrong password incorrectly verified');
 
   const testStudentId = uuidv4();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO users (id, email, password_hash, full_name, role, plan_type, plan_expires_at, created_at)
     VALUES (?, ?, ?, ?, 'student', 'paid_plan', datetime('now', '+30 days'), datetime('now'))
-  `).run(testStudentId, `student_${Date.now()}@test.com`, hashPassword(password), 'Test Student');
+  `).run(testStudentId, `student_${Date.now()}@test.com`, hashPassword(password), 'Test Student'));
 
-  const studentRow = db.prepare('SELECT * FROM users WHERE id = ?').get(testStudentId);
+  const studentRow = (await db.prepare('SELECT * FROM users WHERE id = ?').get(testStudentId));
   const studentUser = mapUserRow(studentRow);
   assert.strictEqual(studentUser.role, 'student', 'Role must default to student');
   console.log('  ✔ Secure hashing and student role constraint verified.');
@@ -57,13 +57,13 @@ async function runAllTests() {
   // ---------------------------------------------------------------
   console.log('TEST 2: Content Access & Learner Data Isolation');
   // Student should only see published tests
-  const studentTests = listTests({ isTeacherOrAdmin: false });
+  const studentTests = (await listTests({ isTeacherOrAdmin: false }));
   for (const t of studentTests) {
     assert.strictEqual(t.status, 'published', 'Student must never see unpublished/draft tests');
   }
 
   // Teacher sees all
-  const teacherTests = listTests({ isTeacherOrAdmin: true });
+  const teacherTests = (await listTests({ isTeacherOrAdmin: true }));
   assert.ok(teacherTests.length >= studentTests.length, 'Teacher should see all tests');
   console.log(`  ✔ Content visibility filtered: Students see ${studentTests.length} published tests.`);
 
@@ -75,10 +75,10 @@ async function runAllTests() {
     studentTests.find((t) => t.category === 'mock' && t.totalQuestions === 40);
   assert.ok(publishedMock, '40-question mock must exist in published catalogue');
 
-  const { attempt, testVersion: sanitizedTest } = startOrResumeAttempt({
+  const { attempt, testVersion: sanitizedTest } = (await startOrResumeAttempt({
     userId: testStudentId,
     testId: publishedMock.id,
-  });
+  }));
 
   assert.strictEqual(attempt.status, 'in_progress', 'New attempt must be in_progress');
 
@@ -97,36 +97,36 @@ async function runAllTests() {
   // TEST 4: Autosave and State Recovery on Refresh
   // ---------------------------------------------------------------
   console.log('TEST 4: Real-time Autosave & Refresh Recovery');
-  const actualVersion = getVersionById(publishedMock.currentVersionId || (db.prepare('SELECT id FROM reading_test_versions WHERE test_id = ?').get(publishedMock.id) as any)?.id)!;
+  const actualVersion = (await getVersionById(publishedMock.currentVersionId || ((await db.prepare('SELECT id FROM reading_test_versions WHERE test_id = ?').get(publishedMock.id)) as any)?.id))!;
   const actualQ1 = actualVersion.questionGroups[0].questions[0];
   const actualQ5Group = actualVersion.questionGroups.find((g) => g.questions.some((q) => q.questionNumber === 5))!;
   const actualQ5 = actualQ5Group.questions.find((q) => q.questionNumber === 5)!;
 
-  const save1 = saveStudentAnswer({
+  const save1 = (await saveStudentAnswer({
     attemptId: attempt.id,
     userId: testStudentId,
     questionNumber: 1,
     questionId: sanitizedTest.questionGroups[0].questions[0].id,
     userAnswer: actualQ1.answerKey,
     isFlagged: false,
-  });
+  }));
   assert.strictEqual(save1.saved, true, 'Autosave Q1 failed');
 
-  const save5 = saveStudentAnswer({
+  const save5 = (await saveStudentAnswer({
     attemptId: attempt.id,
     userId: testStudentId,
     questionNumber: 5,
     questionId: sanitizedTest.questionGroups.flatMap(g => g.questions).find(q => q.questionNumber === 5)!.id,
     userAnswer: actualQ5.answerKey,
     isFlagged: true,
-  });
+  }));
   assert.strictEqual(save5.saved, true, 'Autosave Q5 failed');
 
   // Simulate student refreshing page / reconnecting:
-  const resumed = startOrResumeAttempt({
+  const resumed = (await startOrResumeAttempt({
     userId: testStudentId,
     testId: publishedMock.id,
-  });
+  }));
   assert.strictEqual(resumed.attempt.id, attempt.id, 'Resumed attempt must match original attempt ID');
   assert.strictEqual(resumed.attempt.answers[1].userAnswer, actualQ1.answerKey, 'Q1 answer restored after refresh');
   assert.strictEqual(resumed.attempt.answers[5].userAnswer, actualQ5.answerKey, 'Q5 answer restored after refresh');
@@ -284,10 +284,10 @@ async function runAllTests() {
   // TEST 7: Submission, Evaluation & Results Report
   // ---------------------------------------------------------------
   console.log('TEST 7: Submission & Results Delivery');
-  const submitted = submitAttempt({
+  const submitted = (await submitAttempt({
     attemptId: attempt.id,
     userId: testStudentId,
-  });
+  }));
 
   assert.strictEqual(submitted.status, 'submitted', 'Status must be submitted');
   assert.ok(submitted.results && submitted.results.length === 40, 'Results must contain all 40 items');
@@ -303,13 +303,13 @@ async function runAllTests() {
   // TEST 8: Content Versioning & Immutability
   // ---------------------------------------------------------------
   console.log('TEST 8: Content Versioning and Attempt History Immutability');
-  const beforeTest = getTestById(publishedMock.id)!;
-  const forkedVersion = forkNewDraftVersion(publishedMock.id);
+  const beforeTest = (await getTestById(publishedMock.id))!;
+  const forkedVersion = (await forkNewDraftVersion(publishedMock.id));
   assert.strictEqual(forkedVersion.versionNumber, beforeTest.currentVersionNumber + 1, 'Forked version must increment version counter');
   assert.strictEqual(forkedVersion.status, 'draft', 'Forked version must be draft');
 
   // Student previous attempt still points to version 1!
-  const pastAttempt = getAttemptById(attempt.id, testStudentId);
+  const pastAttempt = (await getAttemptById(attempt.id, testStudentId));
   assert.strictEqual(pastAttempt!.versionId, publishedMock.latestVersionId, 'Past attempt must retain Version 1 reference');
   console.log('  ✔ Immutability confirmed: previous student attempts preserve their original test version.');
 
@@ -318,38 +318,38 @@ async function runAllTests() {
   // ---------------------------------------------------------------
   console.log('TEST 9: Server-Controlled Deadline Auto-Expiry');
   const testStudent2Id = uuidv4();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO users (id, email, password_hash, full_name, role, plan_type, plan_expires_at, created_at)
     VALUES (?, ?, ?, ?, 'student', 'paid_plan', datetime('now', '+30 days'), datetime('now'))
-  `).run(testStudent2Id, `student_timer_${Date.now()}@test.com`, hash, 'Timer Student');
+  `).run(testStudent2Id, `student_timer_${Date.now()}@test.com`, hash, 'Timer Student'));
 
-  const timedAttempt = startOrResumeAttempt({
+  const timedAttempt = (await startOrResumeAttempt({
     userId: testStudent2Id,
     testId: publishedMock.id,
     modeOverride: 'mock',
-  });
+  }));
 
   assert.ok(timedAttempt.attempt.deadlineAt, 'Mock attempt must have server-defined deadlineAt');
 
   // Simulate time passage past deadline
-  db.prepare(`
+  (await db.prepare(`
     UPDATE reading_attempts
     SET deadline_at = datetime('now', '-5 minutes')
     WHERE id = ?
-  `).run(timedAttempt.attempt.id);
+  `).run(timedAttempt.attempt.id));
 
   // Next save attempt should detect expiry and auto-submit
-  const expiredSave = saveStudentAnswer({
+  const expiredSave = (await saveStudentAnswer({
     attemptId: timedAttempt.attempt.id,
     userId: testStudent2Id,
     questionNumber: 2,
     questionId: sanitizedTest.questionGroups[0].questions[1].id,
     userAnswer: 'FALSE',
-  });
+  }));
 
   assert.strictEqual(expiredSave.isExpired, true, 'Save on expired attempt must detect expiration');
 
-  const expiredAttempt = getAttemptById(timedAttempt.attempt.id, testStudent2Id);
+  const expiredAttempt = (await getAttemptById(timedAttempt.attempt.id, testStudent2Id));
   assert.strictEqual(expiredAttempt!.status, 'expired', 'Attempt must transition to expired status');
   console.log('  ✔ Server-authoritative timer expiry and auto-submission verified.');
 
@@ -358,7 +358,9 @@ async function runAllTests() {
   console.log('====================================================');
 }
 
-runAllTests().catch((err) => {
-  console.error('Test verification failed:', err);
-  process.exit(1);
-});
+async function runEntryPoint() {
+await runAllTests();
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

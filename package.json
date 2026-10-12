@@ -8,7 +8,16 @@
     "server": "tsx server/server.ts",
     "client": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
-    "test": "tsx test/runAll.ts"
+    "test": "tsx test/runIsolated.ts",
+    "test:legacy": "tsx test/runAll.ts",
+    "typecheck:server": "tsc -p tsconfig.server.json",
+    "db:check": "tsx scripts/checkDatabase.ts",
+    "db:migrate": "tsx scripts/migrateDatabase.ts",
+    "db:schema": "tsx scripts/generatePostgresSchema.ts",
+    "test:postgres": "tsx test/runPostgresIntegration.ts && tsx test/runPostgresSuite.ts",
+    "db:initialize": "tsx scripts/initializeHostedDatabase.ts",
+    "test:netlify": "tsx test/runNetlifyIntegration.ts",
+    "db:verify": "tsx scripts/verifyHostedDatabase.ts"
   },
   "keywords": [
     "ielts",
@@ -28,9 +37,11 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.1",
+    "serverless-http": "^4.0.0",
     "uuid": "^11.1.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^9.6.0",
     "@types/cors": "^2.8.19",

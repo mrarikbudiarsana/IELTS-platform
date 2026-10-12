@@ -29,15 +29,15 @@ async function runTests() {
   console.log('   ✓ 4 parts and 40 questions correctly structured');
 
   console.log('\n2. Ingesting into platform database...');
-  const result = ingestCambridge19ListeningTest1();
+  const result = (await ingestCambridge19ListeningTest1());
   assert(result.status === 'published' && result.totalQuestions === 40, 'Ingestion result invalid');
   console.log(`   ✓ Ingested: ${result.testId}`);
 
   console.log('\n3. Verifying database records...');
-  const testRecord = getListeningTestById(result.testId);
+  const testRecord = (await getListeningTestById(result.testId));
   assert(testRecord && testRecord.title === 'Cambridge IELTS 19 Academic Listening Test 1', 'Test record missing');
   assert(testRecord!.isFreeTier === true && testRecord!.status === 'published', 'Test should be published and free tier');
-  const versionRecord = getListeningVersionById(result.versionId);
+  const versionRecord = (await getListeningVersionById(result.versionId));
   assert(versionRecord && versionRecord.parts.length === 4, 'Version must have 4 parts');
   assert(versionRecord!.questionGroups.length === 7, 'Must have 7 question groups');
   assert(versionRecord!.totalQuestions === 40, 'Total questions must be 40');
@@ -76,7 +76,7 @@ async function runTests() {
   console.log('   ✓ Student payloads securely scrubbed');
 
   console.log('\n7. Verifying catalogue visibility...');
-  const found = listListeningTests({ isTeacherOrAdmin: false }).find((t) => t.id === result.testId);
+  const found = (await listListeningTests({ isTeacherOrAdmin: false })).find((t) => t.id === result.testId);
   assert(found !== undefined, 'Test must appear in catalogue');
   console.log(`   ✓ Visible: "${found!.title}"`);
 
@@ -104,7 +104,9 @@ async function runTests() {
   console.log('\n>>> ALL CAMBRIDGE IELTS 19 LISTENING TEST 1 VERIFICATION TESTS PASSED SUCCESSFULLY! <<<\n');
 }
 
-runTests().catch((err) => {
-  console.error('\n❌ Test suite failed:', err);
-  process.exit(1);
-});
+async function runEntryPoint() {
+await runTests();
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });

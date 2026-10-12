@@ -18,30 +18,30 @@ import {
 } from '../shared/scoring';
 import { canUserAccessTest } from './commercialService';
 
-export function startOrResumeAttempt(params: {
+export async function startOrResumeAttempt(params: {
   userId: string;
   testId: string;
   modeOverride?: 'practice' | 'mock';
   assignmentId?: string;
   packageAttemptId?: string;
-}): { attempt: ReadingAttempt; testVersion: any } {
+}): Promise<{ attempt: ReadingAttempt; testVersion: any }> {
   // If attempting independently without assignment, ensure test is not reserved in an unreleased post-test
   if (!params.assignmentId) {
-    const isReserved = db.prepare(`
+    const isReserved = (await db.prepare(`
       SELECT 1 FROM assignments a
       LEFT JOIN test_packages tp ON a.package_id = tp.id
       WHERE a.purpose = 'post_test'
         AND (a.is_released = 0 OR a.release_at > datetime('now'))
         AND (a.test_id = ? OR tp.reading_test_id = ?)
       LIMIT 1
-    `).get(params.testId, params.testId);
+    `).get(params.testId, params.testId));
 
     if (isReserved) {
       throw new Error('This test material is reserved for a protected post-test and has not been released by your teacher.');
     }
   }
 
-  const test = getTestById(params.testId);
+  const test = (await getTestById(params.testId));
   if (!test) throw new Error('Test not found');
   if (test.status !== 'published') {
     throw new Error('Test is not published');
@@ -49,49 +49,49 @@ export function startOrResumeAttempt(params: {
 
   // Commercial tier check: free tier vs paid plan vs assignment grant
   if (!params.assignmentId && !test.isFreeTier) {
-    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(params.userId) as any;
+    const user = (await db.prepare('SELECT role FROM users WHERE id = ?').get(params.userId)) as any;
     const isStaff = user?.role === 'teacher' || user?.role === 'admin';
     if (!isStaff) {
-      const accessCheck = canUserAccessTest({
+      const accessCheck = (await canUserAccessTest({
         userId: params.userId,
         isTeacherOrAdmin: isStaff,
         isFreeTier: Boolean(test.isFreeTier),
         assignmentId: params.assignmentId,
-      });
+      }));
       if (!accessCheck.allowed) {
         throw new Error(accessCheck.reason || 'This practice material requires an active Paid Practice Plan or Teacher Code.');
       }
     }
   }
 
-  const latestVersion = getVersionById(test.latestVersionId);
+  const latestVersion = (await getVersionById(test.latestVersionId));
   if (!latestVersion) throw new Error('Published test version not found');
 
   // Check if user already has an active in_progress attempt
-  const existingAttemptRow = db
+  const existingAttemptRow = (await db
     .prepare(`
       SELECT * FROM reading_attempts
       WHERE user_id = ? AND test_id = ? AND status = 'in_progress'
       ORDER BY started_at DESC LIMIT 1
     `)
-    .get(params.userId, params.testId) as any;
+    .get(params.userId, params.testId)) as any;
 
   if (existingAttemptRow) {
     const now = new Date();
     // Check server deadline
     if (existingAttemptRow.deadline_at && new Date(existingAttemptRow.deadline_at) < now) {
       // Auto-submit expired attempt
-      submitAttempt({
+      (await submitAttempt({
         attemptId: existingAttemptRow.id,
         userId: params.userId,
         forceExpired: true,
-      });
+      }));
       // Start a new attempt since the previous was expired
-      return startNewAttempt(params, test, latestVersion);
+      return (await startNewAttempt(params, test, latestVersion));
     }
 
     // Resume existing attempt
-    const attempt = getAttemptById(existingAttemptRow.id, params.userId);
+    const attempt = (await getAttemptById(existingAttemptRow.id, params.userId));
     const sanitizedGroups = sanitizeQuestionsForStudent(latestVersion.questionGroups);
 
     return {
@@ -103,10 +103,10 @@ export function startOrResumeAttempt(params: {
     };
   }
 
-  return startNewAttempt(params, test, latestVersion);
+  return (await startNewAttempt(params, test, latestVersion));
 }
 
-function startNewAttempt(
+async function startNewAttempt(
   params: {
     userId: string;
     testId: string;
@@ -129,16 +129,16 @@ function startNewAttempt(
   }
 
   // Check if first attempt
-  const pastAttemptsCount = db
+  const pastAttemptsCount = (await db
     .prepare(`
       SELECT COUNT(*) as count FROM reading_attempts
       WHERE user_id = ? AND test_id = ? AND status IN ('submitted', 'expired')
     `)
-    .get(params.userId, params.testId) as any;
+    .get(params.userId, params.testId)) as any;
 
   const isFirstAttempt = pastAttemptsCount.count === 0 ? 1 : 0;
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO reading_attempts (
       id, user_id, test_id, version_id, test_title, test_type,
       mode, status, started_at, deadline_at, duration_seconds,
@@ -158,18 +158,18 @@ function startNewAttempt(
     isFirstAttempt,
     params.assignmentId || null,
     now.toISOString()
-  );
+  ));
 
   // If package attempt is provided, link it
   if (params.packageAttemptId) {
-    db.prepare(`
+    (await db.prepare(`
       UPDATE package_attempts
       SET reading_attempt_id = ?
       WHERE id = ?
-    `).run(attemptId, params.packageAttemptId);
+    `).run(attemptId, params.packageAttemptId));
   }
 
-  const attempt = getAttemptById(attemptId, params.userId)!;
+  const attempt = (await getAttemptById(attemptId, params.userId))!;
   const sanitizedGroups = sanitizeQuestionsForStudent(version.questionGroups);
 
   return {
@@ -181,17 +181,17 @@ function startNewAttempt(
   };
 }
 
-export function saveStudentAnswer(params: {
+export async function saveStudentAnswer(params: {
   attemptId: string;
   userId: string;
   questionNumber: number;
   questionId: string;
   userAnswer: string | string[];
   isFlagged?: boolean;
-}): { saved: boolean; isExpired?: boolean } {
-  const attemptRow = db
+}): Promise<{ saved: boolean; isExpired?: boolean }> {
+  const attemptRow = (await db
     .prepare('SELECT * FROM reading_attempts WHERE id = ? AND user_id = ?')
-    .get(params.attemptId, params.userId) as any;
+    .get(params.attemptId, params.userId)) as any;
 
   if (!attemptRow) throw new Error('Attempt not found or access forbidden');
 
@@ -201,7 +201,7 @@ export function saveStudentAnswer(params: {
 
   // Check server-enforced deadline
   if (attemptRow.deadline_at && new Date(attemptRow.deadline_at) < new Date()) {
-    submitAttempt({ attemptId: params.attemptId, userId: params.userId, forceExpired: true });
+    (await submitAttempt({ attemptId: params.attemptId, userId: params.userId, forceExpired: true }));
     return { saved: false, isExpired: true };
   }
 
@@ -210,7 +210,7 @@ export function saveStudentAnswer(params: {
   const answerJson = JSON.stringify(params.userAnswer);
   const flagged = params.isFlagged ? 1 : 0;
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO reading_answers (
       id, attempt_id, question_id, question_number, user_answer_json, is_flagged, saved_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -226,28 +226,28 @@ export function saveStudentAnswer(params: {
     answerJson,
     flagged,
     now
-  );
+  ));
 
   return { saved: true };
 }
 
-export function submitAttempt(params: {
+export async function submitAttempt(params: {
   attemptId: string;
   userId: string;
   forceExpired?: boolean;
-}): ReadingAttempt {
-  const attemptRow = db
+}): Promise<ReadingAttempt> {
+  const attemptRow = (await db
     .prepare('SELECT * FROM reading_attempts WHERE id = ? AND user_id = ?')
-    .get(params.attemptId, params.userId) as any;
+    .get(params.attemptId, params.userId)) as any;
 
   if (!attemptRow) throw new Error('Attempt not found or access forbidden');
 
   // If already submitted or expired, return current result
   if (attemptRow.status === 'submitted' || attemptRow.status === 'expired') {
-    return getAttemptById(params.attemptId, params.userId)!;
+    return (await getAttemptById(params.attemptId, params.userId))!;
   }
 
-  const version = getVersionById(attemptRow.version_id);
+  const version = (await getVersionById(attemptRow.version_id));
   if (!version) throw new Error('Test version not found');
 
   const now = new Date();
@@ -263,9 +263,9 @@ export function submitAttempt(params: {
   }
 
   // Load existing student answers
-  const answerRows = db
+  const answerRows = (await db
     .prepare('SELECT * FROM reading_answers WHERE attempt_id = ?')
-    .all(params.attemptId) as any[];
+    .all(params.attemptId)) as any[];
 
   const studentAnswersMap = new Map<number, any>();
   for (const row of answerRows) {
@@ -281,7 +281,7 @@ export function submitAttempt(params: {
     WHERE attempt_id = ? AND question_number = ?
   `);
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     for (const [qNum, { question, group }] of questionMap.entries()) {
       const studentAnsRow = studentAnswersMap.get(qNum);
       const studentAns = studentAnsRow ? JSON.parse(studentAnsRow.user_answer_json) : '';
@@ -297,20 +297,20 @@ export function submitAttempt(params: {
       });
 
       if (studentAnsRow) {
-        updateAnswerMark.run(
+        (await updateAnswerMark.run(
           markResult.isCorrect ? 1 : 0,
           markResult.mark,
           params.attemptId,
           qNum
-        );
+        ));
       } else {
         // Insert empty answer for unanswered question
-        db.prepare(`
+        (await db.prepare(`
           INSERT INTO reading_answers (
             id, attempt_id, question_id, question_number, user_answer_json,
             is_flagged, is_correct, mark, saved_at
           ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, datetime('now'))
-        `).run(uuidv4(), params.attemptId, question.id, qNum, JSON.stringify(''));
+        `).run(uuidv4(), params.attemptId, question.id, qNum, JSON.stringify('')));
       }
 
       totalRawScore += markResult.mark;
@@ -345,7 +345,7 @@ export function submitAttempt(params: {
       attemptRow.test_type
     );
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE reading_attempts
       SET status = ?,
           submitted_at = ?,
@@ -360,24 +360,24 @@ export function submitAttempt(params: {
       totalRawScore,
       estimatedBand,
       params.attemptId
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
-  return getAttemptById(params.attemptId, params.userId)!;
+  return (await getAttemptById(params.attemptId, params.userId))!;
 }
 
-export function getAttemptById(attemptId: string, userId: string): ReadingAttempt | null {
-  const attemptRow = db
+export async function getAttemptById(attemptId: string, userId: string): Promise<ReadingAttempt | null> {
+  const attemptRow = (await db
     .prepare('SELECT * FROM reading_attempts WHERE id = ? AND user_id = ?')
-    .get(attemptId, userId) as any;
+    .get(attemptId, userId)) as any;
 
   if (!attemptRow) return null;
 
-  const answerRows = db
+  const answerRows = (await db
     .prepare('SELECT * FROM reading_answers WHERE attempt_id = ?')
-    .all(attemptId) as any[];
+    .all(attemptId)) as any[];
 
   const answers: Record<number, StudentAnswer> = {};
   for (const row of answerRows) {
@@ -394,7 +394,7 @@ export function getAttemptById(attemptId: string, userId: string): ReadingAttemp
 
   // Answers and explanations are ONLY delivered if attempt has been submitted or expired!
   if (attemptRow.status === 'submitted' || attemptRow.status === 'expired') {
-    const version = getVersionById(attemptRow.version_id);
+    const version = (await getVersionById(attemptRow.version_id));
     if (version) {
       const questionMap = new Map<number, { question: QuestionItem; group: QuestionGroup }>();
       for (const g of version.questionGroups) {
@@ -457,10 +457,10 @@ export function getAttemptById(attemptId: string, userId: string): ReadingAttemp
   };
 }
 
-export function listUserAttempts(userId: string): ReadingAttempt[] {
-  const rows = db
+export async function listUserAttempts(userId: string): Promise<ReadingAttempt[]> {
+  const rows = (await db
     .prepare('SELECT * FROM reading_attempts WHERE user_id = ? ORDER BY started_at DESC')
-    .all(userId) as any[];
+    .all(userId)) as any[];
 
   return rows.map((r) => ({
     id: r.id,

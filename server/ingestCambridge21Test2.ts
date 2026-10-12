@@ -982,12 +982,12 @@ The medical profession experimented with an AI programme, but their experts had 
   };
 }
 
-export function ingestCambridge21Test2(adminUserId?: string): {
+export async function ingestCambridge21Test2(adminUserId?: string): Promise<{
   testId: string;
   versionId: string;
   status: string;
   totalQuestions: number;
-} {
+}> {
   const data = getCambridge21Test2Data();
 
   // Validate data integrity
@@ -999,14 +999,14 @@ export function ingestCambridge21Test2(adminUserId?: string): {
   // Resolve author ID: supplied adminUserId, or existing admin from DB
   let resolvedAuthorId = adminUserId;
   if (!resolvedAuthorId) {
-    const adminUser = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get() as any;
+    const adminUser = (await db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get()) as any;
     resolvedAuthorId = adminUser ? adminUser.id : 'system-seed-admin';
   }
 
   // Check if test already exists in SQLite
-  const existingTest = db
+  const existingTest = (await db
     .prepare("SELECT id FROM reading_tests WHERE title LIKE '%Cambridge%21%Reading%Test 2%' OR title = ?")
-    .get(data.title) as any;
+    .get(data.title)) as any;
 
   let testId: string;
   let versionId: string;
@@ -1016,13 +1016,13 @@ export function ingestCambridge21Test2(adminUserId?: string): {
     testId = existingTest.id;
     console.log(`Cambridge 21 Reading Test 2 already exists (${testId}), updating to published...`);
 
-    const existingVersion = db
+    const existingVersion = (await db
       .prepare('SELECT id FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-      .get(testId) as any;
+      .get(testId)) as any;
 
     if (existingVersion) {
       versionId = existingVersion.id;
-      db.prepare(`
+      (await db.prepare(`
         UPDATE reading_test_versions
         SET passages_json = ?,
             question_groups_json = ?,
@@ -1034,10 +1034,10 @@ export function ingestCambridge21Test2(adminUserId?: string): {
         JSON.stringify(data.passages),
         JSON.stringify(data.questionGroups),
         versionId
-      );
+      ));
     } else {
       versionId = uuidv4();
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO reading_test_versions (
           id, test_id, version_number, status, passages_json,
           question_groups_json, total_questions, validation_errors_json, published_at, created_at
@@ -1049,21 +1049,21 @@ export function ingestCambridge21Test2(adminUserId?: string): {
         JSON.stringify(data.questionGroups),
         now,
         now
-      );
+      ));
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE reading_tests
       SET status = 'published',
           is_free_tier = 1,
           updated_at = ?
       WHERE id = ?
-    `).run(now, testId);
+    `).run(now, testId));
   } else {
     testId = uuidv4();
     versionId = uuidv4();
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO reading_tests (
         id, title, test_type, category, time_limit_minutes,
         current_version_number, status, created_by_id, is_free_tier, created_at, updated_at
@@ -1077,9 +1077,9 @@ export function ingestCambridge21Test2(adminUserId?: string): {
       resolvedAuthorId,
       now,
       now
-    );
+    ));
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO reading_test_versions (
         id, test_id, version_number, status, passages_json,
         question_groups_json, total_questions, validation_errors_json, published_at, created_at
@@ -1091,7 +1091,7 @@ export function ingestCambridge21Test2(adminUserId?: string): {
       JSON.stringify(data.questionGroups),
       now,
       now
-    );
+    ));
   }
 
   return {

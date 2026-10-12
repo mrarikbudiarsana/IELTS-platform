@@ -1,3 +1,4 @@
+import { asyncFilter } from './asyncCollections';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import {
@@ -111,7 +112,7 @@ export function sanitizeQuestionsForStudent(questionGroups: QuestionGroup[]): Qu
   }));
 }
 
-export function createReadingTest(params: {
+export async function createReadingTest(params: {
   title: string;
   testType: ReadingTestType;
   category: TestMode;
@@ -119,7 +120,7 @@ export function createReadingTest(params: {
   createdById: string;
   passages: ReadingPassage[];
   questionGroups: QuestionGroup[];
-}): { test: ReadingTest; version: ReadingTestVersion } {
+}): Promise<{ test: ReadingTest; version: ReadingTestVersion }> {
   const testId = uuidv4();
   const versionId = uuidv4();
   const now = new Date().toISOString();
@@ -145,8 +146,8 @@ export function createReadingTest(params: {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const tx = db.transaction(() => {
-    insertTest.run(
+  const tx = db.transaction(async () => {
+    (await insertTest.run(
       testId,
       params.title,
       params.testType,
@@ -157,9 +158,9 @@ export function createReadingTest(params: {
       params.createdById,
       now,
       now
-    );
+    ));
 
-    insertVersion.run(
+    (await insertVersion.run(
       versionId,
       testId,
       1,
@@ -169,10 +170,10 @@ export function createReadingTest(params: {
       totalQuestions,
       JSON.stringify(validationErrors),
       now
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
   const test: ReadingTest = {
     id: testId,
@@ -204,18 +205,18 @@ export function createReadingTest(params: {
   return { test, version };
 }
 
-export function updateDraftVersion(params: {
+export async function updateDraftVersion(params: {
   testId: string;
   versionId: string;
   title?: string;
   passages: ReadingPassage[];
   questionGroups: QuestionGroup[];
   timeLimitMinutes?: number;
-}): { version: ReadingTestVersion; errors: string[] } {
-  const versionRow = db.prepare('SELECT * FROM reading_test_versions WHERE id = ? AND test_id = ?').get(
+}): Promise<{ version: ReadingTestVersion; errors: string[] }> {
+  const versionRow = (await db.prepare('SELECT * FROM reading_test_versions WHERE id = ? AND test_id = ?').get(
     params.versionId,
     params.testId
-  ) as any;
+  )) as any;
 
   if (!versionRow) {
     throw new Error('Test version not found');
@@ -232,18 +233,18 @@ export function updateDraftVersion(params: {
 
   const validationErrors = validateTestVersion(params.passages, params.questionGroups);
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     if (params.title || params.timeLimitMinutes) {
-      db.prepare(`
+      (await db.prepare(`
         UPDATE reading_tests
         SET title = COALESCE(?, title),
             time_limit_minutes = COALESCE(?, time_limit_minutes),
             updated_at = datetime('now')
         WHERE id = ?
-      `).run(params.title || null, params.timeLimitMinutes || null, params.testId);
+      `).run(params.title || null, params.timeLimitMinutes || null, params.testId));
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE reading_test_versions
       SET passages_json = ?,
           question_groups_json = ?,
@@ -256,10 +257,10 @@ export function updateDraftVersion(params: {
       totalQuestions,
       JSON.stringify(validationErrors),
       params.versionId
-    );
+    ));
   });
 
-  tx();
+  (await tx());
 
   return {
     version: {
@@ -281,13 +282,13 @@ export function updateDraftVersion(params: {
  * Creates a new draft version when a teacher wishes to edit a published test.
  * Preserves historical versions and their attempts completely.
  */
-export function forkNewDraftVersion(testId: string): ReadingTestVersion {
-  const test = db.prepare('SELECT * FROM reading_tests WHERE id = ?').get(testId) as any;
+export async function forkNewDraftVersion(testId: string): Promise<ReadingTestVersion> {
+  const test = (await db.prepare('SELECT * FROM reading_tests WHERE id = ?').get(testId)) as any;
   if (!test) throw new Error('Test not found');
 
-  const latestVersion = db
+  const latestVersion = (await db
     .prepare('SELECT * FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-    .get(testId) as any;
+    .get(testId)) as any;
 
   if (!latestVersion) throw new Error('No existing versions found');
 
@@ -295,7 +296,7 @@ export function forkNewDraftVersion(testId: string): ReadingTestVersion {
   const newVersionId = uuidv4();
   const now = new Date().toISOString();
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO reading_test_versions (
       id, test_id, version_number, status, passages_json,
       question_groups_json, total_questions, validation_errors_json, created_at
@@ -309,14 +310,14 @@ export function forkNewDraftVersion(testId: string): ReadingTestVersion {
     latestVersion.total_questions,
     latestVersion.validation_errors_json,
     now
-  );
+  ));
 
-  db.prepare(`
+  (await db.prepare(`
     UPDATE reading_tests
     SET current_version_number = ?,
         updated_at = ?
     WHERE id = ?
-  `).run(newVersionNumber, now, testId);
+  `).run(newVersionNumber, now, testId));
 
   return {
     id: newVersionId,
@@ -331,11 +332,11 @@ export function forkNewDraftVersion(testId: string): ReadingTestVersion {
   };
 }
 
-export function publishTestVersion(testId: string, versionId: string): void {
-  const versionRow = db.prepare('SELECT * FROM reading_test_versions WHERE id = ? AND test_id = ?').get(
+export async function publishTestVersion(testId: string, versionId: string): Promise<void> {
+  const versionRow = (await db.prepare('SELECT * FROM reading_test_versions WHERE id = ? AND test_id = ?').get(
     versionId,
     testId
-  ) as any;
+  )) as any;
 
   if (!versionRow) throw new Error('Version not found');
 
@@ -349,44 +350,44 @@ export function publishTestVersion(testId: string, versionId: string): void {
 
   const now = new Date().toISOString();
 
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     // Set this version to published
-    db.prepare(`
+    (await db.prepare(`
       UPDATE reading_test_versions
       SET status = 'published',
           published_at = ?
       WHERE id = ?
-    `).run(now, versionId);
+    `).run(now, versionId));
 
     // Update parent test status
-    db.prepare(`
+    (await db.prepare(`
       UPDATE reading_tests
       SET status = 'published',
           current_version_number = ?,
           updated_at = ?
       WHERE id = ?
-    `).run(versionRow.version_number, now, testId);
+    `).run(versionRow.version_number, now, testId));
   });
 
-  tx();
+  (await tx());
 }
 
-export function archiveTest(testId: string): void {
-  db.prepare(`
+export async function archiveTest(testId: string): Promise<void> {
+  (await db.prepare(`
     UPDATE reading_tests
     SET status = 'archived',
         updated_at = datetime('now')
     WHERE id = ?
-  `).run(testId);
+  `).run(testId));
 }
 
-export function getTestById(testId: string): ReadingTest | null {
-  const row = db.prepare('SELECT * FROM reading_tests WHERE id = ?').get(testId) as any;
+export async function getTestById(testId: string): Promise<ReadingTest | null> {
+  const row = (await db.prepare('SELECT * FROM reading_tests WHERE id = ?').get(testId)) as any;
   if (!row) return null;
 
-  const latestVersion = db
+  const latestVersion = (await db
     .prepare('SELECT * FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-    .get(testId) as any;
+    .get(testId)) as any;
 
   let passageCount = 0;
   let questionGroupsSummary: any[] = [];
@@ -427,11 +428,11 @@ export function getTestById(testId: string): ReadingTest | null {
   };
 }
 
-export function listTests(params: {
+export async function listTests(params: {
   isTeacherOrAdmin: boolean;
   testType?: ReadingTestType;
   category?: TestMode;
-}): ReadingTest[] {
+}): Promise<ReadingTest[]> {
   let query = 'SELECT * FROM reading_tests WHERE 1=1';
   const args: any[] = [];
 
@@ -451,28 +452,27 @@ export function listTests(params: {
 
   query += ' ORDER BY created_at DESC';
 
-  const rows = db.prepare(query).all(...args) as any[];
+  const rows = (await db.prepare(query).all(...args)) as any[];
 
-  const tests = rows
-    .filter((row) => {
+  const tests = (await Promise.all((await asyncFilter(rows, async (row) => {
       if (params.isTeacherOrAdmin) return true;
       // Filter out scratch automated test titles with epoch timestamps
       if (/\b\d{10,}\b/.test(row.title)) return false;
       // Protected post-test check: hide if reserved in an unreleased post-test
-      const isReserved = db.prepare(`
+      const isReserved = (await db.prepare(`
         SELECT 1 FROM assignments a
         LEFT JOIN test_packages tp ON a.package_id = tp.id
         WHERE a.purpose = 'post_test'
           AND (a.is_released = 0 OR a.release_at > datetime('now'))
           AND (a.test_id = ? OR tp.reading_test_id = ?)
         LIMIT 1
-      `).get(row.id, row.id);
+      `).get(row.id, row.id));
       return !isReserved;
-    })
-    .map((row) => {
-      const latestVersion = db
+    }))
+    .map(async (row) => {
+      const latestVersion = (await db
         .prepare('SELECT * FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-        .get(row.id) as any;
+        .get(row.id)) as any;
       let passageCount = 0;
       let questionGroupsSummary: any[] = [];
     if (latestVersion) {
@@ -510,13 +510,13 @@ export function listTests(params: {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
-  });
+  })));
 
   return sortTestsChronological(tests);
 }
 
-export function getVersionById(versionId: string): ReadingTestVersion | null {
-  const row = db.prepare('SELECT * FROM reading_test_versions WHERE id = ?').get(versionId) as any;
+export async function getVersionById(versionId: string): Promise<ReadingTestVersion | null> {
+  const row = (await db.prepare('SELECT * FROM reading_test_versions WHERE id = ?').get(versionId)) as any;
   if (!row) return null;
 
   return {

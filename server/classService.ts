@@ -19,10 +19,10 @@ function generateInviteCode(): string {
 /**
  * Creates a new class taught by an authorized teacher.
  */
-export function createClass(
+export async function createClass(
   teacherId: string,
   data: { title: string; description?: string; testType: ClassTestType }
-): ClassItem {
+): Promise<ClassItem> {
   if (!data.title || !data.title.trim()) {
     throw new Error('Class title is required.');
   }
@@ -30,24 +30,24 @@ export function createClass(
   const id = uuidv4();
   const invitationCode = generateInviteCode();
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO classes (id, title, description, teacher_id, test_type, invitation_code, is_archived, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now'))
-  `).run(id, data.title.trim(), data.description ? data.description.trim() : null, teacherId, data.testType, invitationCode);
+  `).run(id, data.title.trim(), data.description ? data.description.trim() : null, teacherId, data.testType, invitationCode));
 
-  return getClassById(id);
+  return (await getClassById(id));
 }
 
 /**
  * Updates an existing class.
  */
-export function updateClass(
+export async function updateClass(
   classId: string,
   teacherId: string,
   data: { title?: string; description?: string; testType?: ClassTestType; isArchived?: boolean },
   isAdmin = false
-): ClassItem {
-  const classRow = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId) as any;
+): Promise<ClassItem> {
+  const classRow = (await db.prepare('SELECT * FROM classes WHERE id = ?').get(classId)) as any;
   if (!classRow) {
     throw new Error('Class not found.');
   }
@@ -61,26 +61,26 @@ export function updateClass(
   const testType = data.testType !== undefined ? data.testType : classRow.test_type;
   const isArchived = data.isArchived !== undefined ? (data.isArchived ? 1 : 0) : classRow.is_archived;
 
-  db.prepare(`
+  (await db.prepare(`
     UPDATE classes
     SET title = ?, description = ?, test_type = ?, is_archived = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).run(title, description, testType, isArchived, classId);
+  `).run(title, description, testType, isArchived, classId));
 
-  return getClassById(classId);
+  return (await getClassById(classId));
 }
 
 /**
  * Gets class by ID with teacher details and student count.
  */
-export function getClassById(classId: string): ClassItem {
-  const row = db.prepare(`
+export async function getClassById(classId: string): Promise<ClassItem> {
+  const row = (await db.prepare(`
     SELECT c.*, u.full_name as teacher_name,
       (SELECT COUNT(*) FROM class_enrolments ce WHERE ce.class_id = c.id AND ce.status = 'active') as student_count
     FROM classes c
     JOIN users u ON c.teacher_id = u.id
     WHERE c.id = ?
-  `).get(classId) as any;
+  `).get(classId)) as any;
 
   if (!row) {
     throw new Error('Class not found.');
@@ -104,25 +104,25 @@ export function getClassById(classId: string): ClassItem {
 /**
  * Lists all classes taught by a teacher.
  */
-export function listTeacherClasses(teacherId: string, isAdmin = false): ClassItem[] {
+export async function listTeacherClasses(teacherId: string, isAdmin = false): Promise<ClassItem[]> {
   let rows: any[];
   if (isAdmin) {
-    rows = db.prepare(`
+    rows = (await db.prepare(`
       SELECT c.*, u.full_name as teacher_name,
         (SELECT COUNT(*) FROM class_enrolments ce WHERE ce.class_id = c.id AND ce.status = 'active') as student_count
       FROM classes c
       JOIN users u ON c.teacher_id = u.id
       ORDER BY c.created_at DESC
-    `).all();
+    `).all());
   } else {
-    rows = db.prepare(`
+    rows = (await db.prepare(`
       SELECT c.*, u.full_name as teacher_name,
         (SELECT COUNT(*) FROM class_enrolments ce WHERE ce.class_id = c.id AND ce.status = 'active') as student_count
       FROM classes c
       JOIN users u ON c.teacher_id = u.id
       WHERE c.teacher_id = ?
       ORDER BY c.created_at DESC
-    `).all(teacherId);
+    `).all(teacherId));
   }
 
   return rows.map((row) => ({
@@ -143,8 +143,8 @@ export function listTeacherClasses(teacherId: string, isAdmin = false): ClassIte
 /**
  * Lists all classes that a student is actively enrolled in.
  */
-export function listStudentClasses(studentId: string): ClassItem[] {
-  const rows = db.prepare(`
+export async function listStudentClasses(studentId: string): Promise<ClassItem[]> {
+  const rows = (await db.prepare(`
     SELECT c.*, u.full_name as teacher_name,
       (SELECT COUNT(*) FROM class_enrolments ce WHERE ce.class_id = c.id AND ce.status = 'active') as student_count
     FROM classes c
@@ -152,7 +152,7 @@ export function listStudentClasses(studentId: string): ClassItem[] {
     JOIN class_enrolments ce ON ce.class_id = c.id
     WHERE ce.student_id = ? AND ce.status = 'active' AND c.is_archived = 0
     ORDER BY ce.enrolled_at DESC
-  `).all(studentId) as any[];
+  `).all(studentId)) as any[];
 
   return rows.map((row) => ({
     id: row.id,
@@ -172,21 +172,21 @@ export function listStudentClasses(studentId: string): ClassItem[] {
 /**
  * Enrols a student via class invitation code.
  */
-export function enrolStudentByCode(studentId: string, invitationCode: string): ClassItem {
-  const classRow = db.prepare('SELECT * FROM classes WHERE invitation_code = ? AND is_archived = 0').get(invitationCode.trim().toUpperCase()) as any;
+export async function enrolStudentByCode(studentId: string, invitationCode: string): Promise<ClassItem> {
+  const classRow = (await db.prepare('SELECT * FROM classes WHERE invitation_code = ? AND is_archived = 0').get(invitationCode.trim().toUpperCase())) as any;
   if (!classRow) {
     throw new Error('Invalid or inactive class invitation code.');
   }
 
-  enrolStudentInClass(classRow.id, studentId);
-  return getClassById(classRow.id);
+  (await enrolStudentInClass(classRow.id, studentId));
+  return (await getClassById(classRow.id));
 }
 
 /**
  * Enrols a student by email (invoked by teacher).
  */
-export function enrolStudentByEmail(teacherId: string, classId: string, studentEmail: string, isAdmin = false): ClassEnrolment {
-  const classRow = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId) as any;
+export async function enrolStudentByEmail(teacherId: string, classId: string, studentEmail: string, isAdmin = false): Promise<ClassEnrolment> {
+  const classRow = (await db.prepare('SELECT * FROM classes WHERE id = ?').get(classId)) as any;
   if (!classRow) {
     throw new Error('Class not found.');
   }
@@ -195,7 +195,7 @@ export function enrolStudentByEmail(teacherId: string, classId: string, studentE
     throw new Error('You do not have permission to enrol students in this class.');
   }
 
-  const studentUser = db.prepare('SELECT * FROM users WHERE email = ?').get(studentEmail.trim().toLowerCase()) as any;
+  const studentUser = (await db.prepare('SELECT * FROM users WHERE email = ?').get(studentEmail.trim().toLowerCase())) as any;
   if (!studentUser) {
     throw new Error(`No registered account found with email "${studentEmail}". Please ask learner to register first.`);
   }
@@ -204,43 +204,43 @@ export function enrolStudentByEmail(teacherId: string, classId: string, studentE
     throw new Error('Only registered student accounts can be enrolled in classes.');
   }
 
-  return enrolStudentInClass(classId, studentUser.id);
+  return (await enrolStudentInClass(classId, studentUser.id));
 }
 
 /**
  * Internal helper to enrol or reactivate student enrolment in class.
  */
-export function enrolStudentInClass(classId: string, studentId: string): ClassEnrolment {
-  const existing = db.prepare('SELECT * FROM class_enrolments WHERE class_id = ? AND student_id = ?').get(classId, studentId) as any;
+export async function enrolStudentInClass(classId: string, studentId: string): Promise<ClassEnrolment> {
+  const existing = (await db.prepare('SELECT * FROM class_enrolments WHERE class_id = ? AND student_id = ?').get(classId, studentId)) as any;
 
   if (existing) {
     if (existing.status === 'active') {
       // Already actively enrolled
-      return getClassEnrolment(existing.id);
+      return (await getClassEnrolment(existing.id));
     }
     // Reactivate previously removed enrolment
-    db.prepare(`
+    (await db.prepare(`
       UPDATE class_enrolments
       SET status = 'active', removed_at = NULL, enrolled_at = datetime('now')
       WHERE id = ?
-    `).run(existing.id);
-    return getClassEnrolment(existing.id);
+    `).run(existing.id));
+    return (await getClassEnrolment(existing.id));
   }
 
   const id = uuidv4();
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO class_enrolments (id, class_id, student_id, status, enrolled_at)
     VALUES (?, ?, ?, 'active', datetime('now'))
-  `).run(id, classId, studentId);
+  `).run(id, classId, studentId));
 
-  return getClassEnrolment(id);
+  return (await getClassEnrolment(id));
 }
 
 /**
  * Removes a student from a class without deleting their account or historical work.
  */
-export function removeStudentFromClass(teacherId: string, classId: string, studentId: string, isAdmin = false): void {
-  const classRow = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId) as any;
+export async function removeStudentFromClass(teacherId: string, classId: string, studentId: string, isAdmin = false): Promise<void> {
+  const classRow = (await db.prepare('SELECT * FROM classes WHERE id = ?').get(classId)) as any;
   if (!classRow) {
     throw new Error('Class not found.');
   }
@@ -249,23 +249,23 @@ export function removeStudentFromClass(teacherId: string, classId: string, stude
     throw new Error('You do not have permission to manage this class.');
   }
 
-  db.prepare(`
+  (await db.prepare(`
     UPDATE class_enrolments
     SET status = 'removed', removed_at = datetime('now')
     WHERE class_id = ? AND student_id = ?
-  `).run(classId, studentId);
+  `).run(classId, studentId));
 }
 
 /**
  * Gets a single enrolment record.
  */
-export function getClassEnrolment(enrolmentId: string): ClassEnrolment {
-  const row = db.prepare(`
+export async function getClassEnrolment(enrolmentId: string): Promise<ClassEnrolment> {
+  const row = (await db.prepare(`
     SELECT ce.*, u.full_name as student_name, u.email as student_email
     FROM class_enrolments ce
     JOIN users u ON ce.student_id = u.id
     WHERE ce.id = ?
-  `).get(enrolmentId) as any;
+  `).get(enrolmentId)) as any;
 
   if (!row) {
     throw new Error('Enrolment not found.');
@@ -286,8 +286,8 @@ export function getClassEnrolment(enrolmentId: string): ClassEnrolment {
 /**
  * Lists all enrolments in a class for teacher view.
  */
-export function listClassEnrolments(teacherId: string, classId: string, isAdmin = false): ClassEnrolment[] {
-  const classRow = db.prepare('SELECT * FROM classes WHERE id = ?').get(classId) as any;
+export async function listClassEnrolments(teacherId: string, classId: string, isAdmin = false): Promise<ClassEnrolment[]> {
+  const classRow = (await db.prepare('SELECT * FROM classes WHERE id = ?').get(classId)) as any;
   if (!classRow) {
     throw new Error('Class not found.');
   }
@@ -296,13 +296,13 @@ export function listClassEnrolments(teacherId: string, classId: string, isAdmin 
     throw new Error('You do not have permission to view enrolments for this class.');
   }
 
-  const rows = db.prepare(`
+  const rows = (await db.prepare(`
     SELECT ce.*, u.full_name as student_name, u.email as student_email
     FROM class_enrolments ce
     JOIN users u ON ce.student_id = u.id
     WHERE ce.class_id = ?
     ORDER BY ce.status ASC, ce.enrolled_at DESC
-  `).all(classId) as any[];
+  `).all(classId)) as any[];
 
   return rows.map((r) => ({
     id: r.id,
@@ -319,10 +319,10 @@ export function listClassEnrolments(teacherId: string, classId: string, isAdmin 
 /**
  * Checks if a learner is an active member of a class.
  */
-export function isStudentInClass(classId: string, studentId: string): boolean {
-  const row = db.prepare(`
+export async function isStudentInClass(classId: string, studentId: string): Promise<boolean> {
+  const row = (await db.prepare(`
     SELECT 1 FROM class_enrolments
     WHERE class_id = ? AND student_id = ? AND status = 'active'
-  `).get(classId, studentId);
+  `).get(classId, studentId));
   return Boolean(row);
 }

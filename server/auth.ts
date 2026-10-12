@@ -5,6 +5,9 @@ import crypto from 'crypto';
 import { db } from './db';
 import { User, UserRole } from '../shared/types';
 
+if (process.env.NETLIFY && (!process.env.JWT_SECRET || !process.env.TEACHER_SETUP_SECRET)) {
+  throw new Error('Set JWT_SECRET and TEACHER_SETUP_SECRET in Netlify environment variables.');
+}
 export const JWT_SECRET = process.env.JWT_SECRET || 'ielts-platform-pilot-secret-jwt-key-2026';
 export const TEACHER_SETUP_SECRET = process.env.TEACHER_SETUP_SECRET || 'arik-teacher-grant-2026';
 
@@ -51,7 +54,7 @@ export function mapUserRow(row: any): User {
   };
 }
 
-export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Authentication required' });
@@ -61,7 +64,7 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-    const row = db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.id);
+    const row = (await db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.id));
     if (!row) {
       res.status(401).json({ error: 'User not found' });
       return;

@@ -891,6 +891,7 @@ Tackling invasive species
     audioMode: 'part_audios',
     timeLimitMinutes: 40,
     audioConfig: {
+      postTestCheckTimeSeconds: 120,
       audioMode: 'part_audios',
       overallAudioUrl: '/audio/listening/c21_test3_complete.mp3',
       parts: [
@@ -905,12 +906,12 @@ Tackling invasive species
   };
 }
 
-export function ingestCambridge21ListeningTest3(authorId?: string): {
+export async function ingestCambridge21ListeningTest3(authorId?: string): Promise<{
   testId: string;
   versionId: string;
   status: 'published';
   totalQuestions: number;
-} {
+}> {
   const data = getCambridge21ListeningTest3Data();
   const errors = validateListeningTestVersion(data.parts, data.questionGroups);
   if (errors.length > 0) {
@@ -919,28 +920,28 @@ export function ingestCambridge21ListeningTest3(authorId?: string): {
 
   const resolvedAuthorId =
     authorId ||
-    (db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get() as any)?.id ||
+    ((await db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get()) as any)?.id ||
     uuidv4();
 
   const now = new Date().toISOString();
 
-  const existingTest = db
+  const existingTest = (await db
     .prepare("SELECT id, current_version_number FROM listening_tests WHERE title LIKE '%Cambridge%21%Listening%Test 3%' OR title = ?")
-    .get(data.title) as any;
+    .get(data.title)) as any;
 
   let testId: string;
   let versionId: string;
 
   if (existingTest) {
     testId = existingTest.id;
-    const existingVer = db
+    const existingVer = (await db
       .prepare('SELECT id FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1')
-      .get(testId) as any;
+      .get(testId)) as any;
 
     versionId = existingVer ? existingVer.id : uuidv4();
 
     if (existingVer) {
-      db.prepare(`
+      (await db.prepare(`
         UPDATE listening_test_versions
         SET parts_json = ?,
             question_groups_json = ?,
@@ -953,9 +954,9 @@ export function ingestCambridge21ListeningTest3(authorId?: string): {
         JSON.stringify(data.questionGroups),
         JSON.stringify(data.audioConfig),
         versionId
-      );
+      ));
     } else {
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO listening_test_versions (
           id, test_id, version_number, status, parts_json, question_groups_json,
           total_questions, audio_config_json, validation_errors_json, published_at, created_at
@@ -968,21 +969,21 @@ export function ingestCambridge21ListeningTest3(authorId?: string): {
         JSON.stringify(data.audioConfig),
         now,
         now
-      );
+      ));
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE listening_tests
       SET status = 'published',
           is_free_tier = 1,
           updated_at = ?
       WHERE id = ?
-    `).run(now, testId);
+    `).run(now, testId));
   } else {
     testId = uuidv4();
     versionId = uuidv4();
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO listening_tests (
         id, title, category, audio_mode, time_limit_minutes,
         current_version_number, status, created_by_id, is_free_tier, created_at, updated_at
@@ -996,9 +997,9 @@ export function ingestCambridge21ListeningTest3(authorId?: string): {
       resolvedAuthorId,
       now,
       now
-    );
+    ));
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO listening_test_versions (
         id, test_id, version_number, status, parts_json, question_groups_json,
         total_questions, audio_config_json, validation_errors_json, published_at, created_at
@@ -1011,7 +1012,7 @@ export function ingestCambridge21ListeningTest3(authorId?: string): {
       JSON.stringify(data.audioConfig),
       now,
       now
-    );
+    ));
   }
 
   return {

@@ -209,17 +209,17 @@ export async function mintRealtimeSessionToken(): Promise<{
 // 2. SERVER-AUTHORITATIVE SPEAKING SESSION STATE MACHINE
 // -------------------------------------------------------------
 
-export function getSpeakingSessionById(sessionId: string): SpeakingAiSession | null {
-  const row = db.prepare('SELECT * FROM speaking_ai_sessions WHERE id = ?').get(sessionId) as any;
+export async function getSpeakingSessionById(sessionId: string): Promise<SpeakingAiSession | null> {
+  const row = (await db.prepare('SELECT * FROM speaking_ai_sessions WHERE id = ?').get(sessionId)) as any;
   if (!row) return null;
 
-  const turns = db
+  const turns = (await db
     .prepare('SELECT * FROM speaking_audio_turns WHERE session_id = ? ORDER BY turn_number ASC')
-    .all(sessionId) as any[];
+    .all(sessionId)) as any[];
 
   let assessment: SpeakingAssessment | undefined = undefined;
   if (row.assessment_id) {
-    const assessRow = db.prepare('SELECT * FROM speaking_assessments WHERE id = ?').get(row.assessment_id) as any;
+    const assessRow = (await db.prepare('SELECT * FROM speaking_assessments WHERE id = ?').get(row.assessment_id)) as any;
     if (assessRow) {
       const criteria: any = {};
       if (assessRow.criterion_fluency_coherence !== null) criteria.fluencyCoherence = assessRow.criterion_fluency_coherence;
@@ -270,7 +270,7 @@ export function getSpeakingSessionById(sessionId: string): SpeakingAiSession | n
     setVersionId: row.set_version_id || undefined,
     mode: row.mode as TestMode,
     stage: row.stage as SpeakingAiSessionStage,
-    currentPart: row.current_part as SpeakingPart,
+    currentPart: row.current_part as 1 | 2 | 3,
     currentQuestionIndex: row.current_question_index,
     part2Notes: row.part2_notes || undefined,
     durationSeconds: row.duration_seconds,
@@ -281,7 +281,7 @@ export function getSpeakingSessionById(sessionId: string): SpeakingAiSession | n
     turns: turns.map((t) => ({
       id: t.id,
       sessionId: t.session_id,
-      part: t.part as SpeakingPart,
+      part: t.part as 1 | 2 | 3,
       turnNumber: t.turn_number,
       speaker: t.speaker as 'examiner' | 'candidate',
       text: t.text,
@@ -305,14 +305,14 @@ export function getSpeakingSessionById(sessionId: string): SpeakingAiSession | n
  * If recovering an existing session: charges 0 additional allowances and marks wasInterrupted.
  * If starting new: verifies allowance balance and reserves 1 allowance atomically.
  */
-export function startOrRecoverSpeakingSession(params: {
+export async function startOrRecoverSpeakingSession(params: {
   userId: string;
   setId?: string;
   setVersionId?: string;
   assignmentId?: string;
   packageAttemptId?: string;
   mode?: TestMode;
-}): SpeakingAiSession {
+}): Promise<SpeakingAiSession> {
   const { userId, setId, setVersionId, assignmentId, packageAttemptId, mode = 'mock' } = params;
 
   // 1. Check for an active recoverable session for this user
@@ -329,19 +329,19 @@ export function startOrRecoverSpeakingSession(params: {
 
   query += ' ORDER BY created_at DESC LIMIT 1';
 
-  const existingRow = db.prepare(query).get(...queryParams) as any;
+  const existingRow = (await db.prepare(query).get(...queryParams)) as any;
 
   if (existingRow) {
     // Session recovery: mark interruption, do NOT charge new allowance
-    db.prepare(`
+    (await db.prepare(`
       UPDATE speaking_ai_sessions 
       SET was_interrupted = 1,
           interruption_count = interruption_count + 1,
           updated_at = datetime('now')
       WHERE id = ?
-    `).run(existingRow.id);
+    `).run(existingRow.id));
 
-    return getSpeakingSessionById(existingRow.id)!;
+    return (await getSpeakingSessionById(existingRow.id))!;
   }
 
   // 2. Fallback to default speaking set if none provided
@@ -349,15 +349,15 @@ export function startOrRecoverSpeakingSession(params: {
   let effectiveVersionId = setVersionId;
 
   if (!effectiveSetId) {
-    const defaultSet = db
+    const defaultSet = (await db
       .prepare("SELECT id, current_version_number FROM speaking_sets WHERE status = 'published' ORDER BY created_at ASC LIMIT 1")
-      .get() as any;
+      .get()) as any;
 
     if (defaultSet) {
       effectiveSetId = defaultSet.id;
-      const ver = db
+      const ver = (await db
         .prepare("SELECT id FROM speaking_set_versions WHERE set_id = ? AND status = 'published' ORDER BY version_number DESC LIMIT 1")
-        .get(defaultSet.id) as any;
+        .get(defaultSet.id)) as any;
       if (ver) effectiveVersionId = ver.id;
     }
   }
@@ -366,7 +366,7 @@ export function startOrRecoverSpeakingSession(params: {
     throw new Error('No published Speaking set available for this session.');
   }
 
-  const setVersion = getSpeakingSetVersionById(effectiveVersionId);
+  const setVersion = (await getSpeakingSetVersionById(effectiveVersionId));
   if (!setVersion) {
     throw new Error('Speaking set version not found.');
   }
@@ -375,17 +375,17 @@ export function startOrRecoverSpeakingSession(params: {
   const sessionId = uuidv4();
   const idempotencyKey = `reserve-speaking-${sessionId}`;
 
-  reserveSpeakingAllowance({
+  (await reserveSpeakingAllowance({
     userId,
     sessionId,
     idempotencyKey,
     notes: `AI Speaking simulation session (${mode})`,
-  });
+  }));
 
   const now = new Date().toISOString();
 
   // 4. Create session record
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO speaking_ai_sessions (
       id, user_id, assignment_id, package_attempt_id, set_id, set_version_id,
       mode, stage, current_part, current_question_index, duration_seconds,
@@ -408,7 +408,7 @@ export function startOrRecoverSpeakingSession(params: {
     now,
     now,
     now
-  );
+  ));
 
   // 5. Create initial greeting examiner turn
   const firstTopic = setVersion.part1Topics[0];
@@ -417,25 +417,25 @@ export function startOrRecoverSpeakingSession(params: {
   const greetingTurnId = uuidv4();
   const greetingText = `Good day. My name is Dr. Edwards, and I will be your IELTS Speaking examiner today. This test is an AI Speaking simulation. To begin Part 1, ${firstQuestion}`;
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO speaking_audio_turns (
       id, session_id, part, turn_number, speaker, text, duration_seconds, timestamp_seconds, is_follow_up, created_at
     ) VALUES (?, ?, 1, 1, 'examiner', ?, 4.5, 0, 0, ?)
-  `).run(greetingTurnId, sessionId, greetingText, now);
+  `).run(greetingTurnId, sessionId, greetingText, now));
 
-  return getSpeakingSessionById(sessionId)!;
+  return (await getSpeakingSessionById(sessionId))!;
 }
 
 /**
  * Advances the session stage through the official IELTS structure:
  * setup -> part_1 -> part_2_prep -> part_2_speaking -> part_3 -> completed
  */
-export function advanceSessionStage(
+export async function advanceSessionStage(
   sessionId: string,
   userId: string,
   targetStage: SpeakingAiSessionStage
-): SpeakingAiSession {
-  const session = getSpeakingSessionById(sessionId);
+): Promise<SpeakingAiSession> {
+  const session = (await getSpeakingSessionById(sessionId));
   if (!session) throw new Error('Speaking session not found.');
   if (session.userId !== userId) throw new Error('Unauthorized session access.');
 
@@ -454,7 +454,7 @@ export function advanceSessionStage(
     throw new Error(`Invalid stage transition from ${session.stage} to ${targetStage}.`);
   }
 
-  let nextPart: SpeakingPart = session.currentPart;
+  let nextPart: 1 | 2 | 3 = session.currentPart;
   if (targetStage === 'part_1') nextPart = 1;
   else if (targetStage === 'part_2_prep' || targetStage === 'part_2_speaking') nextPart = 2;
   else if (targetStage === 'part_3') nextPart = 3;
@@ -464,7 +464,7 @@ export function advanceSessionStage(
   // Examiner prompt generation when entering a new part
   let examinerPromptText: string | null = null;
   if (session.setVersionId) {
-    const setVer = getSpeakingSetVersionById(session.setVersionId);
+    const setVer = (await getSpeakingSetVersionById(session.setVersionId));
     if (setVer) {
       if (targetStage === 'part_2_prep') {
         examinerPromptText = `We will now proceed to Part 2. I will give you a topic card and you have one minute to prepare. You may take notes in the scratchpad. Here is your topic: ${setVer.part2CueCard.topic}.`;
@@ -477,39 +477,39 @@ export function advanceSessionStage(
     }
   }
 
-  db.transaction(() => {
-    db.prepare(`
+  (await db.transaction(async () => {
+    (await db.prepare(`
       UPDATE speaking_ai_sessions
       SET stage = ?, current_part = ?, current_question_index = 0, updated_at = ?
       WHERE id = ?
-    `).run(targetStage, nextPart, now, sessionId);
+    `).run(targetStage, nextPart, now, sessionId));
 
     if (examinerPromptText) {
       const nextTurnNumber = (session.turns?.length || 0) + 1;
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO speaking_audio_turns (
           id, session_id, part, turn_number, speaker, text, duration_seconds, timestamp_seconds, is_follow_up, created_at
         ) VALUES (?, ?, ?, ?, 'examiner', ?, 4.0, ?, 0, ?)
-      `).run(uuidv4(), sessionId, nextPart, nextTurnNumber, examinerPromptText, session.durationSeconds, now);
+      `).run(uuidv4(), sessionId, nextPart, nextTurnNumber, examinerPromptText, session.durationSeconds, now));
     }
-  })();
+  })());
 
-  return getSpeakingSessionById(sessionId)!;
+  return (await getSpeakingSessionById(sessionId))!;
 }
 
 /**
  * Saves candidate preparation scratchpad notes for Part 2 cue card.
  */
-export function savePart2ScratchpadNotes(sessionId: string, userId: string, notes: string): void {
-  const session = getSpeakingSessionById(sessionId);
+export async function savePart2ScratchpadNotes(sessionId: string, userId: string, notes: string): Promise<void> {
+  const session = (await getSpeakingSessionById(sessionId));
   if (!session) throw new Error('Session not found.');
   if (session.userId !== userId) throw new Error('Unauthorized session access.');
 
-  db.prepare(`
+  (await db.prepare(`
     UPDATE speaking_ai_sessions
     SET part2_notes = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).run(notes, sessionId);
+  `).run(notes, sessionId));
 }
 
 /**
@@ -529,7 +529,7 @@ export async function submitCandidateTurn(params: {
 }> {
   const { sessionId, userId, candidateText = '', audioBase64, durationSeconds = 5 } = params;
 
-  const session = getSpeakingSessionById(sessionId);
+  const session = (await getSpeakingSessionById(sessionId));
   if (!session) throw new Error('Speaking session not found.');
   if (session.userId !== userId) throw new Error('Unauthorized session access.');
   if (session.stage === 'completed' || session.stage === 'abandoned') {
@@ -561,7 +561,7 @@ export async function submitCandidateTurn(params: {
   const currentDuration = session.durationSeconds + durationSeconds;
 
   // Insert Candidate Turn
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO speaking_audio_turns (
       id, session_id, part, turn_number, speaker, text, duration_seconds, timestamp_seconds, is_follow_up, created_at
     ) VALUES (?, ?, ?, ?, 'candidate', ?, ?, ?, 0, ?)
@@ -574,10 +574,10 @@ export async function submitCandidateTurn(params: {
     durationSeconds,
     session.durationSeconds,
     now
-  );
+  ));
 
   // 3. Generate adaptive examiner response within set boundaries
-  const setVer = session.setVersionId ? getSpeakingSetVersionById(session.setVersionId) : null;
+  const setVer = session.setVersionId ? (await getSpeakingSetVersionById(session.setVersionId)) : null;
   const nextQIndex = session.currentQuestionIndex + 1;
 
   let examinerText = 'Thank you for your response.';
@@ -610,7 +610,7 @@ export async function submitCandidateTurn(params: {
   const examinerTurnId = uuidv4();
   const examinerTurnNumber = turnNumber + 1;
 
-  db.prepare(`
+  (await db.prepare(`
     INSERT INTO speaking_audio_turns (
       id, session_id, part, turn_number, speaker, text, duration_seconds, timestamp_seconds, is_follow_up, created_at
     ) VALUES (?, ?, ?, ?, 'examiner', ?, 3.5, ?, ?, ?)
@@ -623,17 +623,17 @@ export async function submitCandidateTurn(params: {
     currentDuration,
     isFollowUp ? 1 : 0,
     now
-  );
+  ));
 
-  db.prepare(`
+  (await db.prepare(`
     UPDATE speaking_ai_sessions
     SET duration_seconds = ?,
         current_question_index = ?,
         updated_at = ?
     WHERE id = ?
-  `).run(currentDuration + 4, nextQIndex, now, sessionId);
+  `).run(currentDuration + 4, nextQIndex, now, sessionId));
 
-  const updatedSession = getSpeakingSessionById(sessionId)!;
+  const updatedSession = (await getSpeakingSessionById(sessionId))!;
   const examinerTurn = updatedSession.turns!.find((t) => t.id === examinerTurnId)!;
 
   return {
@@ -656,6 +656,7 @@ export async function submitCandidateTurn(params: {
  * directly from recorded session audio turns.
  */
 export function computeSessionAcoustics(turns: SpeakingAudioTurn[]): {
+  isClipping?: boolean;
   speechRateWpm: number;
   pauseRatio: number;
   pronunciationNotes: string;
@@ -708,7 +709,7 @@ export async function finishAndAssessSpeakingSession(
   sessionId: string,
   userId: string
 ): Promise<SpeakingAssessment> {
-  const session = getSpeakingSessionById(sessionId);
+  const session = (await getSpeakingSessionById(sessionId));
   if (!session) throw new Error('Speaking session not found.');
   if (session.userId !== userId) throw new Error('Unauthorized session access.');
 
@@ -857,11 +858,11 @@ export async function finishAndAssessSpeakingSession(
         ?, ?, ?
       )
     `);
-  db.transaction(() => {
-    stmt.run(...runArgs);
+  (await db.transaction(async () => {
+    (await stmt.run(...runArgs));
 
     // Update speaking_ai_sessions record
-    db.prepare(`
+    (await db.prepare(`
       UPDATE speaking_ai_sessions
       SET stage = 'completed',
           assessment_id = ?,
@@ -869,54 +870,54 @@ export async function finishAndAssessSpeakingSession(
           completed_at = ?,
           updated_at = ?
       WHERE id = ?
-    `).run(assessmentId, now, now, sessionId);
+    `).run(assessmentId, now, now, sessionId));
 
     // If linked to package_attempts, link speaking assessment & session
     if (session.packageAttemptId) {
-      db.prepare(`
+      (await db.prepare(`
         UPDATE package_attempts
         SET speaking_assessment_id = ?,
             speaking_ai_session_id = ?,
             updated_at = ?
         WHERE id = ?
-      `).run(assessmentId, sessionId, now, session.packageAttemptId);
+      `).run(assessmentId, sessionId, now, session.packageAttemptId));
     }
-  })();
+  })());
 
   // Consume 1 speaking allowance permanently upon successful assessment
-  consumeSpeakingAllowance({
+  (await consumeSpeakingAllowance({
     userId,
     sessionId,
     assessmentId,
     notes: `Completed AI Speaking assessment (Band ${overallBand})`,
-  });
+  }));
 
-  const refreshedSession = getSpeakingSessionById(sessionId)!;
+  const refreshedSession = (await getSpeakingSessionById(sessionId))!;
   return refreshedSession.assessment!;
 }
 
 /**
  * Abandons an active speaking session and safely refunds the reserved allowance.
  */
-export function abandonSpeakingSession(sessionId: string, userId: string, reason = 'User cancelled session'): void {
-  const session = getSpeakingSessionById(sessionId);
+export async function abandonSpeakingSession(sessionId: string, userId: string, reason = 'User cancelled session'): Promise<void> {
+  const session = (await getSpeakingSessionById(sessionId));
   if (!session) throw new Error('Speaking session not found.');
   if (session.userId !== userId) throw new Error('Unauthorized session access.');
 
-  db.transaction(() => {
-    db.prepare(`
+  (await db.transaction(async () => {
+    (await db.prepare(`
       UPDATE speaking_ai_sessions
       SET stage = 'abandoned', updated_at = datetime('now')
       WHERE id = ?
-    `).run(sessionId);
+    `).run(sessionId));
 
     // Safe refund of reserved allowance if not consumed
     if (session.allowanceReserved && !session.allowanceConsumed) {
-      releaseSpeakingAllowance({
+      (await releaseSpeakingAllowance({
         userId,
         sessionId,
         reason,
-      });
+      }));
     }
-  })();
+  })());
 }

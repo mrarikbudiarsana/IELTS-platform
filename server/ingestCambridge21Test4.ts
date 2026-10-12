@@ -1064,12 +1064,12 @@ export function getCambridge21Test4Data(): {
   };
 }
 
-export function ingestCambridge21Test4(authorId?: string): {
+export async function ingestCambridge21Test4(authorId?: string): Promise<{
   testId: string;
   versionId: string;
   status: string;
   totalQuestions: number;
-} {
+}> {
   const data = getCambridge21Test4Data();
 
   // Validate the data first
@@ -1081,19 +1081,19 @@ export function ingestCambridge21Test4(authorId?: string): {
   // Get author id (fallback to admin user)
   let resolvedAuthorId = authorId;
   if (!resolvedAuthorId) {
-    const adminUser = db.prepare(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`).get() as any;
+    const adminUser = (await db.prepare(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`).get()) as any;
     if (adminUser) {
       resolvedAuthorId = adminUser.id;
     } else {
-      const anyUser = db.prepare(`SELECT id FROM users LIMIT 1`).get() as any;
+      const anyUser = (await db.prepare(`SELECT id FROM users LIMIT 1`).get()) as any;
       resolvedAuthorId = anyUser ? anyUser.id : 'system-admin';
     }
   }
 
   // Check if Cambridge IELTS 21 Academic Reading Test 4 already exists
-  const existing = db
+  const existing = (await db
     .prepare(`SELECT id FROM reading_tests WHERE title = ?`)
-    .get(data.title) as any;
+    .get(data.title)) as any;
 
   const now = new Date().toISOString();
   let testId: string;
@@ -1103,13 +1103,13 @@ export function ingestCambridge21Test4(authorId?: string): {
     testId = existing.id;
 
     // Find latest version and update it in place
-    const latestVerRow = db
+    const latestVerRow = (await db
       .prepare(`SELECT id, version_number FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1`)
-      .get(testId) as any;
+      .get(testId)) as any;
 
     if (latestVerRow) {
       versionId = latestVerRow.id;
-      db.prepare(`
+      (await db.prepare(`
         UPDATE reading_test_versions
         SET passages_json = ?,
             question_groups_json = ?,
@@ -1120,10 +1120,10 @@ export function ingestCambridge21Test4(authorId?: string): {
         JSON.stringify(data.passages),
         JSON.stringify(data.questionGroups),
         versionId
-      );
+      ));
     } else {
       versionId = uuidv4();
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO reading_test_versions (
           id, test_id, version_number, status, passages_json,
           question_groups_json, total_questions, validation_errors_json, published_at, created_at
@@ -1135,21 +1135,21 @@ export function ingestCambridge21Test4(authorId?: string): {
         JSON.stringify(data.questionGroups),
         now,
         now
-      );
+      ));
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE reading_tests
       SET status = 'published',
           is_free_tier = 1,
           updated_at = ?
       WHERE id = ?
-    `).run(now, testId);
+    `).run(now, testId));
   } else {
     testId = uuidv4();
     versionId = uuidv4();
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO reading_tests (
         id, title, test_type, category, time_limit_minutes,
         current_version_number, status, created_by_id, is_free_tier, created_at, updated_at
@@ -1163,9 +1163,9 @@ export function ingestCambridge21Test4(authorId?: string): {
       resolvedAuthorId,
       now,
       now
-    );
+    ));
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO reading_test_versions (
         id, test_id, version_number, status, passages_json,
         question_groups_json, total_questions, validation_errors_json, published_at, created_at
@@ -1177,7 +1177,7 @@ export function ingestCambridge21Test4(authorId?: string): {
       JSON.stringify(data.questionGroups),
       now,
       now
-    );
+    ));
   }
 
   return {

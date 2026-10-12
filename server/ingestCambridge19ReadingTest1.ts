@@ -832,12 +832,12 @@ Although people have [[31]] to misinformation, there is debate about precisely h
   };
 }
 
-export function ingestCambridge19ReadingTest1(authorId?: string): {
+export async function ingestCambridge19ReadingTest1(authorId?: string): Promise<{
   testId: string;
   versionId: string;
   status: 'published';
   totalQuestions: number;
-} {
+}> {
   const data = getCambridge19ReadingTest1Data();
   const errors = validateTestVersion(data.passages, data.questionGroups);
 
@@ -850,26 +850,26 @@ export function ingestCambridge19ReadingTest1(authorId?: string): {
   // Resolve author
   let resolvedAuthorId = authorId;
   if (!resolvedAuthorId) {
-    const adminUser = db
+    const adminUser = (await db
       .prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
-      .get() as { id: string } | undefined;
+      .get()) as { id: string } | undefined;
     resolvedAuthorId = adminUser?.id;
   }
   if (!resolvedAuthorId) {
-    const anyUser = db
+    const anyUser = (await db
       .prepare('SELECT id FROM users LIMIT 1')
-      .get() as { id: string } | undefined;
+      .get()) as { id: string } | undefined;
     resolvedAuthorId = anyUser?.id;
   }
   if (!resolvedAuthorId) {
     resolvedAuthorId = 'f8b2e30a-ae78-435a-b9d3-a22f34452016';
   }
 
-  const existingTest = db
+  const existingTest = (await db
     .prepare(
       "SELECT id, current_version_number FROM reading_tests WHERE title = ? OR title LIKE '%Cambridge%19%Academic%Reading%Test 1%' LIMIT 1"
     )
-    .get(data.title) as { id: string; current_version_number: number } | undefined;
+    .get(data.title)) as { id: string; current_version_number: number } | undefined;
 
   const now = new Date().toISOString();
   let testId: string;
@@ -877,15 +877,15 @@ export function ingestCambridge19ReadingTest1(authorId?: string): {
 
   if (existingTest) {
     testId = existingTest.id;
-    const existingVersion = db
+    const existingVersion = (await db
       .prepare(
         'SELECT id FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1'
       )
-      .get(testId) as { id: string } | undefined;
+      .get(testId)) as { id: string } | undefined;
 
     if (existingVersion) {
       versionId = existingVersion.id;
-      db.prepare(`
+      (await db.prepare(`
         UPDATE reading_test_versions
         SET passages_json = ?,
             question_groups_json = ?,
@@ -899,10 +899,10 @@ export function ingestCambridge19ReadingTest1(authorId?: string): {
         JSON.stringify(data.questionGroups),
         now,
         versionId
-      );
+      ));
     } else {
       versionId = uuidv4();
-      db.prepare(`
+      (await db.prepare(`
         INSERT INTO reading_test_versions (
           id, test_id, version_number, status, passages_json,
           question_groups_json, total_questions, validation_errors_json, published_at, created_at
@@ -914,21 +914,21 @@ export function ingestCambridge19ReadingTest1(authorId?: string): {
         JSON.stringify(data.questionGroups),
         now,
         now
-      );
+      ));
     }
 
-    db.prepare(`
+    (await db.prepare(`
       UPDATE reading_tests
       SET status = 'published',
           is_free_tier = 1,
           updated_at = ?
       WHERE id = ?
-    `).run(now, testId);
+    `).run(now, testId));
   } else {
     testId = uuidv4();
     versionId = uuidv4();
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO reading_tests (
         id, title, test_type, category, time_limit_minutes,
         current_version_number, status, created_by_id, is_free_tier, created_at, updated_at
@@ -942,9 +942,9 @@ export function ingestCambridge19ReadingTest1(authorId?: string): {
       resolvedAuthorId,
       now,
       now
-    );
+    ));
 
-    db.prepare(`
+    (await db.prepare(`
       INSERT INTO reading_test_versions (
         id, test_id, version_number, status, passages_json,
         question_groups_json, total_questions, validation_errors_json, published_at, created_at
@@ -956,7 +956,7 @@ export function ingestCambridge19ReadingTest1(authorId?: string): {
       JSON.stringify(data.questionGroups),
       now,
       now
-    );
+    ));
   }
 
   return {

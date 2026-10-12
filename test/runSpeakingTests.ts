@@ -34,7 +34,8 @@ console.log('\n======================================================');
 console.log('  RUNNING IELTS SPEAKING PLATFORM VERIFICATION SUITE  ');
 console.log('======================================================\n');
 
-initDatabase();
+async function runEntryPoint() {
+(await initDatabase());
 
 // ---------------------------------------------------------------------
 // TEST USERS SETUP
@@ -47,20 +48,20 @@ const teacherEmail = `elena_speaking_${Date.now()}@test.com`;
 const student1Email = `marcus_speaking_${Date.now()}@test.com`;
 const student2Email = `chloe_speaking_${Date.now()}@test.com`;
 
-db.prepare(`
+(await db.prepare(`
   INSERT INTO users (id, email, password_hash, full_name, role)
   VALUES (?, ?, 'dummy_hash', 'Teacher Elena Speaking', 'teacher')
-`).run(teacherId, teacherEmail);
+`).run(teacherId, teacherEmail));
 
-db.prepare(`
+(await db.prepare(`
   INSERT INTO users (id, email, password_hash, full_name, role)
   VALUES (?, ?, 'dummy_hash', 'Student Marcus Speaking', 'student')
-`).run(student1Id, student1Email);
+`).run(student1Id, student1Email));
 
-db.prepare(`
+(await db.prepare(`
   INSERT INTO users (id, email, password_hash, full_name, role)
   VALUES (?, ?, 'dummy_hash', 'Student Chloe Speaking', 'student')
-`).run(student2Id, student2Email);
+`).run(student2Id, student2Email));
 
 // =====================================================================
 // CHECK 1: Official IELTS Speaking Scoring Engine Calibration
@@ -108,7 +109,7 @@ console.log('  ✔ Verified official IELTS rounding and criterion calibration.')
 // =====================================================================
 console.log('CHECK 2: Speaking Content Editor & Version Immutability');
 
-const createdSet = createSpeakingSet(teacherId, {
+const createdSet = (await createSpeakingSet(teacherId, {
   title: 'Environmental Conservation & Habitat Restoration',
   part1Topics: [
     {
@@ -133,23 +134,23 @@ const createdSet = createSpeakingSet(teacherId, {
     ],
   },
   teacherNotes: 'Version 1 initial draft.',
-});
+}));
 
 assert.strictEqual(createdSet.set.status, 'draft');
 assert.strictEqual(createdSet.set.currentVersionNumber, 1);
 
 // Publish Version 1
-publishSpeakingSetVersion(createdSet.set.id, createdSet.version.id);
-const pubSet = getSpeakingSetById(createdSet.set.id);
+(await publishSpeakingSetVersion(createdSet.set.id, createdSet.version.id));
+const pubSet = (await getSpeakingSetById(createdSet.set.id));
 assert.strictEqual(pubSet?.status, 'published');
 
 // Fork new Draft Version 2
-const v2 = forkSpeakingDraftVersion(createdSet.set.id);
+const v2 = (await forkSpeakingDraftVersion(createdSet.set.id));
 assert.strictEqual(v2.versionNumber, 2);
 assert.strictEqual(v2.status, 'draft');
 
 // Update Draft Version 2
-const updatedV2 = updateSpeakingDraftVersion({
+const updatedV2 = (await updateSpeakingDraftVersion({
   setId: createdSet.set.id,
   versionId: v2.id,
   part1Topics: [
@@ -162,13 +163,13 @@ const updatedV2 = updateSpeakingDraftVersion({
   part2CueCard: v2.part2CueCard,
   part3Discussion: v2.part3Discussion,
   teacherNotes: 'Updated prompts for spring cohort.',
-});
+}));
 assert.strictEqual(updatedV2.errors.length, 0);
 
 // Publish Version 2: Version 1 should now be archived
-publishSpeakingSetVersion(createdSet.set.id, v2.id);
-const v1Row = db.prepare('SELECT status FROM speaking_set_versions WHERE id = ?').get(createdSet.version.id) as any;
-const v2Row = db.prepare('SELECT status FROM speaking_set_versions WHERE id = ?').get(v2.id) as any;
+(await publishSpeakingSetVersion(createdSet.set.id, v2.id));
+const v1Row = (await db.prepare('SELECT status FROM speaking_set_versions WHERE id = ?').get(createdSet.version.id)) as any;
+const v2Row = (await db.prepare('SELECT status FROM speaking_set_versions WHERE id = ?').get(v2.id)) as any;
 assert.strictEqual(v1Row.status, 'archived', 'Old published version is archived');
 assert.strictEqual(v2Row.status, 'published', 'New version is published');
 
@@ -179,7 +180,7 @@ console.log('  ✔ Speaking set creation, editing, forking, and version immutabi
 // =====================================================================
 console.log('CHECK 3: Teacher-Led Assessment Draft & Learner Draft Privacy Guard');
 
-const draftAssessment = recordSpeakingAssessment(teacherId, {
+const draftAssessment = (await recordSpeakingAssessment(teacherId, {
   studentId: student1Id,
   sessionType: 'complete_mock',
   partsCovered: ['part1', 'part2', 'part3'],
@@ -196,19 +197,19 @@ const draftAssessment = recordSpeakingAssessment(teacherId, {
   strengths: 'Very natural hesitation phenomena; strong cohesive discourse markers.',
   improvementPriorities: 'Extend range of complex dependent clauses in Part 3.',
   teacherPrivateNotes: 'CONFIDENTIAL: Student expressed anxiety about Part 3 topic.',
-});
+}));
 
 assert.strictEqual(draftAssessment.status, 'draft');
 assert.strictEqual(draftAssessment.overallBand, 6.5); // (6.5+6.0+6.5+7.0)/4 = 6.5
 
 // Teacher CAN view draft and private notes
-const teacherView = getSpeakingAssessmentById(draftAssessment.id, teacherId, 'teacher');
+const teacherView = (await getSpeakingAssessmentById(draftAssessment.id, teacherId, 'teacher'));
 assert.strictEqual(teacherView?.teacherPrivateNotes, 'CONFIDENTIAL: Student expressed anxiety about Part 3 topic.');
 
 // Student CANNOT view draft before release: MUST throw 403 Forbidden
-assert.throws(() => {
-  getSpeakingAssessmentById(draftAssessment.id, student1Id, 'student');
-}, /draft state and has not been released/, 'Student is blocked from accessing draft assessment');
+(await assert.rejects(async () => {
+  (await getSpeakingAssessmentById(draftAssessment.id, student1Id, 'student'));
+}, /draft state and has not been released/, 'Student is blocked from accessing draft assessment'));
 
 console.log('  ✔ Draft saving, criteria calculation, and student draft privacy guard verified.');
 
@@ -217,11 +218,11 @@ console.log('  ✔ Draft saving, criteria calculation, and student draft privacy
 // =====================================================================
 console.log('CHECK 4: Assessment Release & Private Notes Scrubbing for Student');
 
-const releasedAssessment = releaseSpeakingAssessment(teacherId, draftAssessment.id);
+const releasedAssessment = (await releaseSpeakingAssessment(teacherId, draftAssessment.id));
 assert.strictEqual(releasedAssessment.status, 'released');
 
 // Student CAN now view released assessment
-const studentView = getSpeakingAssessmentById(draftAssessment.id, student1Id, 'student');
+const studentView = (await getSpeakingAssessmentById(draftAssessment.id, student1Id, 'student'));
 assert.ok(studentView, 'Student can view released assessment');
 assert.strictEqual(studentView?.overallBand, 6.5);
 assert.strictEqual(studentView?.strengths, 'Very natural hesitation phenomena; strong cohesive discourse markers.');
@@ -235,7 +236,7 @@ console.log('  ✔ Explicit release and learner view private notes scrubbing ver
 // =====================================================================
 console.log('CHECK 5: Incomplete Criterion Guard for Complete Mock Release');
 
-const incompleteAssessment = recordSpeakingAssessment(teacherId, {
+const incompleteAssessment = (await recordSpeakingAssessment(teacherId, {
   studentId: student2Id,
   sessionType: 'complete_mock',
   partsCovered: ['part1', 'part2', 'part3'],
@@ -247,14 +248,14 @@ const incompleteAssessment = recordSpeakingAssessment(teacherId, {
     lexicalResource: 6.5,
     // missing grammaticalRange and pronunciation
   },
-});
+}));
 
 assert.strictEqual(incompleteAssessment.overallBand, undefined, 'Incomplete criteria produces no overall band');
 
 // Attempting to release complete mock without all 4 criteria must be rejected!
-assert.throws(() => {
-  releaseSpeakingAssessment(teacherId, incompleteAssessment.id);
-}, /Cannot release complete mock assessment without all four criterion scores/, 'Release rejected without 4 criteria');
+(await assert.rejects(async () => {
+  (await releaseSpeakingAssessment(teacherId, incompleteAssessment.id));
+}, /Cannot release complete mock assessment without all four criterion scores/, 'Release rejected without 4 criteria'));
 
 console.log('  ✔ Complete mock incomplete criteria release guard verified.');
 
@@ -263,7 +264,7 @@ console.log('  ✔ Complete mock incomplete criteria release guard verified.');
 // =====================================================================
 console.log('CHECK 6: Partial Practice Isolation (No Overall Band / Labelled Partial)');
 
-const partialAssessment = recordSpeakingAssessment(teacherId, {
+const partialAssessment = (await recordSpeakingAssessment(teacherId, {
   studentId: student2Id,
   sessionType: 'partial_practice',
   partsCovered: ['part2'],
@@ -280,13 +281,13 @@ const partialAssessment = recordSpeakingAssessment(teacherId, {
     part2: 'Spoke smoothly for 1 minute 50 seconds. Good timing.',
   },
   strengths: 'Strong narrative pace in Part 2.',
-});
+}));
 
 assert.strictEqual(partialAssessment.sessionType, 'partial_practice');
 // Invariant: Partial practice NEVER calculates an overall band!
 assert.strictEqual(partialAssessment.overallBand, undefined, 'Partial practice produces no overall band');
 
-const studentPartialView = getSpeakingAssessmentById(partialAssessment.id, student2Id, 'student');
+const studentPartialView = (await getSpeakingAssessmentById(partialAssessment.id, student2Id, 'student'));
 assert.strictEqual(studentPartialView?.sessionType, 'partial_practice');
 assert.strictEqual(studentPartialView?.overallBand, undefined);
 
@@ -300,7 +301,7 @@ console.log('CHECK 7: Transparent Score Corrections & Audit History');
 // Released assessment has (FC: 6.5, LR: 6.0, GRA: 6.5, P: 7.0) -> 6.5
 // Teacher corrects LR from 6.0 to 7.0 upon review of recorded notes
 // New mean: (6.5 + 7.0 + 6.5 + 7.0) / 4 = 6.75 -> 7.0
-const corrected = correctReleasedSpeakingScores(teacherId, draftAssessment.id, {
+const corrected = (await correctReleasedSpeakingScores(teacherId, draftAssessment.id, {
   updatedScores: {
     fluencyCoherence: 6.5,
     lexicalResource: 7.0,
@@ -308,13 +309,13 @@ const corrected = correctReleasedSpeakingScores(teacherId, draftAssessment.id, {
     pronunciation: 7.0,
   },
   reason: 'Second listening to notes confirmed candidate used advanced idiomatic travel vocabulary (e.g., "off the beaten track", "unspoilt landscape") appropriately.',
-});
+}));
 
 assert.strictEqual(corrected.overallBand, 7.0, 'Recalculated band from 6.75 is 7.0');
 assert.strictEqual(corrected.criteria?.lexicalResource, 7.0);
 
 // Verify audit history is present
-const auditAssessment = getSpeakingAssessmentById(draftAssessment.id, teacherId, 'teacher');
+const auditAssessment = (await getSpeakingAssessmentById(draftAssessment.id, teacherId, 'teacher'));
 assert.ok(auditAssessment?.corrections && auditAssessment.corrections.length >= 1, 'Audit trail recorded');
 const latestCorrection = auditAssessment!.corrections![0];
 assert.strictEqual(latestCorrection.previousScores.lexicalResource, 6.0);
@@ -331,7 +332,7 @@ console.log('  ✔ Score correction and transparent audit history verified.');
 console.log('CHECK 8: Audio Recording Optionality & Disclosure Retention Policy');
 
 // Score without audio recording
-const noAudioAssessment = recordSpeakingAssessment(teacherId, {
+const noAudioAssessment = (await recordSpeakingAssessment(teacherId, {
   studentId: student1Id,
   sessionType: 'complete_mock',
   partsCovered: ['part1', 'part2', 'part3'],
@@ -346,12 +347,12 @@ const noAudioAssessment = recordSpeakingAssessment(teacherId, {
   },
   recordingUrl: undefined, // no audio
   recordingRetentionAcknowledged: false,
-});
+}));
 assert.strictEqual(noAudioAssessment.recordingUrl, undefined);
 assert.strictEqual(noAudioAssessment.overallBand, 7.0);
 
 // Score WITH optional audio recording and retention acknowledgement
-const withAudioAssessment = recordSpeakingAssessment(teacherId, {
+const withAudioAssessment = (await recordSpeakingAssessment(teacherId, {
   studentId: student2Id,
   sessionType: 'complete_mock',
   partsCovered: ['part1', 'part2', 'part3'],
@@ -366,7 +367,7 @@ const withAudioAssessment = recordSpeakingAssessment(teacherId, {
   },
   recordingUrl: '/audio/speaking_mock_student2_20261011.mp3',
   recordingRetentionAcknowledged: true,
-});
+}));
 assert.strictEqual(withAudioAssessment.recordingUrl, '/audio/speaking_mock_student2_20261011.mp3');
 assert.strictEqual(withAudioAssessment.recordingRetentionAcknowledged, true);
 
@@ -378,49 +379,49 @@ console.log('  ✔ Audio recording optionality and retention policy acknowledgem
 console.log('CHECK 9: Pre/Post Test Journey Integration & Speaking Delta');
 
 // Create class and enrol student1
-const testClass = createClass(teacherId, {
+const testClass = (await createClass(teacherId, {
   title: 'IELTS Speaking Masterclass - Pre/Post Cohort',
   testType: 'academic',
   description: 'Cohort testing Speaking progression.',
-});
-enrolStudentByEmail(teacherId, testClass.id, student1Email, false);
+}));
+(await enrolStudentByEmail(teacherId, testClass.id, student1Email, false));
 
 // Create Pre-Test Package with Speaking Set
-const prePackage = createTestPackage(teacherId, {
+const prePackage = (await createTestPackage(teacherId, {
   title: 'Diagnostic Pre-Test Package with Speaking',
   packageType: 'pre_test',
   testType: 'academic',
   speakingSetId: createdSet.set.id,
   speakingSetVersionId: v2.id,
-});
+}));
 assert.strictEqual(prePackage.speakingStatus, 'configured');
 
 // Create Post-Test Package with Speaking Set
-const postPackage = createTestPackage(teacherId, {
+const postPackage = (await createTestPackage(teacherId, {
   title: 'Exit Post-Test Package with Speaking',
   packageType: 'post_test',
   testType: 'academic',
   speakingSetId: createdSet.set.id,
   speakingSetVersionId: v2.id,
-});
+}));
 
 // Create Pre-Test and Post-Test Assignments
-const preAssignment = createAssignment(teacherId, testClass.id, {
+const preAssignment = (await createAssignment(teacherId, testClass.id, {
   title: 'Cohort Diagnostic Pre-Test',
   purpose: 'pre_test',
   packageId: prePackage.id,
   isReleased: true,
-});
+}));
 
-const postAssignment = createAssignment(teacherId, testClass.id, {
+const postAssignment = (await createAssignment(teacherId, testClass.id, {
   title: 'Cohort Exit Post-Test',
   purpose: 'post_test',
   packageId: postPackage.id,
   isReleased: true,
-});
+}));
 
 // Record Pre-Test Speaking Assessment: Overall Band 6.0
-recordSpeakingAssessment(teacherId, {
+(await recordSpeakingAssessment(teacherId, {
   studentId: student1Id,
   classId: testClass.id,
   assignmentId: preAssignment.assignment.id,
@@ -436,10 +437,10 @@ recordSpeakingAssessment(teacherId, {
     grammaticalRange: 6.0,
     pronunciation: 6.0,
   },
-});
+}));
 
 // Record Post-Test Speaking Assessment: Overall Band 7.0
-recordSpeakingAssessment(teacherId, {
+(await recordSpeakingAssessment(teacherId, {
   studentId: student1Id,
   classId: testClass.id,
   assignmentId: postAssignment.assignment.id,
@@ -455,10 +456,10 @@ recordSpeakingAssessment(teacherId, {
     grammaticalRange: 7.0,
     pronunciation: 7.0,
   },
-});
+}));
 
 // Retrieve Pre/Post Comparison Report
-const report = getPrePostComparison(testClass.id, student1Id, teacherId, 'teacher');
+const report = (await getPrePostComparison(testClass.id, student1Id, teacherId, 'teacher'));
 assert.strictEqual(report.preTest.skills.speaking.status, 'completed');
 assert.strictEqual(report.preTest.skills.speaking.bandScore, 6.0);
 assert.strictEqual(report.preTest.skills.speaking.assessor, 'Teacher assessment');
@@ -476,10 +477,10 @@ console.log('  ✔ Pre/Post journey Speaking integration and band delta calculat
 // =====================================================================
 console.log('CHECK 10: Teacher Queue & Student Assessment List');
 
-const teacherQueue = listTeacherAssessmentQueue(teacherId);
+const teacherQueue = (await listTeacherAssessmentQueue(teacherId));
 assert.ok(teacherQueue.length >= 3, 'Teacher queue lists created assessments');
 
-const studentAssessments = listStudentSpeakingAssessments(student1Id);
+const studentAssessments = (await listStudentSpeakingAssessments(student1Id));
 assert.ok(studentAssessments.length >= 2, 'Student lists released assessments');
 // All student assessments must be released
 for (const a of studentAssessments) {
@@ -491,3 +492,7 @@ console.log('  ✔ Teacher assessment queue and student assessment list verified
 console.log('\n======================================================');
 console.log('  ALL 10 SPEAKING VERIFICATION CHECKS PASSED (100%)!  ');
 console.log('======================================================\n');
+
+}
+export const testCompleted = runEntryPoint();
+testCompleted.catch(error => { console.error(error); process.exitCode = 1; });
