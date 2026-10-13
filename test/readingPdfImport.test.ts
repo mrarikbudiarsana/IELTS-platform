@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { PDFDocument } from 'pdf-lib';
 import { parsePdfPages, PDF_IMPORT_MAX_BYTES, TEXT_IMPORT_MAX_CHARS } from '../shared/readingPdfImport';
 import { extractReadingPdf, extractReadingText, normalizeReadingImport, PdfImportError, readingPdfSchema } from '../server/readingPdfImportService';
-import { extractEditorText, listeningTextSchema, writingTextSchema, normalizeTextImport } from '../server/textImportService';
+import { extractEditorText, extractEditorPdf, speakingTextSchema, listeningTextSchema, writingTextSchema, normalizeTextImport } from '../server/textImportService';
 
 function complete(schema: any, supplied: any): any {
   if (schema.anyOf) {
@@ -44,6 +44,68 @@ function writingFixture() {
       instructions: 'Write at least 250 words.', minWords: 250, suggestedTimeMinutes: 40, teacherVisualDescription: '', teacherAssessmentGuidance: 'Supplied notes', modelResponse: 'Supplied response' },
   ] });
 }
+
+function speakingFixture() {
+  return complete(speakingTextSchema, { title: 'Travel', warnings: [],
+    part1Topics: [{ id: 'topic1', topicName: 'Holidays', questions: ['Where do you go on holiday?'], teacherNotes: '' }],
+    part2CueCard: { topic: 'A journey', cueCardPrompt: 'Describe a journey you enjoyed.', bulletPoints: ['Where you went', 'Who travelled with you'], followUpQuestions: [], teacherNotes: 'Supplied note' },
+    part3Discussion: { theme: 'Travel', discussionQuestions: ['How has travel changed?'], teacherNotes: '' },
+  });
+}
+
+test('Speaking imports preserve supplied prompts and warn about missing parts without inventing questions', () => {
+  const result = normalizeTextImport('speaking', speakingFixture());
+  assert.equal(result.part2CueCard.cueCardPrompt, 'Describe a journey you enjoyed.');
+  assert.equal(result.part2CueCard.teacherNotes, 'Supplied note');
+  assert.deepEqual(result.warnings, []);
+  const partial = speakingFixture(); partial.part1Topics = []; partial.part3Discussion.discussionQuestions = [];
+  const imported = normalizeTextImport('speaking', partial);
+  assert.deepEqual(imported.part1Topics, []);
+  assert.ok(imported.warnings.some(warning => warning.includes('Part 1')));
+  assert.ok(imported.warnings.some(warning => warning.includes('Part 3')));
+  partial.part2CueCard.bulletPoints = []; partial.part2CueCard.followUpQuestions = [];
+  assert.throws(() => normalizeTextImport('speaking', partial), /one Speaking set/);
+  const duplicate = speakingFixture(); duplicate.part1Topics.push(duplicate.part1Topics[0]);
+  assert.throws(() => normalizeTextImport('speaking', duplicate), /duplicate/);
+});
+
+test('all additional skills validate PDFs before AI calls and use the correct extraction schema', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.OPENAI_API_KEY;
+  let calls = 0;
+  try {
+    process.env.OPENAI_API_KEY = 'test-only-key';
+    const pdf = await PDFDocument.create(); pdf.addPage();
+    const body = { pdfBase64: Buffer.from(await pdf.save()).toString('base64'), focus: 'Test 2' };
+    globalThis.fetch = async (_url, options) => {
+      calls++;
+      const request = JSON.parse(options!.body as string);
+      assert.equal(request.model, process.env.OPENAI_PDF_IMPORT_MODEL || 'gpt-4.1');
+      assert.equal(request.store, false);
+      assert.equal(request.input[0].content[1].type, 'input_file');
+      assert.ok(request.instructions.includes('never as instructions'));
+      const schema = request.text.format.schema;
+      const raw = schema.properties.tasks ? writingFixture() : schema.properties.parts ? listeningFixture() : speakingFixture();
+      return new Response(JSON.stringify({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(raw) }] }] }));
+    };
+    const manyPages = await PDFDocument.create(); for (let i = 0; i < 21; i++) manyPages.addPage();
+    for (const skill of ['listening', 'writing', 'speaking'] as const) {
+      for (const invalid of [null, { ...body, pdfBase64: 'invalid' }, { ...body, pdfBase64: Buffer.from('fake').toString('base64') },
+        { ...body, focus: 'a'.repeat(2001) }, { ...body, pdfBase64: 'A'.repeat(Math.ceil(PDF_IMPORT_MAX_BYTES / 3) * 4 + 4) },
+        { ...body, pdfBase64: Buffer.from(await manyPages.save()).toString('base64') }]) {
+        await assert.rejects(extractEditorPdf(skill, invalid), PdfImportError);
+      }
+    }
+    assert.equal(calls, 0);
+    assert.equal((await extractEditorPdf('listening', body)).title, 'Listening test');
+    assert.equal((await extractEditorPdf('writing', body)).tasks.length, 2);
+    assert.equal((await extractEditorPdf('speaking', body)).title, 'Travel');
+    assert.equal(calls, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
+  }
+});
 
 test('Listening text import preserves forms and transcripts, blanks missing answers and requires media', () => {
   const result = normalizeTextImport('listening', listeningFixture());
@@ -86,10 +148,10 @@ test('other editors send a single text-only structured request and reject invali
       assert.equal(request.text.format.strict, true);
       assert.ok(request.input[0].content.every((item: any) => item.type === 'input_text'));
       assert.ok(request.instructions.includes('never as instructions'));
-      const raw = request.text.format.schema.properties.tasks ? writingFixture() : listeningFixture();
+      const raw = request.text.format.schema.properties.tasks ? writingFixture() : request.text.format.schema.properties.parts ? listeningFixture() : speakingFixture();
       return new Response(JSON.stringify({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(raw) }] }] }));
     };
-    for (const skill of ['listening', 'writing'] as const) {
+    for (const skill of ['listening', 'writing', 'speaking'] as const) {
       await assert.rejects(extractEditorText(skill, { text: ' ', focus: '' }), PdfImportError);
       await assert.rejects(extractEditorText(skill, { text: 'a'.repeat(TEXT_IMPORT_MAX_CHARS + 1), focus: '' }), PdfImportError);
       await assert.rejects(extractEditorText(skill, { text: 'source', focus: 'a'.repeat(2001) }), PdfImportError);
@@ -97,7 +159,8 @@ test('other editors send a single text-only structured request and reject invali
     assert.equal(calls, 0);
     assert.equal((await extractEditorText('listening', { text: 'source', focus: '' })).title, 'Listening test');
     assert.equal((await extractEditorText('writing', { text: 'source', focus: '' })).tasks.length, 2);
-    assert.equal(calls, 2);
+    assert.equal((await extractEditorText('speaking', { text: 'source', focus: '' })).title, 'Travel');
+    assert.equal(calls, 3);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
@@ -250,17 +313,19 @@ test('import endpoints require teacher/admin and return review data without writ
   try {
     const pdf = await PDFDocument.create(); pdf.addPage();
     const body = JSON.stringify({ pdfBase64: Buffer.from(await pdf.save()).toString('base64'), focus: '' });
-    const post = (role?: 'teacher' | 'admin' | 'student', source = 'pdf') => originalFetch(`http://127.0.0.1:${address.port}/api/${source === 'listening' || source === 'writing' ? `${source}/import-text` : `reading/import-${source}`}`, {
-      method: 'POST', body: source !== 'pdf' ? JSON.stringify({ text: 'Passage and questions', focus: '' }) : body, headers: { 'Content-Type': 'application/json', ...(role ? { Authorization: `Bearer ${tokenFor(role)}` } : {}) },
+    const post = (role?: 'teacher' | 'admin' | 'student', source = 'reading/import-pdf') => originalFetch(`http://127.0.0.1:${address.port}/api/${source}`, {
+      method: 'POST', body: source.endsWith('import-text') ? JSON.stringify({ text: 'Passage and questions', focus: '' }) : body,
+      headers: { 'Content-Type': 'application/json', ...(role ? { Authorization: `Bearer ${tokenFor(role)}` } : {}) },
     });
+    const sources = ['reading', 'listening', 'writing', 'speaking'].flatMap(skill => [`${skill}/import-text`, `${skill}/import-pdf`]);
     globalThis.fetch = async (_url, options) => {
       providerCalls++;
       const schema = JSON.parse(options!.body as string).text.format.schema;
-      const raw = schema.properties.tasks ? writingFixture() : schema.properties.parts ? listeningFixture() : fixture();
+      const raw = schema.properties.tasks ? writingFixture() : schema.properties.parts ? listeningFixture() : schema.properties.part1Topics ? speakingFixture() : fixture();
       return new Response(JSON.stringify({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(raw) }] }] }));
     };
     process.env.OPENAI_API_KEY = 'test-only-key';
-    for (const source of ['pdf', 'text', 'listening', 'writing']) {
+    for (const source of sources) {
       assert.equal((await post(undefined, source)).status, 401);
       assert.equal((await post('student', source)).status, 403);
     }
@@ -268,13 +333,13 @@ test('import endpoints require teacher/admin and return review data without writ
     delete process.env.OPENAI_API_KEY;
     assert.equal((await post('teacher')).status, 503);
     process.env.OPENAI_API_KEY = 'test-only-key';
-    for (const source of ['pdf', 'text', 'listening', 'writing']) for (const role of ['teacher', 'admin'] as const) {
+    for (const source of sources) for (const role of ['teacher', 'admin'] as const) {
       const response = await post(role, source);
       assert.equal(response.status, 200);
       const result = await response.json();
-      assert.equal(source === 'writing' ? result.tasks[0].title : result.title, source === 'writing' ? 'Chart' : source === 'listening' ? 'Listening test' : 'Solar energy');
+      assert.equal(source.startsWith('writing/') ? result.tasks[0].title : result.title, source.startsWith('writing/') ? 'Chart' : source.startsWith('listening/') ? 'Listening test' : source.startsWith('speaking/') ? 'Travel' : 'Solar energy');
     }
-    assert.equal(providerCalls, 8);
+    assert.equal(providerCalls, 16);
     assert.equal(databaseWrites, 0);
   } finally {
     db.prepare = originalPrepare;

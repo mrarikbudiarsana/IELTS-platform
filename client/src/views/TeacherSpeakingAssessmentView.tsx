@@ -10,6 +10,7 @@ import {
 import { calculateIeltsSpeakingBand } from '../../../shared/scoring';
 import { SpeakingFeedbackModal } from './SpeakingFeedbackModal';
 import { CloudinaryMediaUploader } from '../components/CloudinaryMediaUploader';
+import { SpeakingSetImporter } from '../components/SpeakingSetImporter';
 
 
 const CRITERION_OPTIONS = [
@@ -370,6 +371,8 @@ export const TeacherSpeakingAssessmentView: React.FC = () => {
           </select>
         </div>
       </div>
+
+      <SpeakingSetImporter onPublished={() => { loadInitialData(); }} />
 
       {/* Assessment Queue Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

@@ -1,6 +1,10 @@
-import type { ListeningPart, QuestionGroup, WritingTaskVersion } from './types';
+import type { ListeningPart, QuestionGroup, WritingTaskVersion, SpeakingSetVersion } from './types';
 
-export type TextImportSkill = 'listening' | 'writing';
+export type TextImportSkill = 'listening' | 'writing' | 'speaking';
+export interface SpeakingTextImportResult extends Pick<SpeakingSetVersion, 'part1Topics' | 'part2CueCard' | 'part3Discussion'> {
+  title: string;
+  warnings: string[];
+}
 export interface ListeningTextImportResult {
   title: string;
   parts: ListeningPart[];
@@ -15,6 +19,7 @@ export interface WritingTextImportResult {
   warnings: string[];
 }
 export interface TextImportResults {
+  speaking: SpeakingTextImportResult;
   listening: ListeningTextImportResult;
   writing: WritingTextImportResult;
 }

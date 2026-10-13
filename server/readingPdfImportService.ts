@@ -121,6 +121,14 @@ export function normalizeReadingImport(raw: unknown): ReadingPdfImportResult {
 export async function extractReadingPdf(body: any): Promise<ReadingPdfImportResult> {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) throw new PdfImportError('PDF import is unavailable. Ask the administrator to configure OPENAI_API_KEY on the server.', 503);
+  await validateImportPdf(body);
+  return requestReadingImport(key, [
+    { type: 'input_file', filename: 'reading-pages.pdf', file_data: `data:application/pdf;base64,${body.pdfBase64}` },
+    { type: 'input_text', text: `Extract the Reading test. Selection notes: ${body.focus || 'Use the single test in these pages.'}` },
+  ], false);
+}
+
+export async function validateImportPdf(body: any): Promise<void> {
   if (!body || typeof body.pdfBase64 !== 'string' || !body.pdfBase64.length
     || body.pdfBase64.length > Math.ceil(PDF_IMPORT_MAX_BYTES / 3) * 4
     || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(body.pdfBase64)) {
@@ -133,11 +141,6 @@ export async function extractReadingPdf(body: any): Promise<ReadingPdfImportResu
   try { document = await PDFDocument.load(bytes); }
   catch { throw new PdfImportError('This PDF is damaged or password protected. Upload an unlocked PDF.'); }
   if (document.getPageCount() < 1 || document.getPageCount() > PDF_IMPORT_MAX_PAGES) throw new PdfImportError('Select between 1 and 20 PDF pages.');
-
-  return requestReadingImport(key, [
-    { type: 'input_file', filename: 'reading-pages.pdf', file_data: `data:application/pdf;base64,${body.pdfBase64}` },
-    { type: 'input_text', text: `Extract the Reading test. Teacher's selection notes: ${body.focus || 'Use the single test in these pages.'}` },
-  ], false);
 }
 
 export async function extractReadingText(body: any): Promise<ReadingPdfImportResult> {

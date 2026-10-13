@@ -41,6 +41,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  importEditorPdf: <K extends TextImportSkill>(skill: K, body: { pdfBase64: string; focus: string }) => request<TextImportResults[K]>(`/${skill}/import-pdf`, {
+    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
+  }),
   importEditorText: <K extends TextImportSkill>(skill: K, body: { text: string; focus: string }) => request<TextImportResults[K]>(`/${skill}/import-text`, {
     method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
   }),
