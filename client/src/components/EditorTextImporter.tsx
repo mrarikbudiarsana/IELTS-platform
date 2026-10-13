@@ -25,6 +25,14 @@ export function EditorTextImporter(props: Props) {
   const [taskIndex, setTaskIndex] = useState(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => {
+    const pending = api.resumeEditorImport(props.skill);
+    if (!pending) return;
+    setOpen(true); setBusy(true);
+    pending.then(imported => { if (mounted.current) { setResult(imported); setTaskIndex(0); } })
+      .catch(err => { if (mounted.current) setError(err.message); })
+      .finally(() => { if (mounted.current) setBusy(false); });
+  }, [props.skill]);
   const extract = async () => {
     if ((source === 'text' ? !text.trim() : !file) || busy || props.disabled) return;
     setBusy(true); setError(''); setResult(null);
@@ -74,7 +82,7 @@ export function EditorTextImporter(props: Props) {
         className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
         {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}{busy ? 'Extracting...' : 'Extract and review'}
       </button>
-      {busy && <p role="status" className="text-sm text-slate-600">Extraction may take up to 90 seconds. Keep this editor open.</p>}
+      {busy && <p role="status" className="text-sm text-slate-600">Extraction is running in the background and may take several minutes. This editor checks progress automatically and resumes after a refresh.</p>}
       {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
       {result && <div className="space-y-4 border-t border-slate-200 pt-4">
         {result.warnings.length > 0 && <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">

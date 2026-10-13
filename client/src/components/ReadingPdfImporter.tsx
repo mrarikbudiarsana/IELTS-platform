@@ -20,6 +20,14 @@ export function ReadingPdfImporter({ onApply, disabled }: {
   const [result, setResult] = useState<ReadingPdfImportResult | null>(null);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => {
+    const pending = api.resumeReadingImport();
+    if (!pending) return;
+    setOpen(true); setBusy(true);
+    pending.then(imported => { if (mounted.current) setResult(imported); })
+      .catch(err => { if (mounted.current) setError(err.message); })
+      .finally(() => { if (mounted.current) setBusy(false); });
+  }, []);
 
   const extract = async () => {
     if (busy || disabled || (source === 'pdf' ? !file : !sourceText.trim())) return;
@@ -83,11 +91,11 @@ export function ReadingPdfImporter({ onApply, disabled }: {
           {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
           {busy ? 'Extracting questions…' : 'Extract and review'}
         </button>
-        {busy && <p role="status" className="text-sm text-slate-600">Extraction may take up to 90 seconds. Keep this editor open.</p>}
+        {busy && <p role="status" className="text-sm text-slate-600">Extraction is running in the background and may take several minutes. This editor checks progress automatically and resumes after a refresh.</p>}
         {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
         {result && <div className="space-y-4 border-t border-slate-200 pt-4">
           <h3 className="font-bold text-slate-900">Review: {result.title}</h3>
-          <p className="text-sm text-slate-600">{result.testType === 'academic' ? 'Academic' : 'General Training'} · {result.passages.length} passages · {result.questionGroups.reduce((n, g) => n + g.questions.length, 0)} questions. Check wording, options and answers against the {source === 'text' ? 'pasted text' : 'PDF'}.</p>
+          <p className="text-sm text-slate-600">{result.testType === 'academic' ? 'Academic' : 'General Training'} · {result.passages.length} passages · {result.questionGroups.reduce((n, g) => n + g.questions.length, 0)} questions. Check wording, options and answers against the source material.</p>
           {result.warnings.length > 0 && <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
             <p className="font-bold mb-2">Needs review</p>
             <ul className="list-disc pl-5 space-y-1">{result.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>

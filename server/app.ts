@@ -2,6 +2,7 @@ import './environment';
 import { isRetiredDemoAccount } from './retiredDemoAccounts';
 import { extractReadingPdf, extractReadingText, PdfImportError } from './readingPdfImportService';
 import { extractEditorText, extractEditorPdf } from './textImportService';
+import { startImportJob, getImportJob } from './importJobService';
 import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
@@ -448,6 +449,14 @@ app.get('/api/reading/tests/:id', authMiddleware, async (req: AuthenticatedReque
 
 // Extraction returns a review payload only; it never creates or publishes a test.
 const activePdfImports = new Set<string>();
+app.post('/api/imports/:skill/:source', authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
+  try { res.status(202).json(await startImportJob(req.user!.id, String(req.params.skill), String(req.params.source), req.body)); }
+  catch (error) { res.status(error instanceof PdfImportError ? error.status : 500).json({ error: error instanceof PdfImportError ? error.message : 'Could not start extraction. Please retry.' }); }
+});
+app.get('/api/imports/:id', authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
+  try { res.json(await getImportJob(req.user!.id, String(req.params.id))); }
+  catch (error) { res.status(error instanceof PdfImportError ? error.status : 500).json({ error: error instanceof PdfImportError ? error.message : 'Could not check extraction. Please retry shortly.' }); }
+});
 app.post(['/api/reading/import-pdf', '/api/reading/import-text', '/api/listening/import-text', '/api/writing/import-text', '/api/listening/import-pdf', '/api/writing/import-pdf', '/api/speaking/import-text', '/api/speaking/import-pdf'], authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   if (activePdfImports.has(userId)) {

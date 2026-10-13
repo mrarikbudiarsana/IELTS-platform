@@ -37,10 +37,18 @@ The importer preserves original question numbering. Include the full set of ques
 
 Diagram questions need the original diagram image uploaded separately through the editor. The importer does not extract image assets from the PDF and never accepts AI-generated image URLs. Missing diagram images block publication.
 
-Only the selected pages are sent to OpenAI. The server uses `store: false`, does not save the PDF locally, and returns review data without writing tests to the database. This does not override OpenAI's applicable API data retention policies.
+Only the selected pages are sent to OpenAI. The server uses `store: false` and returns review data without creating tests. Source text or PDF pages are temporarily stored in a private database job row so background extraction can access them, then removed when the job completes or fails. Completed review results are available for one hour. Expired jobs are removed on subsequent import requests. This does not override OpenAI's applicable API data retention policies.
+
+## Background extraction and 504 errors
+
+The editors enqueue extraction through `POST /api/imports/:skill/:source` and poll `GET /api/imports/:id`. On Netlify, `import-questions-background` receives only a signed job ID and runs separately from the API request. This avoids the 60-second synchronous function timeout and the 256 KB background invocation payload limit. Local development runs the same job processor in the server process.
+
+AI extraction has a nine-minute limit; jobs expire after twelve minutes. The editor checks progress automatically and resumes a pending job after refresh for the same signed-in account. A brief failed status request is retried without repeating the AI extraction. Imports are restricted to teacher/admin accounts, job results are restricted to their owner, and the database permits one active import per account across API instances.
+
+The first job automatically initializes the additive `question_import_jobs` table using the server database connection, including PostgreSQL row-level security and revocation of direct client access. Deploy the frontend, API and background function together. No API-key or model change is required for this timeout fix.
 
 ## Verification
 
-Run `npm run test:pdf-import`, `npm run typecheck:server`, and `npm run build`. Tests use generated PDFs and a mocked OpenAI provider; they incur no API usage. The endpoint tests cover student denial, teacher/admin access, unavailable configuration, and ensuring extraction does not write to the database.
+Run `npm test`, `npm run typecheck:server`, and `npm run build`. Tests use generated PDFs and a mocked OpenAI provider; they incur no API usage. Import tests cover student denial, teacher/admin access, unavailable configuration, and ensuring extraction does not create tests. Job tests cover PostgreSQL persistence, slow extraction, status polling, owner isolation, duplicate dispatch prevention, worker authentication, failure handling, source cleanup and expiry.
 
 Official documentation: [PDF inputs](https://developers.openai.com/api/docs/guides/file-inputs), [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).

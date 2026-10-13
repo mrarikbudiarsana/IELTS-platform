@@ -40,13 +40,61 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return data as T;
 }
 
+type ImportSkill = TextImportSkill | 'reading';
+const pendingImportKey = (skill: ImportSkill) => {
+  let userId = 'signed-out';
+  try { userId = JSON.parse(atob(getStoredToken()!.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).id || userId; } catch { /* No current session. */ }
+  return `ielts_import_${userId}_${skill}`;
+};
+async function waitForImport<T>(jobId: string, storageKey: string): Promise<T> {
+  const deadline = Date.now() + 12 * 60 * 1000;
+  while (Date.now() < deadline) {
+    let response: Response;
+    try {
+      const token = getStoredToken();
+      response = await fetch(`${API_BASE}/imports/${encodeURIComponent(jobId)}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      continue;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (response.status >= 500 || response.status === 429) {
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      continue;
+    }
+    if (!response.ok || data.status === 'failed') {
+      if (localStorage.getItem(storageKey) === jobId) localStorage.removeItem(storageKey);
+      throw new Error(data.error || 'Import failed. Please retry.');
+    }
+    if (data.status === 'completed') {
+      if (localStorage.getItem(storageKey) === jobId) localStorage.removeItem(storageKey);
+      return data.result as T;
+    }
+    await new Promise(resolve => setTimeout(resolve, 2500));
+  }
+  throw new Error('Extraction is taking longer than expected. Reopen this editor to check the running import.');
+}
+function resumeImport<T>(skill: ImportSkill): Promise<T> | null {
+  const key = pendingImportKey(skill);
+  const jobId = localStorage.getItem(key);
+  return jobId ? waitForImport<T>(jobId, key) : null;
+}
+async function importSource<T>(skill: ImportSkill, source: 'text' | 'pdf', body: object): Promise<T> {
+  const key = pendingImportKey(skill);
+  const { jobId } = await request<{ jobId: string }>(`/imports/${skill}/${source}`, {
+    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(30_000),
+  });
+  localStorage.setItem(key, jobId);
+  return waitForImport<T>(jobId, key);
+}
+
 export const api = {
-  importEditorPdf: <K extends TextImportSkill>(skill: K, body: { pdfBase64: string; focus: string }) => request<TextImportResults[K]>(`/${skill}/import-pdf`, {
-    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
-  }),
-  importEditorText: <K extends TextImportSkill>(skill: K, body: { text: string; focus: string }) => request<TextImportResults[K]>(`/${skill}/import-text`, {
-    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
-  }),
+  resumeEditorImport: <K extends TextImportSkill>(skill: K) => resumeImport<TextImportResults[K]>(skill),
+  resumeReadingImport: () => resumeImport<ReadingPdfImportResult>('reading'),
+  importEditorPdf: <K extends TextImportSkill>(skill: K, body: { pdfBase64: string; focus: string }) => importSource<TextImportResults[K]>(skill, 'pdf', body),
+  importEditorText: <K extends TextImportSkill>(skill: K, body: { text: string; focus: string }) => importSource<TextImportResults[K]>(skill, 'text', body),
   // Auth
   register: (body: any) => request<{ user: any; token: string }>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: any) => request<{ user: any; token: string }>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
@@ -57,12 +105,8 @@ export const api = {
   elevate: (body: { secretKey?: string; targetRole: string }) => request<{ message: string; user: any; token: string }>('/auth/elevate', { method: 'POST', body: JSON.stringify(body) }),
 
   // Reading Tests
-  importReadingText: (body: { text: string; focus: string }) => request<ReadingPdfImportResult>('/reading/import-text', {
-    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
-  }),
-  importReadingPdf: (body: { pdfBase64: string; focus: string }) => request<ReadingPdfImportResult>('/reading/import-pdf', {
-    method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(100_000),
-  }),
+  importReadingText: (body: { text: string; focus: string }) => importSource<ReadingPdfImportResult>('reading', 'text', body),
+  importReadingPdf: (body: { pdfBase64: string; focus: string }) => importSource<ReadingPdfImportResult>('reading', 'pdf', body),
   getTests: (params?: { testType?: string; category?: string }) => {
     const q = new URLSearchParams(params as any).toString();
     return request<{ tests: any[] }>(`/reading/tests${q ? `?${q}` : ''}`);
