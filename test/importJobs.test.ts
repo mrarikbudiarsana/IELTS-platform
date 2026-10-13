@@ -39,11 +39,7 @@ test('imports queue quickly, survive slow extraction, isolate owners and execute
     globalThis.fetch = async (url, options) => {
       if (String(url).includes('import-questions-background')) {
         dispatchCalls++;
-        const payload = JSON.parse(options!.body as string);
-        assert.deepEqual(Object.keys(payload), ['jobId']);
-        const claims = jwt.verify((options!.headers as any).Authorization.slice(7), JWT_SECRET, { audience: 'import-worker' }) as jwt.JwtPayload;
-        assert.equal(claims.jobId, payload.jobId);
-        return new Response('', { status: 202 });
+        return new Response('<title>Login Redirect</title>', { status: 401 });
       }
       providerCalls++;
       assert.ok(JSON.parse(options!.body as string).text.format.schema.properties.parts);
@@ -52,11 +48,15 @@ test('imports queue quickly, survive slow extraction, isolate owners and execute
     };
     const body = { text: 'Listening questions', focus: '' };
     const job = await startImportJob('teacher1', 'listening', 'text', body);
-    assert.equal(dispatchCalls, 1);
+    assert.equal(dispatchCalls, 0, 'server must not invoke a login-protected worker URL');
     assert.equal(providerCalls, 0, 'enqueue must return without waiting for AI');
-    assert.equal((await getImportJob('teacher1', job.jobId)).status, 'queued');
+    const queued = await getImportJob('teacher1', job.jobId);
+    assert.equal(queued.status, 'queued');
+    assert.equal(queued.dispatch?.path, '/.netlify/functions/import-questions-background');
+    const grant = jwt.verify(queued.dispatch!.token, JWT_SECRET, { audience: 'import-worker' }) as jwt.JwtPayload;
+    assert.equal(grant.jobId, job.jobId);
     assert.deepEqual(await startImportJob('teacher1', 'listening', 'text', body), job);
-    assert.equal(dispatchCalls, 1, 'repeated enqueue must not dispatch twice');
+    assert.equal(dispatchCalls, 0, 'repeated enqueue must not self-fetch the protected site');
     await assert.rejects(startImportJob('teacher1', 'writing', 'text', body), (error: any) => error.status === 429);
     await assert.rejects(getImportJob('teacher2', job.jobId), (error: any) => error.status === 404);
     const running = processImportJob(job.jobId);
@@ -68,6 +68,7 @@ test('imports queue quickly, survive slow extraction, isolate owners and execute
     release(); await running;
     const result = await getImportJob('teacher1', job.jobId);
     assert.equal(result.status, 'completed');
+    assert.equal(result.dispatch, undefined);
     assert.equal(result.result.title, 'Listening import');
     assert.equal(providerCalls, 1);
     await processImportJob(job.jobId); assert.equal(providerCalls, 1);
@@ -96,8 +97,8 @@ test('imports queue quickly, survive slow extraction, isolate owners and execute
     assert.equal(polled.status, 200); assert.equal((await polled.json()).status, 'queued');
 
     globalThis.fetch = async () => new Response('', { status: 500 });
-    const failed = await startImportJob('failed-dispatch', 'listening', 'text', body);
-    assert.equal((await getImportJob('failed-dispatch', failed.jobId)).status, 'failed');
+    const pending = await startImportJob('failed-dispatch', 'listening', 'text', body);
+    assert.equal((await getImportJob('failed-dispatch', pending.jobId)).status, 'queued');
     await processImportJob(acceptedJob.jobId);
     assert.equal((await getImportJob('teacher', acceptedJob.jobId)).status, 'failed');
     await pg.query('UPDATE question_import_jobs SET expires_at = $1 WHERE id = $2', ['2000-01-01T00:00:00.000Z', job.jobId]);

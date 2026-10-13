@@ -48,6 +48,7 @@ const pendingImportKey = (skill: ImportSkill) => {
 };
 async function waitForImport<T>(jobId: string, storageKey: string): Promise<T> {
   const deadline = Date.now() + 12 * 60 * 1000;
+  let dispatched = false;
   while (Date.now() < deadline) {
     let response: Response;
     try {
@@ -71,6 +72,23 @@ async function waitForImport<T>(jobId: string, storageKey: string): Promise<T> {
     if (data.status === 'completed') {
       if (localStorage.getItem(storageKey) === jobId) localStorage.removeItem(storageKey);
       return data.result as T;
+    }
+    if (data.status === 'queued' && data.dispatch && !dispatched) {
+      // Use the user's existing protected-site session; keep the job grant in memory only.
+      if (data.dispatch.path !== '/.netlify/functions/import-questions-background' || typeof data.dispatch.token !== 'string') {
+        throw new Error('Invalid extraction worker configuration.');
+      }
+      try {
+        const started = await fetch(data.dispatch.path, {
+          method: 'POST', credentials: 'same-origin', redirect: 'error',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.dispatch.token}` },
+          body: JSON.stringify({ jobId }), signal: AbortSignal.timeout(15_000),
+        });
+        if (!started.ok) throw new Error(`Extraction worker returned HTTP ${started.status}. Refresh this page to restore your site session and retry.`);
+        dispatched = true;
+      } catch (error) {
+        throw new Error(error instanceof Error ? error.message : 'Could not start extraction. Reopen this editor to retry.');
+      }
     }
     await new Promise(resolve => setTimeout(resolve, 2500));
   }

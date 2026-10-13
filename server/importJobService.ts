@@ -59,23 +59,7 @@ export async function startImportJob(userId: string, skill: string, source: stri
     if (current?.fingerprint === fingerprint) return { jobId: current.id };
     throw new PdfImportError('A test import is already running for your account. Please wait.', 429);
   }
-  if (process.env.NETLIFY) {
-    try {
-      const origin = process.env.DEPLOY_PRIME_URL || process.env.URL;
-      if (!origin) throw new Error('Missing deployment URL');
-      const token = jwt.sign({ jobId: id }, JWT_SECRET, { algorithm: 'HS256', audience: 'import-worker', expiresIn: '15m' });
-      const response = await fetch(new URL('/.netlify/functions/import-questions-background', origin), {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        // Never send the PDF in the background invocation (256 KB payload limit).
-        body: JSON.stringify({ jobId: id }), signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) throw new Error('Dispatch failed');
-    } catch {
-      // A timed-out dispatch may already have reached the worker. Do not cancel a claimed job.
-      await db.prepare(`UPDATE question_import_jobs SET status = 'failed', active_key = NULL, input_json = NULL,
-        error = ? WHERE id = ? AND status = 'queued'`).run('Could not start extraction. Please retry.', id);
-    }
-  } else {
+  if (!process.env.NETLIFY) {
     setImmediate(() => { processImportJob(id).catch(error => console.error('Import worker failed:', error.name)); });
   }
   return { jobId: id };
@@ -90,6 +74,12 @@ export async function getImportJob(userId: string, id: string) {
     throw new PdfImportError('Import expired. Extract the source again.', 410);
   }
   return { status: job.status, ...(job.status === 'completed' ? { result: JSON.parse(job.result_json) } : {}),
+    // The authorized browser invokes the same-origin worker with its existing Netlify session.
+    // A server self-fetch cannot pass through protected-site login. Grant only this job.
+    ...(job.status === 'queued' && process.env.NETLIFY ? { dispatch: {
+      path: '/.netlify/functions/import-questions-background',
+      token: jwt.sign({ jobId: id }, JWT_SECRET, { algorithm: 'HS256', audience: 'import-worker', expiresIn: '15m' }),
+    } } : {}),
     ...(job.status === 'failed' ? { error: job.error } : {}) };
 }
 

@@ -41,7 +41,9 @@ Only the selected pages are sent to OpenAI. The server uses `store: false` and r
 
 ## Background extraction and 504 errors
 
-The editors enqueue extraction through `POST /api/imports/:skill/:source` and poll `GET /api/imports/:id`. On Netlify, `import-questions-background` receives only a signed job ID and runs separately from the API request. This avoids the 60-second synchronous function timeout and the 256 KB background invocation payload limit. Local development runs the same job processor in the server process.
+The editors enqueue extraction through `POST /api/imports/:skill/:source` and poll `GET /api/imports/:id`. For queued Netlify jobs, the owner receives a short-lived grant restricted to that job. The browser invokes `import-questions-background` on the same origin with its existing Netlify site session, sending only the job ID. The grant stays in memory and is never stored with the source or in browser storage. This works with protected sites, where a server self-fetch would instead receive Netlify's login page. The worker validates the grant and atomically claims the job before any AI call.
+
+The worker runs separately from the API request, avoiding the 60-second synchronous function timeout and the 256 KB background invocation payload limit. Local development runs the same job processor in the server process. If browser dispatch fails, the queued job remains recoverable by reopening the editor; the error identifies the worker's HTTP status.
 
 AI extraction has a nine-minute limit; jobs expire after twelve minutes. The editor checks progress automatically and resumes a pending job after refresh for the same signed-in account. A brief failed status request is retried without repeating the AI extraction. Imports are restricted to teacher/admin accounts, job results are restricted to their owner, and the database permits one active import per account across API instances.
 

@@ -57,3 +57,36 @@ test('refresh resumes the persisted job; terminal errors release the saved job i
   await assert.rejects(failed.api.resumeEditorImport('listening'), /Source was unreadable/);
   assert.equal(failed.storage.has(pendingKey), false);
 });
+
+test('protected sites dispatch from the browser with its site session and a job-specific grant', async () => {
+  let dispatches = 0;
+  let polls = 0;
+  const state = client(async (url, options) => {
+    if (String(url) === '/.netlify/functions/import-questions-background') {
+      dispatches++;
+      assert.equal(options?.method, 'POST');
+      assert.equal(options?.credentials, 'same-origin');
+      assert.equal(options?.redirect, 'error');
+      assert.equal((options?.headers as any).Authorization, 'Bearer job-only-grant');
+      assert.deepEqual(JSON.parse(options!.body as string), { jobId: 'protected-job' });
+      assert.ok(![...state.storage.values()].includes('job-only-grant'), 'worker grant must not be persisted');
+      return new Response('', { status: 202 });
+    }
+    assert.equal(String(url), '/api/imports/protected-job');
+    polls++;
+    return new Response(JSON.stringify(polls < 3 ? { status: 'queued', dispatch: {
+      path: '/.netlify/functions/import-questions-background', token: 'job-only-grant',
+    } } : { status: 'completed', result: { title: 'Protected-site import' } }));
+  }, [['ielts_auth_token', token], [pendingKey, 'protected-job']]);
+  assert.equal((await state.api.resumeEditorImport('listening')).title, 'Protected-site import');
+  assert.equal(dispatches, 1, 'polling queued jobs must not repeatedly invoke the worker');
+});
+
+test('failed browser dispatch preserves the job for recovery and reports the HTTP status', async () => {
+  const state = client(async url => String(url).includes('import-questions-background')
+    ? new Response('Login Redirect', { status: 401 })
+    : new Response(JSON.stringify({ status: 'queued', dispatch: { path: '/.netlify/functions/import-questions-background', token: 'grant' } })),
+    [['ielts_auth_token', token], [pendingKey, 'blocked-job']]);
+  await assert.rejects(state.api.resumeEditorImport('listening'), /HTTP 401/);
+  assert.equal(state.storage.get(pendingKey), 'blocked-job');
+});
