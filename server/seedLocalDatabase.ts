@@ -12,6 +12,11 @@ import { ingestCambridge21ListeningTest2 } from './ingestCambridge21ListeningTes
 import { ingestCambridge21ListeningTest3 } from './ingestCambridge21ListeningTest3';
 import { ingestCambridge21ListeningTest4 } from './ingestCambridge21ListeningTest4';
 import { ingestCambridge19ListeningTest1 } from './ingestCambridge19ListeningTest1';
+import { ingestCambridge19ListeningTest2 } from './ingestCambridge19ListeningTest2';
+import { ingestCambridge19ListeningTest3 } from './ingestCambridge19ListeningTest3';
+import { ingestCambridge19ReadingTest1 } from './ingestCambridge19ReadingTest1';
+import { ingestCambridge19ReadingTest2 } from './ingestCambridge19ReadingTest2';
+import { ingestCambridge19ReadingTest3 } from './ingestCambridge19ReadingTest3';
 
 export async function seedLocalDatabase() {
   await seedDatabase();
@@ -32,4 +37,9 @@ export async function seedLocalDatabase() {
   await ingestCambridge21ListeningTest3();
   await ingestCambridge21ListeningTest4();
   await ingestCambridge19ListeningTest1();
+  await ingestCambridge19ListeningTest2();
+  await ingestCambridge19ListeningTest3();
+  await ingestCambridge19ReadingTest1();
+  await ingestCambridge19ReadingTest2();
+  await ingestCambridge19ReadingTest3();
 }

@@ -55,6 +55,7 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
 }) => {
   // Drag and drop state for matching questions
   const [draggedOptionKey, setDraggedOptionKey] = useState<string | null>(null);
+  const [draggedFromQuestionNumber, setDraggedFromQuestionNumber] = useState<number | null>(null);
 
   // Helper to render text with inline input gaps matching official IELTS (Image 1, Image 5)
   const renderTextWithGaps = (text: string) => {
@@ -152,6 +153,20 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
   if (group.formData) {
     group.formData.fields.forEach((field) => {
       if (field.questionNumber) inlineQuestionNumbers.add(field.questionNumber);
+      if (field.defaultValue) {
+        const matches = field.defaultValue.match(/\[{1,2}(?:Q)?(\d+)\]{1,2}/g);
+        matches?.forEach((m) => {
+          const num = parseInt(m.replace(/\D/g, ''), 10);
+          if (!isNaN(num)) inlineQuestionNumbers.add(num);
+        });
+      }
+      if (field.label) {
+        const matches = field.label.match(/\[{1,2}(?:Q)?(\d+)\]{1,2}/g);
+        matches?.forEach((m) => {
+          const num = parseInt(m.replace(/\D/g, ''), 10);
+          if (!isNaN(num)) inlineQuestionNumbers.add(num);
+        });
+      }
     });
   }
 
@@ -279,38 +294,48 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
 
       {/* 3. FORM COMPLETION (Clean form table matching official IELTS) */}
       {group.questionType === 'form_completion' && group.formData && (
-        <div className="mb-8 border border-slate-300 rounded-[2px] p-5 sm:p-6 bg-white max-w-2xl">
+        <div className="mb-8 border border-slate-300 rounded-[2px] p-5 sm:p-7 bg-white max-w-2xl shadow-2xs">
           {group.formData.formTitle && (
-            <h4 className="font-bold text-sm sm:text-base text-slate-900 border-b border-slate-200 pb-2.5 mb-4">
+            <h4 className="font-bold text-base sm:text-lg text-slate-900 border-b border-slate-200 pb-3 mb-5 tracking-tight">
               {group.formData.formTitle}
             </h4>
           )}
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             {group.formData.fields.map((field, fIdx) => {
               const q = field.questionNumber
                 ? group.questions.find((x) => x.questionNumber === field.questionNumber)
                 : undefined;
               const isActive = field.questionNumber ? activeQuestionNumber === field.questionNumber : false;
+              const hasGapInDefault = field.defaultValue && /\[{1,2}(?:Q)?\d+\]{1,2}/.test(field.defaultValue);
+              const hasGapInLabel = field.label && /\[{1,2}(?:Q)?\d+\]{1,2}/.test(field.label);
 
               return (
                 <div
                   key={fIdx}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm text-slate-800"
+                  className="flex flex-col sm:flex-row sm:items-baseline gap-1.5 sm:gap-4 text-sm text-slate-800 py-0.5"
                 >
-                  <span className="font-semibold text-slate-900 sm:w-1/2">{field.label}</span>
-                  {field.isGap && field.questionNumber && q ? (
-                    <div className="sm:w-1/2 flex items-center">
-                      <InlineGapInput
-                        qNum={field.questionNumber}
-                        question={q}
-                        currentVal={(answers[field.questionNumber]?.userAnswer as string) || ''}
-                        isActive={isActive}
-                        onAnswerChange={(qn, qId, val) => onAnswerChange(qn, qId, val)}
-                      />
-                    </div>
-                  ) : (
-                    <span className="text-slate-700 sm:w-1/2">{field.defaultValue}</span>
-                  )}
+                  <div className="w-full sm:w-44 shrink-0 font-semibold text-slate-900 select-none">
+                    {hasGapInLabel ? renderTextWithGaps(field.label) : field.label || ''}
+                  </div>
+                  <div className="flex-1 flex items-baseline flex-wrap gap-1 text-slate-800">
+                    {hasGapInDefault ? (
+                      renderTextWithGaps(field.defaultValue!)
+                    ) : field.isGap && field.questionNumber && q ? (
+                      <div className="inline-flex items-baseline gap-1 flex-wrap">
+                        {field.defaultValue && <span className="text-slate-800">{field.defaultValue}</span>}
+                        <InlineGapInput
+                          qNum={field.questionNumber}
+                          question={q}
+                          currentVal={(answers[field.questionNumber]?.userAnswer as string) || ''}
+                          isActive={isActive}
+                          onAnswerChange={(qn, qId, val) => onAnswerChange(qn, qId, val)}
+                        />
+                        {field.placeholder && <span className="text-slate-800">{field.placeholder}</span>}
+                      </div>
+                    ) : (
+                      <span className="text-slate-700">{field.defaultValue || ''}</span>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -346,23 +371,59 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
 
                   {/* Drop Zone Box matching Image 3 */}
                   <div
+                    draggable={!!currentVal}
+                    onDragStart={(e) => {
+                      if (currentVal) {
+                        e.dataTransfer.setData('text/plain', currentVal);
+                        setDraggedOptionKey(currentVal);
+                        setDraggedFromQuestionNumber(q.questionNumber);
+                      }
+                    }}
+                    onDragEnd={() => {
+                      setDraggedOptionKey(null);
+                      setDraggedFromQuestionNumber(null);
+                    }}
                     onDragOver={(e) => {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = 'copy';
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      const droppedKey =
-                        e.dataTransfer.getData('text/plain') || draggedOptionKey;
+                      const droppedKey = (
+                        e.dataTransfer.getData('text/plain') || draggedOptionKey || ''
+                      ).trim().toUpperCase();
+
                       if (droppedKey) {
-                        onAnswerChange(q.questionNumber, q.id, droppedKey.trim().toUpperCase());
+                        if (!group.optionReuseAllowed) {
+                          const prevQ = group.questions.find(
+                            (x) =>
+                              x.questionNumber !== q.questionNumber &&
+                              (answers[x.questionNumber]?.userAnswer as string)?.trim().toUpperCase() === droppedKey
+                          );
+                          if (prevQ) {
+                            onAnswerChange(prevQ.questionNumber, prevQ.id, '');
+                          }
+                        }
+                        onAnswerChange(q.questionNumber, q.id, droppedKey);
                       }
                       setDraggedOptionKey(null);
+                      setDraggedFromQuestionNumber(null);
                     }}
                     onClick={() => {
                       // Click-to-assign: if user clicked an option, assign it; otherwise focus question
                       if (draggedOptionKey) {
-                        onAnswerChange(q.questionNumber, q.id, draggedOptionKey.toUpperCase());
+                        const targetKey = draggedOptionKey.toUpperCase();
+                        if (!group.optionReuseAllowed) {
+                          const prevQ = group.questions.find(
+                            (x) =>
+                              x.questionNumber !== q.questionNumber &&
+                              (answers[x.questionNumber]?.userAnswer as string)?.trim().toUpperCase() === targetKey
+                          );
+                          if (prevQ) {
+                            onAnswerChange(prevQ.questionNumber, prevQ.id, '');
+                          }
+                        }
+                        onAnswerChange(q.questionNumber, q.id, targetKey);
                         setDraggedOptionKey(null);
                       }
                     }}
@@ -409,9 +470,47 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
           </div>
 
           {/* Right Column: Option Cards Container matching Image 3 (5 cols) */}
-          <div className="lg:col-span-5 border border-slate-300 rounded-[2px] p-4 bg-white shadow-2xs space-y-2.5">
+          <div
+            onDragOver={(e) => {
+              if (draggedFromQuestionNumber) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }
+            }}
+            onDrop={(e) => {
+              if (draggedFromQuestionNumber) {
+                e.preventDefault();
+                const targetQ = group.questions.find(
+                  (x) => x.questionNumber === draggedFromQuestionNumber
+                );
+                if (targetQ) onAnswerChange(draggedFromQuestionNumber, targetQ.id, '');
+                setDraggedFromQuestionNumber(null);
+                setDraggedOptionKey(null);
+              }
+            }}
+            className="lg:col-span-5 border border-slate-300 rounded-[2px] p-4 bg-white shadow-2xs space-y-2.5"
+          >
             {group.optionsList.map((opt) => {
               const isSelectedForDrop = draggedOptionKey === opt.key;
+              const isUsed =
+                !group.optionReuseAllowed &&
+                group.questions.some(
+                  (q) =>
+                    (answers[q.questionNumber]?.userAnswer as string)?.trim().toUpperCase() ===
+                    opt.key.toUpperCase()
+                );
+
+              if (isUsed) {
+                return (
+                  <div
+                    key={opt.key}
+                    className="border border-dashed border-slate-200 bg-slate-50/40 rounded-[2px] p-3 text-sm min-h-[46px] flex items-center select-none"
+                    aria-label={`Option ${opt.key} is in use`}
+                  >
+                    <span className="font-bold text-slate-300 min-w-4 text-sm">{opt.key}</span>
+                  </div>
+                );
+              }
 
               return (
                 <div
@@ -431,7 +530,18 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                       const targetQ = group.questions.find(
                         (x) => x.questionNumber === activeQuestionNumber
                       );
-                      if (targetQ) onAnswerChange(activeQuestionNumber, targetQ.id, opt.key);
+                      if (targetQ) {
+                        if (!group.optionReuseAllowed) {
+                          const prevQ = group.questions.find(
+                            (x) =>
+                              x.questionNumber !== targetQ.questionNumber &&
+                              (answers[x.questionNumber]?.userAnswer as string)?.trim().toUpperCase() ===
+                                opt.key.toUpperCase()
+                          );
+                          if (prevQ) onAnswerChange(prevQ.questionNumber, prevQ.id, '');
+                        }
+                        onAnswerChange(activeQuestionNumber, targetQ.id, opt.key);
+                      }
                     } else {
                       // Toggle active option key for click-to-drop
                       setDraggedOptionKey(isSelectedForDrop ? null : opt.key);
@@ -564,6 +674,20 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
       {/* 8. FLOW CHART COMPLETION */}
       {group.questionType === 'flow_chart_completion' && group.flowChartSteps && (
         <div className="mb-8 space-y-0 max-w-xl">
+          {group.optionsList && (
+            <div className="border border-slate-300 rounded-[2px] p-3 mb-5 bg-white shadow-2xs">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                Options:
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {group.optionsList.map((opt) => (
+                  <div key={opt.key} className="bg-slate-50 px-2.5 py-1 rounded-[2px] border border-slate-200 text-xs font-bold text-slate-900">
+                    {opt.key}: <span className="font-normal text-slate-700">{opt.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {group.flowChartSteps.map((step, sIdx) => {
             const isStepActive = step.questionNumbers?.includes(activeQuestionNumber);
 
