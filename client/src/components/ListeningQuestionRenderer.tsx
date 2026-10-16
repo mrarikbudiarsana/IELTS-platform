@@ -344,7 +344,12 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
       )}
 
       {/* 4. MATCHING WITH DRAG & DROP AND OPTION CARDS (Image 3) */}
-      {group.questionType === 'matching' && group.optionsList && (
+      {group.questionType === 'matching' && group.optionsList && (() => {
+        const isOptionReuseAllowed =
+          Boolean(group.optionReuseAllowed) ||
+          Boolean(group.optionsList && group.questions && group.optionsList.length < group.questions.length);
+
+        return (
         <div className="mb-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Questions with Drop Zones (7 cols) */}
           <div className="lg:col-span-7 space-y-4">
@@ -354,6 +359,7 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                 (opt) => opt.key.toUpperCase() === currentVal.toUpperCase()
               );
               const isActive = activeQuestionNumber === q.questionNumber;
+              const cleanPrompt = q.prompt.replace(/^\d+\.\s*/, '');
 
               return (
                 <div
@@ -363,10 +369,10 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                     isActive ? 'bg-slate-50/70 -mx-2 px-2 rounded-[2px]' : ''
                   }`}
                 >
-                  {/* Prompt with bullet */}
+                  {/* Prompt with question number */}
                   <div className="flex items-start gap-2.5 text-sm text-slate-900 flex-1">
-                    <span className="text-slate-400 font-bold leading-relaxed">•</span>
-                    <span className="leading-relaxed font-normal">{q.prompt}</span>
+                    <span className="font-bold text-sm text-slate-900 min-w-5">{q.questionNumber}</span>
+                    <span className="leading-relaxed font-normal">{cleanPrompt}</span>
                   </div>
 
                   {/* Drop Zone Box matching Image 3 */}
@@ -394,7 +400,7 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                       ).trim().toUpperCase();
 
                       if (droppedKey) {
-                        if (!group.optionReuseAllowed) {
+                        if (!isOptionReuseAllowed) {
                           const prevQ = group.questions.find(
                             (x) =>
                               x.questionNumber !== q.questionNumber &&
@@ -413,7 +419,7 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                       // Click-to-assign: if user clicked an option, assign it; otherwise focus question
                       if (draggedOptionKey) {
                         const targetKey = draggedOptionKey.toUpperCase();
-                        if (!group.optionReuseAllowed) {
+                        if (!isOptionReuseAllowed) {
                           const prevQ = group.questions.find(
                             (x) =>
                               x.questionNumber !== q.questionNumber &&
@@ -493,7 +499,7 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
             {group.optionsList.map((opt) => {
               const isSelectedForDrop = draggedOptionKey === opt.key;
               const isUsed =
-                !group.optionReuseAllowed &&
+                !isOptionReuseAllowed &&
                 group.questions.some(
                   (q) =>
                     (answers[q.questionNumber]?.userAnswer as string)?.trim().toUpperCase() ===
@@ -531,7 +537,7 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                         (x) => x.questionNumber === activeQuestionNumber
                       );
                       if (targetQ) {
-                        if (!group.optionReuseAllowed) {
+                        if (!isOptionReuseAllowed) {
                           const prevQ = group.questions.find(
                             (x) =>
                               x.questionNumber !== targetQ.questionNumber &&
@@ -561,7 +567,8 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* 5. MULTIPLE CHOICE MULTI-SELECT (Choose TWO letters, Image 4) */}
       {isMultiSelect && (() => {
@@ -787,12 +794,14 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                     {q.questionNumber}
                   </span>
                   <div className="text-sm sm:text-base text-slate-900 font-normal leading-relaxed">
-                    {renderTextWithGaps(q.prompt)}
+                    {renderTextWithGaps(q.prompt.replace(new RegExp(`^${q.questionNumber}\\.\\s*`), ''))}
                   </div>
                 </div>
 
                 {/* Multiple Choice Single (Image 2) */}
-                {group.questionType === 'listening_multiple_choice_single' && q.options && (
+                {(group.questionType === 'listening_multiple_choice_single' ||
+                  group.questionType === 'multiple_choice_single' ||
+                  (group.questionType as string) === 'multiple_choice') && q.options && (
                   <div className="space-y-1.5 pl-8 pt-1">
                     {q.options.map((opt) => (
                       <label

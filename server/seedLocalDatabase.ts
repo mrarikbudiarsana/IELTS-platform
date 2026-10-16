@@ -14,9 +14,19 @@ import { ingestCambridge21ListeningTest4 } from './ingestCambridge21ListeningTes
 import { ingestCambridge19ListeningTest1 } from './ingestCambridge19ListeningTest1';
 import { ingestCambridge19ListeningTest2 } from './ingestCambridge19ListeningTest2';
 import { ingestCambridge19ListeningTest3 } from './ingestCambridge19ListeningTest3';
+import { ingestCambridge19ListeningTest4 } from './ingestCambridge19ListeningTest4';
 import { ingestCambridge19ReadingTest1 } from './ingestCambridge19ReadingTest1';
 import { ingestCambridge19ReadingTest2 } from './ingestCambridge19ReadingTest2';
 import { ingestCambridge19ReadingTest3 } from './ingestCambridge19ReadingTest3';
+import { ingestCambridge19ReadingTest4 } from './ingestCambridge19ReadingTest4';
+import { ingestCambridge18ListeningTest1 } from './ingestCambridge18ListeningTest1';
+import { ingestCambridge18ListeningTest2 } from './ingestCambridge18ListeningTest2';
+import { ingestCambridge18ListeningTest3 } from './ingestCambridge18ListeningTest3';
+import { ingestCambridge18ListeningTest4 } from './ingestCambridge18ListeningTest4';
+import { ingestCambridge18ReadingTest1 } from './ingestCambridge18ReadingTest1';
+import { ingestCambridge18ReadingTest2 } from './ingestCambridge18ReadingTest2';
+import { ingestCambridge18ReadingTest3 } from './ingestCambridge18ReadingTest3';
+import { ingestCambridge18ReadingTest4 } from './ingestCambridge18ReadingTest4';
 
 export async function seedLocalDatabase() {
   await seedDatabase();
@@ -39,7 +49,17 @@ export async function seedLocalDatabase() {
   await ingestCambridge19ListeningTest1();
   await ingestCambridge19ListeningTest2();
   await ingestCambridge19ListeningTest3();
+  await ingestCambridge19ListeningTest4();
   await ingestCambridge19ReadingTest1();
   await ingestCambridge19ReadingTest2();
   await ingestCambridge19ReadingTest3();
+  await ingestCambridge19ReadingTest4();
+  await ingestCambridge18ListeningTest1();
+  await ingestCambridge18ListeningTest2();
+  await ingestCambridge18ListeningTest3();
+  await ingestCambridge18ListeningTest4();
+  await ingestCambridge18ReadingTest1();
+  await ingestCambridge18ReadingTest2();
+  await ingestCambridge18ReadingTest3();
+  await ingestCambridge18ReadingTest4();
 }

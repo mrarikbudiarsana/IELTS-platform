@@ -146,7 +146,9 @@ export function countWords(text: string): number {
   if (!text) return 0;
   const cleaned = text.trim();
   if (!cleaned) return 0;
-  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  // In IELTS, UK postcodes (e.g. "DW30 7YZ", "SW1A 1AA") count as a single word/code unit.
+  const normalizedPostcodes = cleaned.replace(/\b([A-Za-z]{1,2}\d[A-Za-z\d]?)\s+(\d[A-Za-z]{2})\b/g, '$1_$2');
+  const tokens = normalizedPostcodes.split(/\s+/).filter(Boolean);
   // Filter out pure numbers or ordinal numbers like "13", "13th" so "13 January" is 1 number and 1 word
   const wordsOnly = tokens.filter((token) => !/^\d+(?:st|nd|rd|th)?$/i.test(token));
   return wordsOnly.length;

@@ -17,7 +17,14 @@ export function useTestPool(testPool: Pool) {
   pool = testPool;
 }
 function getPool() {
-  const ca = process.env.DATABASE_SSL_CA || (process.env.DATABASE_SSL_CA_FILE ? fs.readFileSync(process.env.DATABASE_SSL_CA_FILE, 'utf8') : undefined);
+  let ca = process.env.DATABASE_SSL_CA;
+  if (!ca && process.env.DATABASE_SSL_CA_FILE) {
+    try {
+      ca = fs.readFileSync(process.env.DATABASE_SSL_CA_FILE, 'utf8');
+    } catch {
+      // Ignore read errors if file is inaccessible; postgresConnectionOptions will fall back to bundled supabaseRootCertificate
+    }
+  }
   const connection = postgresConnectionOptions(process.env.DATABASE_URL!, ca);
   return pool ||= new Pool({
     ...connection,

@@ -43,3 +43,5 @@ screenshots/
 =
 *.pdf
 *.txt
+public/audio/listening/*.wav
+client/public/audio/listening/*.wav
