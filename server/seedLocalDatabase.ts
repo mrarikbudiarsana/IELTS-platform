@@ -27,6 +27,14 @@ import { ingestCambridge18ReadingTest1 } from './ingestCambridge18ReadingTest1';
 import { ingestCambridge18ReadingTest2 } from './ingestCambridge18ReadingTest2';
 import { ingestCambridge18ReadingTest3 } from './ingestCambridge18ReadingTest3';
 import { ingestCambridge18ReadingTest4 } from './ingestCambridge18ReadingTest4';
+import { ingestCambridge17ListeningTest1 } from './ingestCambridge17ListeningTest1';
+import { ingestCambridge17ListeningTest2 } from './ingestCambridge17ListeningTest2';
+import { ingestCambridge17ListeningTest3 } from './ingestCambridge17ListeningTest3';
+import { ingestCambridge17ListeningTest4 } from './ingestCambridge17ListeningTest4';
+import { ingestCambridge17ReadingTest1 } from './ingestCambridge17ReadingTest1';
+import { ingestCambridge17ReadingTest2 } from './ingestCambridge17ReadingTest2';
+import { ingestCambridge17ReadingTest3 } from './ingestCambridge17ReadingTest3';
+import { ingestCambridge17ReadingTest4 } from './ingestCambridge17ReadingTest4';
 
 export async function seedLocalDatabase() {
   await seedDatabase();
@@ -62,4 +70,12 @@ export async function seedLocalDatabase() {
   await ingestCambridge18ReadingTest2();
   await ingestCambridge18ReadingTest3();
   await ingestCambridge18ReadingTest4();
+  await ingestCambridge17ListeningTest1();
+  await ingestCambridge17ListeningTest2();
+  await ingestCambridge17ListeningTest3();
+  await ingestCambridge17ListeningTest4();
+  await ingestCambridge17ReadingTest1();
+  await ingestCambridge17ReadingTest2();
+  await ingestCambridge17ReadingTest3();
+  await ingestCambridge17ReadingTest4();
 }
