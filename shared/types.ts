@@ -66,6 +66,7 @@ export interface ReadingPassage {
   passageNumber: number; // 1, 2, 3
   title: string;
   subtitle?: string;
+  imageUrl?: string;
   introduction?: string;
   paragraphs: ParagraphBlock[];
   shortTexts?: ShortTextItem[];

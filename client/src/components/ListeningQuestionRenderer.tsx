@@ -659,22 +659,6 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
               />
             </div>
           </div>
-
-          {/* Letter options list */}
-          {group.optionsList && (
-            <div className="border border-slate-300 rounded-[2px] p-3 mb-5 bg-white">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                Available Locations:
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {group.optionsList.map((opt) => (
-                  <div key={opt.key} className="bg-slate-50 px-2.5 py-1 rounded-[2px] border border-slate-200 text-xs font-bold text-slate-900">
-                    {opt.key}: <span className="font-normal text-slate-700">{opt.text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -708,7 +692,7 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                   {step.title && (
                     <div className="font-bold text-sm text-slate-900 mb-1.5">{step.title}</div>
                   )}
-                  <div className="text-sm text-slate-800 leading-relaxed">
+                  <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-line">
                     {renderTextWithGaps(step.descriptionWithGaps)}
                   </div>
                 </div>
@@ -770,10 +754,10 @@ export const ListeningQuestionRenderer: React.FC<ListeningQuestionRendererProps>
                       onChange={(e) => onAnswerChange(q.questionNumber, q.id, e.target.value)}
                       className="px-3 py-1.5 border border-slate-300 rounded-[2px] text-sm bg-white font-medium text-slate-800 focus:border-[#0066cc] focus:ring-1 focus:ring-[#0066cc] focus:outline-none cursor-pointer"
                     >
-                      <option value="">Select location (A, B, C...)</option>
+                      <option value="">Select</option>
                       {group.optionsList.map((opt) => (
                         <option key={opt.key} value={opt.key}>
-                          {opt.key}: {opt.text}
+                          {opt.key}
                         </option>
                       ))}
                     </select>

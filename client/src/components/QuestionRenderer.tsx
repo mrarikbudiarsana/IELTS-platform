@@ -312,7 +312,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
           <img
             src={group.diagramData.imageUrl}
             alt={group.diagramData.caption || 'Diagram'}
-            className="max-h-96 mx-auto rounded object-contain border border-slate-100"
+            className="w-full h-auto max-h-[650px] mx-auto rounded object-contain"
           />
         </div>
       )}

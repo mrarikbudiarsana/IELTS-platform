@@ -580,6 +580,16 @@ export const TestRunnerView: React.FC<TestRunnerViewProps> = ({
             </p>
           )}
 
+          {currentPassage.imageUrl && (
+            <div className="mb-6 flex justify-center">
+              <img
+                src={currentPassage.imageUrl}
+                alt={currentPassage.title}
+                className="max-h-72 w-auto object-contain rounded-[2px] border border-slate-200"
+              />
+            </div>
+          )}
+
           {/* Academic Paragraphs with Section Letters */}
           {currentPassage.paragraphs && currentPassage.paragraphs.length > 0 && (
             <div className="space-y-6 text-base leading-[1.75] text-slate-800 font-sans">

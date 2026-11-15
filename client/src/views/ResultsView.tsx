@@ -769,6 +769,15 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                           {currentPassage.subtitle}
                         </p>
                       )}
+                      {currentPassage.imageUrl && (
+                        <div className="mt-4 flex justify-center">
+                          <img
+                            src={currentPassage.imageUrl}
+                            alt={currentPassage.title}
+                            className="max-h-64 w-auto object-contain rounded border border-slate-200"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Paragraphs List */}
