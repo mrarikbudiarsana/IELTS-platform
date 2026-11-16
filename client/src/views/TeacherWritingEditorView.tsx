@@ -56,9 +56,98 @@ export const TeacherWritingEditorView: React.FC = () => {
   const [grantNotes, setGrantNotes] = useState('Class trial allocation');
   const [grantSuccess, setGrantSuccess] = useState<string | null>(null);
 
+  // Rubric & Calibration Store state
+  const [showCalibrationModal, setShowCalibrationModal] = useState(false);
+  const [calibrationTab, setCalibrationTab] = useState<'samples' | 'add' | 'rubric'>('samples');
+  const [calibrationSamples, setCalibrationSamples] = useState<any[]>([]);
+  const [rubricInfo, setRubricInfo] = useState<any | null>(null);
+  const [sampleFilterType, setSampleFilterType] = useState<string>('');
+  const [newSample, setNewSample] = useState({
+    taskType: 'academic_task_1' as WritingTaskType,
+    subtype: 'chart',
+    title: '',
+    prompt: '',
+    visualGroundTruth: '',
+    candidateScript: '',
+    overallBand: 7.5,
+    examinerComment: '',
+    keyTakeawaysText: '',
+  });
+
   useEffect(() => {
     loadTasks();
+    loadCalibrationAndRubric();
   }, []);
+
+  async function loadCalibrationAndRubric() {
+    try {
+      const [samplesRes, rubricRes] = await Promise.all([
+        api.getWritingCalibrationSamples(),
+        api.getWritingRubric(),
+      ]);
+      setCalibrationSamples(samplesRes.samples || []);
+      setRubricInfo(rubricRes.rubric || null);
+    } catch {
+      // Non-blocking
+    }
+  }
+
+  async function handleSeedOfficialTasks() {
+    try {
+      setError(null);
+      const res = await api.seedOfficialWritingTasks();
+      setSuccessMsg(res.message);
+      await loadTasks();
+    } catch (err: any) {
+      setError(err.message || 'Failed to seed official tasks.');
+    }
+  }
+
+  async function handleCreateCalibrationSample() {
+    try {
+      setError(null);
+      const takeaways = newSample.keyTakeawaysText
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await api.createWritingCalibrationSample({
+        taskType: newSample.taskType,
+        subtype: newSample.subtype,
+        title: newSample.title,
+        prompt: newSample.prompt,
+        visualGroundTruth: newSample.visualGroundTruth || undefined,
+        candidateScript: newSample.candidateScript,
+        overallBand: Number(newSample.overallBand),
+        examinerComment: newSample.examinerComment,
+        keyTakeaways: takeaways,
+      });
+      setSuccessMsg('Calibration benchmark sample added to internal AI knowledge base.');
+      setNewSample({
+        taskType: 'academic_task_1',
+        subtype: 'chart',
+        title: '',
+        prompt: '',
+        visualGroundTruth: '',
+        candidateScript: '',
+        overallBand: 7.5,
+        examinerComment: '',
+        keyTakeawaysText: '',
+      });
+      setCalibrationTab('samples');
+      await loadCalibrationAndRubric();
+    } catch (err: any) {
+      setError(err.message || 'Failed to add calibration sample.');
+    }
+  }
+
+  async function handleDeleteCalibrationSample(id: string) {
+    try {
+      await api.deleteWritingCalibrationSample(id);
+      await loadCalibrationAndRubric();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete calibration sample.');
+    }
+  }
 
   async function loadTasks() {
     try {
@@ -220,7 +309,19 @@ export const TeacherWritingEditorView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setShowCalibrationModal(true)}
+            className="px-3.5 py-2 border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-800 rounded-xl text-xs font-semibold transition"
+          >
+            AI Rubric & Calibration Store ({calibrationSamples.length})
+          </button>
+          <button
+            onClick={handleSeedOfficialTasks}
+            className="px-3.5 py-2 border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold transition"
+          >
+            Import Official Sample Tasks
+          </button>
           <button
             onClick={() => setShowGrantModal(true)}
             className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold transition"
@@ -619,6 +720,300 @@ export const TeacherWritingEditorView: React.FC = () => {
               >
                 Confirm Grant
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Rubric & Calibration Store Modal */}
+      {showCalibrationModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">
+                  Anti-Hallucination Grounding Knowledge Base
+                </span>
+                <h3 className="text-lg font-black text-slate-900 mt-1">
+                  May 2023 Official Band Descriptors & Calibrated Samples
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  The AI Writing examiner automatically retrieves matching benchmarks from this store to anchor scoring and prevent hallucinations.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCalibrationModal(false)}
+                className="p-2 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-200 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="px-6 pt-3 border-b border-slate-200 flex gap-4 bg-white">
+              <button
+                onClick={() => setCalibrationTab('samples')}
+                className={`pb-3 text-xs font-bold border-b-2 transition ${
+                  calibrationTab === 'samples'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Benchmark Samples ({calibrationSamples.length})
+              </button>
+              <button
+                onClick={() => setCalibrationTab('add')}
+                className={`pb-3 text-xs font-bold border-b-2 transition ${
+                  calibrationTab === 'add'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                + Add New Sample Anchor
+              </button>
+              <button
+                onClick={() => setCalibrationTab('rubric')}
+                className={`pb-3 text-xs font-bold border-b-2 transition ${
+                  calibrationTab === 'rubric'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                May 2023 Core Principles & Limiters
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              {calibrationTab === 'samples' && (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex gap-2">
+                      {['', 'academic_task_1', 'gt_task_1', 'task_2'].map((filterVal) => (
+                        <button
+                          key={filterVal}
+                          onClick={() => setSampleFilterType(filterVal)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                            sampleFilterType === filterVal
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {filterVal === ''
+                            ? 'All Tasks'
+                            : filterVal === 'academic_task_1'
+                            ? 'Academic Task 1'
+                            : filterVal === 'gt_task_1'
+                            ? 'GT Task 1 (Letters)'
+                            : 'Task 2 Essays'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {calibrationSamples
+                      .filter((s) => !sampleFilterType || s.taskType === sampleFilterType)
+                      .map((sample) => (
+                        <div
+                          key={sample.id}
+                          className="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold text-[11px]">
+                                Band {Number(sample.overallBand).toFixed(1)}
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold text-[10px] uppercase">
+                                {sample.source.replace('_', ' ')} • {sample.subtype}
+                              </span>
+                              <h4 className="text-xs font-bold text-slate-900">{sample.title}</h4>
+                            </div>
+                            {sample.source === 'custom_teacher' && (
+                              <button
+                                onClick={() => handleDeleteCalibrationSample(sample.id)}
+                                className="text-[11px] text-rose-600 hover:underline font-semibold"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-600 italic">
+                            <strong>Prompt:</strong> {sample.prompt}
+                          </p>
+                          <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 whitespace-pre-line max-h-40 overflow-y-auto">
+                            {sample.candidateScript}
+                          </div>
+                          <p className="text-[11px] text-indigo-900 bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-100">
+                            <strong>Examiner Comment:</strong> {sample.examinerComment}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </>
+              )}
+
+              {calibrationTab === 'add' && (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-600">
+                    Add a verified student sample, official benchmark script, or IELTS Advantage model response. The AI grading engine will automatically include it in few-shot calibration for matching tasks.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Task Type
+                      </label>
+                      <select
+                        value={newSample.taskType}
+                        onChange={(e) =>
+                          setNewSample({
+                            ...newSample,
+                            taskType: e.target.value as WritingTaskType,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                      >
+                        <option value="academic_task_1">Academic Task 1</option>
+                        <option value="gt_task_1">General Training Task 1</option>
+                        <option value="task_2">Task 2 Essay</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Subtype
+                      </label>
+                      <select
+                        value={newSample.subtype}
+                        onChange={(e) => setNewSample({ ...newSample, subtype: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                      >
+                        <option value="chart">Chart / Graph (Bar, Line, Pie)</option>
+                        <option value="table">Table</option>
+                        <option value="process">Process Diagram</option>
+                        <option value="map">Map Comparison</option>
+                        <option value="letter_formal">Formal Letter</option>
+                        <option value="letter_semi_formal">Semi-Formal Letter</option>
+                        <option value="letter_personal">Personal / Informal Letter</option>
+                        <option value="opinion">Opinion (Agree/Disagree)</option>
+                        <option value="discussion">Discussion / Outweigh</option>
+                        <option value="problem_solution">Problem & Solution</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Verified Band Score (1.0 - 9.0)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="1"
+                        max="9"
+                        value={newSample.overallBand}
+                        onChange={(e) =>
+                          setNewSample({ ...newSample, overallBand: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Sample Title
+                    </label>
+                    <input
+                      type="text"
+                      value={newSample.title}
+                      onChange={(e) => setNewSample({ ...newSample, title: e.target.value })}
+                      placeholder="e.g. Band 8.0 Academic Task 1 Line Graph - Car Expenditure"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Task Prompt
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={newSample.prompt}
+                      onChange={(e) => setNewSample({ ...newSample, prompt: e.target.value })}
+                      placeholder="The graph below shows..."
+                      className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Candidate Script / Model Essay
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={newSample.candidateScript}
+                      onChange={(e) =>
+                        setNewSample({ ...newSample, candidateScript: e.target.value })
+                      }
+                      placeholder="Paste the full student script or benchmark response..."
+                      className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Examiner Rationale / Scoring Justification
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={newSample.examinerComment}
+                      onChange={(e) =>
+                        setNewSample({ ...newSample, examinerComment: e.target.value })
+                      }
+                      placeholder="Explain why this response achieved this band score across TA/TR, CC, LR, and GRA..."
+                      className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Key Takeaways (One per line, optional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={newSample.keyTakeawaysText}
+                      onChange={(e) =>
+                        setNewSample({ ...newSample, keyTakeawaysText: e.target.value })
+                      }
+                      placeholder="Clear overview in paragraph 2&#10;Accurate use of proportions and percentages"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleCreateCalibrationSample}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
+                    >
+                      Save Calibration Sample
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {calibrationTab === 'rubric' && rubricInfo && (
+                <div className="space-y-4 text-xs text-slate-700">
+                  <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 space-y-2">
+                    <h4 className="font-bold text-indigo-950 text-sm">
+                      Core IELTS Examiner & Anti-Hallucination Principles
+                    </h4>
+                    <ul className="space-y-1.5 text-indigo-900">
+                      {rubricInfo.corePrinciples?.map((p: string, idx: number) => (
+                        <li key={idx} className="leading-relaxed">
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

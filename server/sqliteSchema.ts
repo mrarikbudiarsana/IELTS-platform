@@ -516,6 +516,30 @@ export function initDatabase() {
       FOREIGN KEY (created_by_id) REFERENCES users(id)
     );
 
+    -- Writing Calibration Samples (Rubric & Benchmark Knowledge Base)
+    CREATE TABLE IF NOT EXISTS writing_calibration_samples (
+      id TEXT PRIMARY KEY,
+      source TEXT NOT NULL DEFAULT 'custom_teacher' CHECK(source IN ('official_ielts', 'ielts_advantage', 'custom_teacher')),
+      task_type TEXT NOT NULL CHECK(task_type IN ('academic_task_1', 'gt_task_1', 'task_2')),
+      task_number INTEGER NOT NULL CHECK(task_number IN (1, 2)),
+      subtype TEXT NOT NULL,
+      title TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      visual_ground_truth TEXT,
+      candidate_script TEXT NOT NULL,
+      word_count INTEGER NOT NULL DEFAULT 0,
+      overall_band REAL NOT NULL,
+      score_ta_tr REAL,
+      score_cc REAL,
+      score_lr REAL,
+      score_gra REAL,
+      examiner_comment TEXT NOT NULL,
+      key_takeaways_json TEXT NOT NULL DEFAULT '[]',
+      created_by_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (created_by_id) REFERENCES users(id)
+    );
+
     -- Live AI Speaking Sessions (Milestone 6)
     CREATE TABLE IF NOT EXISTS speaking_ai_sessions (
       id TEXT PRIMARY KEY,
@@ -740,6 +764,7 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_writing_responses_attempt ON writing_responses(attempt_id, task_number);
     CREATE INDEX IF NOT EXISTS idx_writing_assessments_response ON writing_assessments(response_id);
     CREATE INDEX IF NOT EXISTS idx_writing_allowance_user ON writing_allowance_ledger(user_id);
+    CREATE INDEX IF NOT EXISTS idx_writing_calibration_type ON writing_calibration_samples(task_type, subtype, overall_band);
 
     CREATE INDEX IF NOT EXISTS idx_commercial_products_status ON commercial_products(status, product_type);
     CREATE INDEX IF NOT EXISTS idx_commercial_orders_user ON commercial_orders(user_id, status);

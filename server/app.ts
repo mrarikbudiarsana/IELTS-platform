@@ -131,6 +131,13 @@ import {
 } from './writingService';
 import { requestAiWritingAssessment } from './aiWritingService';
 import {
+  listCalibrationSamples,
+  createCalibrationSample,
+  deleteCalibrationSample,
+  getWritingRubricOverview,
+} from './writingCalibrationService';
+import { seedOfficialWritingTasks } from './writingSeed';
+import {
   getUserAllowanceBalance,
   listAllowanceLedger,
   grantTestingAllowance,
@@ -1719,6 +1726,85 @@ app.post('/api/writing/allowances/grant', authMiddleware, requireRole('teacher',
       notes: req.body.notes,
     }));
     res.json({ entry, balance: (await getUserAllowanceBalance(req.body.userId)) });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// WRITING RUBRIC & CALIBRATION SAMPLES (ANTI-HALLUCINATION STORE)
+// -------------------------------------------------------------
+
+// GET /api/writing/rubric - get May 2023 descriptors, principles, and sample counts
+app.get('/api/writing/rubric', async (_req, res) => {
+  try {
+    const rubric = await getWritingRubricOverview();
+    res.json({ rubric });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /api/writing/calibration - list calibration samples
+app.get('/api/writing/calibration', async (req, res) => {
+  try {
+    const samples = await listCalibrationSamples({
+      taskType: req.query.taskType as any,
+      subtype: req.query.subtype as any,
+      source: req.query.source as any,
+    });
+    res.json({ samples });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/calibration - add custom calibration sample (teacher/admin)
+app.post('/api/writing/calibration', authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const sample = await createCalibrationSample({
+      createdById: req.user!.id,
+      source: req.body.source || 'custom_teacher',
+      taskType: req.body.taskType,
+      taskNumber: req.body.taskNumber,
+      subtype: req.body.subtype,
+      title: req.body.title,
+      prompt: req.body.prompt,
+      visualGroundTruth: req.body.visualGroundTruth,
+      candidateScript: req.body.candidateScript,
+      overallBand: Number(req.body.overallBand),
+      criteria: req.body.criteria,
+      examinerComment: req.body.examinerComment,
+      keyTakeaways: req.body.keyTakeaways,
+    });
+    res.status(201).json({ sample });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/writing/calibration/:id - delete custom calibration sample (teacher/admin)
+app.delete('/api/writing/calibration/:id', authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    await deleteCalibrationSample(String(req.params.id));
+    res.json({ message: 'Calibration sample deleted.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/writing/tasks/seed-official - seed Official IELTS & IELTS Advantage tasks
+app.post('/api/writing/tasks/seed-official', authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const created = await seedOfficialWritingTasks(req.user!.id);
+    res.status(201).json({
+      createdCount: created.length,
+      tasks: created,
+      message:
+        created.length > 0
+          ? `Successfully imported ${created.length} official IELTS Writing tasks.`
+          : 'All official IELTS Writing tasks are already present in the task library.',
+    });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

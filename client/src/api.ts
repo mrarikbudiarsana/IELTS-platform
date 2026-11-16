@@ -280,6 +280,19 @@ export const api = {
   grantWritingAllowance: (body: { userId: string; amount: number; notes?: string }) =>
     request<{ entry: any; balance: any }>('/writing/allowances/grant', { method: 'POST', body: JSON.stringify(body) }),
 
+  // Writing Rubric & Calibration Samples (Anti-Hallucination Store)
+  getWritingRubric: () => request<{ rubric: any }>('/writing/rubric'),
+  getWritingCalibrationSamples: (params?: { taskType?: string; subtype?: string; source?: string }) => {
+    const q = new URLSearchParams(params as any).toString();
+    return request<{ samples: any[] }>(`/writing/calibration${q ? `?${q}` : ''}`);
+  },
+  createWritingCalibrationSample: (body: any) =>
+    request<{ sample: any }>('/writing/calibration', { method: 'POST', body: JSON.stringify(body) }),
+  deleteWritingCalibrationSample: (id: string) =>
+    request<{ message: string }>(`/writing/calibration/${id}`, { method: 'DELETE' }),
+  seedOfficialWritingTasks: () =>
+    request<{ createdCount: number; tasks: any[]; message: string }>('/writing/tasks/seed-official', { method: 'POST' }),
+
   // Commercial Products & Checkout (Milestone 7)
   getCommercialProducts: () => request<{ products: any[] }>('/commerce/products'),
   createCommercialProduct: (body: any) => request<{ product: any }>('/commerce/products', { method: 'POST', body: JSON.stringify(body) }),

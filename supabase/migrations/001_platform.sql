@@ -519,6 +519,28 @@ CREATE TABLE IF NOT EXISTS writing_attempts (
       updated_at TEXT NOT NULL DEFAULT (to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
     );
 
+CREATE TABLE IF NOT EXISTS writing_calibration_samples (
+      id TEXT PRIMARY KEY,
+      source TEXT NOT NULL DEFAULT 'custom_teacher' CHECK(source IN ('official_ielts', 'ielts_advantage', 'custom_teacher')),
+      task_type TEXT NOT NULL CHECK(task_type IN ('academic_task_1', 'gt_task_1', 'task_2')),
+      task_number INTEGER NOT NULL CHECK(task_number IN (1, 2)),
+      subtype TEXT NOT NULL,
+      title TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      visual_ground_truth TEXT,
+      candidate_script TEXT NOT NULL,
+      word_count INTEGER NOT NULL DEFAULT 0,
+      overall_band REAL NOT NULL,
+      score_ta_tr REAL,
+      score_cc REAL,
+      score_lr REAL,
+      score_gra REAL,
+      examiner_comment TEXT NOT NULL,
+      key_takeaways_json TEXT NOT NULL DEFAULT '[]',
+      created_by_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+    );
+
 CREATE TABLE IF NOT EXISTS writing_responses (
       id TEXT PRIMARY KEY,
       attempt_id TEXT NOT NULL,
@@ -575,7 +597,7 @@ CREATE TABLE IF NOT EXISTS writing_tasks (
 
 DO $$ DECLARE field RECORD; BEGIN
     FOR field IN SELECT table_name, column_name, column_default FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name IN ('assignment_access_grants','assignments','audit_logs','class_enrolments','classes','commercial_entitlement_grants','commercial_orders','commercial_products','listening_answers','listening_attempts','listening_test_versions','listening_tests','package_attempts','payment_webhook_events','reading_answers','reading_attempts','reading_test_versions','reading_tests','speaking_ai_sessions','speaking_allowance_ledger','speaking_assessments','speaking_audio_turns','speaking_score_corrections','speaking_set_versions','speaking_sets','teacher_code_redemptions','teacher_codes','test_packages','user_subscriptions','users','writing_allowance_ledger','writing_assessments','writing_attempts','writing_responses','writing_task_versions','writing_tasks')
+      WHERE table_schema = 'public' AND table_name IN ('assignment_access_grants','assignments','audit_logs','class_enrolments','classes','commercial_entitlement_grants','commercial_orders','commercial_products','listening_answers','listening_attempts','listening_test_versions','listening_tests','package_attempts','payment_webhook_events','reading_answers','reading_attempts','reading_test_versions','reading_tests','speaking_ai_sessions','speaking_allowance_ledger','speaking_assessments','speaking_audio_turns','speaking_score_corrections','speaking_set_versions','speaking_sets','teacher_code_redemptions','teacher_codes','test_packages','user_subscriptions','users','writing_allowance_ledger','writing_assessments','writing_attempts','writing_calibration_samples','writing_responses','writing_task_versions','writing_tasks')
       AND data_type IN ('timestamp with time zone', 'timestamp without time zone') LOOP
       EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I DROP DEFAULT', field.table_name, field.column_name);
       EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I TYPE TEXT USING to_char(%I::timestamptz AT TIME ZONE ''UTC'', ''YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'')', field.table_name, field.column_name, field.column_name);
@@ -584,7 +606,7 @@ DO $$ DECLARE field RECORD; BEGIN
       END IF;
     END LOOP;
     FOR field IN SELECT table_name, column_name FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name IN ('assignment_access_grants','assignments','audit_logs','class_enrolments','classes','commercial_entitlement_grants','commercial_orders','commercial_products','listening_answers','listening_attempts','listening_test_versions','listening_tests','package_attempts','payment_webhook_events','reading_answers','reading_attempts','reading_test_versions','reading_tests','speaking_ai_sessions','speaking_allowance_ledger','speaking_assessments','speaking_audio_turns','speaking_score_corrections','speaking_set_versions','speaking_sets','teacher_code_redemptions','teacher_codes','test_packages','user_subscriptions','users','writing_allowance_ledger','writing_assessments','writing_attempts','writing_responses','writing_task_versions','writing_tasks')
+      WHERE table_schema = 'public' AND table_name IN ('assignment_access_grants','assignments','audit_logs','class_enrolments','classes','commercial_entitlement_grants','commercial_orders','commercial_products','listening_answers','listening_attempts','listening_test_versions','listening_tests','package_attempts','payment_webhook_events','reading_answers','reading_attempts','reading_test_versions','reading_tests','speaking_ai_sessions','speaking_allowance_ledger','speaking_assessments','speaking_audio_turns','speaking_score_corrections','speaking_set_versions','speaking_sets','teacher_code_redemptions','teacher_codes','test_packages','user_subscriptions','users','writing_allowance_ledger','writing_assessments','writing_attempts','writing_calibration_samples','writing_responses','writing_task_versions','writing_tasks')
       AND data_type = 'text' AND (column_name LIKE '%_at' OR column_name LIKE '%_until' OR column_name = 'reset_token_expires') LOOP
       EXECUTE format('UPDATE public.%I SET %I = to_char(%I::timestamp AT TIME ZONE ''UTC'' AT TIME ZONE ''UTC'', ''YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'') WHERE %I ~ ''^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}''', field.table_name, field.column_name, field.column_name, field.column_name);
     END LOOP;
@@ -1472,6 +1494,44 @@ ALTER TABLE public.writing_attempts ADD COLUMN IF NOT EXISTS "created_at" TEXT D
 
 ALTER TABLE public.writing_attempts ADD COLUMN IF NOT EXISTS "updated_at" TEXT DEFAULT to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') NOT NULL;
 
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "id" TEXT;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "source" TEXT DEFAULT 'custom_teacher' NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "task_type" TEXT NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "task_number" INTEGER NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "subtype" TEXT NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "title" TEXT NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "prompt" TEXT NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "visual_ground_truth" TEXT;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "candidate_script" TEXT NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "word_count" INTEGER DEFAULT 0 NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "overall_band" REAL NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "score_ta_tr" REAL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "score_cc" REAL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "score_lr" REAL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "score_gra" REAL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "examiner_comment" TEXT NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "key_takeaways_json" TEXT DEFAULT '[]' NOT NULL;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "created_by_id" TEXT;
+
+ALTER TABLE public.writing_calibration_samples ADD COLUMN IF NOT EXISTS "created_at" TEXT DEFAULT to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') NOT NULL;
+
 ALTER TABLE public.writing_responses ADD COLUMN IF NOT EXISTS "id" TEXT;
 
 ALTER TABLE public.writing_responses ADD COLUMN IF NOT EXISTS "attempt_id" TEXT NOT NULL;
@@ -1728,6 +1788,8 @@ DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'writing_
 
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'writing_attempts_fk_6' AND conrelid = 'public.writing_attempts'::regclass) THEN ALTER TABLE public.writing_attempts ADD CONSTRAINT writing_attempts_fk_6 FOREIGN KEY ("user_id") REFERENCES public.users ("id") ON DELETE NO ACTION; END IF; END $$;
 
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'writing_calibration_samples_fk_0' AND conrelid = 'public.writing_calibration_samples'::regclass) THEN ALTER TABLE public.writing_calibration_samples ADD CONSTRAINT writing_calibration_samples_fk_0 FOREIGN KEY ("created_by_id") REFERENCES public.users ("id") ON DELETE NO ACTION; END IF; END $$;
+
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'writing_responses_fk_0' AND conrelid = 'public.writing_responses'::regclass) THEN ALTER TABLE public.writing_responses ADD CONSTRAINT writing_responses_fk_0 FOREIGN KEY ("parent_response_id") REFERENCES public.writing_responses ("id") ON DELETE NO ACTION; END IF; END $$;
 
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'writing_responses_fk_1' AND conrelid = 'public.writing_responses'::regclass) THEN ALTER TABLE public.writing_responses ADD CONSTRAINT writing_responses_fk_1 FOREIGN KEY ("task_version_id") REFERENCES public.writing_task_versions ("id") ON DELETE NO ACTION; END IF; END $$;
@@ -1793,6 +1855,8 @@ CREATE INDEX IF NOT EXISTS idx_writing_responses_attempt ON writing_responses(at
 CREATE INDEX IF NOT EXISTS idx_writing_assessments_response ON writing_assessments(response_id);
 
 CREATE INDEX IF NOT EXISTS idx_writing_allowance_user ON writing_allowance_ledger(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_writing_calibration_type ON writing_calibration_samples(task_type, subtype, overall_band);
 
 CREATE INDEX IF NOT EXISTS idx_commercial_products_status ON commercial_products(status, product_type);
 
@@ -1910,6 +1974,9 @@ DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOK
 
 ALTER TABLE public.writing_attempts ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL ON public.writing_attempts FROM anon; END IF; IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL ON public.writing_attempts FROM authenticated; END IF; END $$;
+
+ALTER TABLE public.writing_calibration_samples ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL ON public.writing_calibration_samples FROM anon; END IF; IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL ON public.writing_calibration_samples FROM authenticated; END IF; END $$;
 
 ALTER TABLE public.writing_responses ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL ON public.writing_responses FROM anon; END IF; IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL ON public.writing_responses FROM authenticated; END IF; END $$;

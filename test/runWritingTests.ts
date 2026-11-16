@@ -23,7 +23,17 @@ import {
 import {
   requestAiWritingAssessment,
   processAssessmentJob,
+  enforceRubricGuardrailsAndVerifyQuotes,
+  evaluateWritingHeuristically,
 } from '../server/aiWritingService';
+import {
+  listCalibrationSamples,
+  createCalibrationSample,
+  deleteCalibrationSample,
+  getCalibrationAnchorsForEvaluation,
+  getWritingRubricOverview,
+} from '../server/writingCalibrationService';
+import { detectCopiedRubric } from '../shared/writingRubricAndCalibration';
 import {
   calculateIeltsWritingTaskBand,
   calculateIeltsWritingOverallBand,
@@ -404,6 +414,119 @@ async function runWritingTestSuite() {
   assert(retrievedPkg.writingStatus === 'configured', 'TestPackage writingStatus is configured');
   assert(retrievedPkg.writingTask1Id === task1!.id, 'TestPackage retains writingTask1Id');
   assert(retrievedPkg.writingTask2Id === task2!.id, 'TestPackage retains writingTask2Id');
+
+  // 7. May 2023 Descriptors, Negative Limiters & Calibration Store
+  console.log('\n7. Official May 2023 Descriptors, Negative Limiters & Calibration Store:');
+
+  const rubricOverview = await getWritingRubricOverview();
+  assert(
+    rubricOverview.task1Descriptors.length === 10 && rubricOverview.task2Descriptors.length === 10,
+    'Complete Band 0-9 descriptors loaded for both Task 1 and Task 2 (May 2023 update)'
+  );
+  assert(
+    rubricOverview.sampleCounts.officialIelts >= 12 && rubricOverview.sampleCounts.ieltsAdvantage >= 10,
+    `Calibration store contains ${rubricOverview.sampleCounts.officialIelts} official IELTS scripts and ${rubricOverview.sampleCounts.ieltsAdvantage} IELTS Advantage samples`
+  );
+
+  // Copied rubric detection (Official Sample 2B Script A copies prompt verbatim)
+  const prompt2B =
+    'International tourism has brought enormous benefit to many places. At the same time, there is concern about its impact on local inhabitants and the environment. Do the disadvantages of international tourism outweigh the advantages?';
+  const copiedEssay =
+    'International tourism has brought enormous benefit to many places. At the same time, there is concern about its impact on local inhabitants and the environment. In my opinion the advantages are greater because many people get jobs in hotels.';
+  const copiedCheck = detectCopiedRubric(prompt2B, copiedEssay);
+  assert(
+    copiedCheck.copiedWordCount >= 20 && copiedCheck.effectiveWordCount < countWords(copiedEssay),
+    `Copied rubric detector discounts ${copiedCheck.copiedWordCount} verbatim prompt words (${copiedCheck.effectiveWordCount} original words remaining)`
+  );
+
+  // May 2023 Band 1 Limiter: <= 20 original words rated at Band 1.0
+  const shortEval = evaluateWritingHeuristically({
+    taskType: 'task_2',
+    taskNumber: 2,
+    prompt: prompt2B,
+    minWords: 250,
+    candidateEssay: 'I agree with this topic very much.',
+    actualWordCount: 7,
+  });
+  assert(
+    shortEval.score_ta_tr === 1.0 &&
+      shortEval.score_cc === 1.0 &&
+      shortEval.score_lr === 1.0 &&
+      shortEval.score_gra === 1.0,
+    'May 2023 Band 1 limiter caps responses of 20 words or fewer at Band 1.0 across all criteria'
+  );
+
+  // May 2023 Band 5 Academic Task 1 Limiter: No data to support description
+  const noDataEssay =
+    'The bar chart shows the percentage growth in property prices in Algeria, China, and Argentina. Overall, property prices in China increased while Algeria decreased and Argentina fluctuated over the period. In the beginning Algeria was the highest and China was the lowest, but later China grew a lot and surpassed Algeria.';
+  const guardedNoData = enforceRubricGuardrailsAndVerifyQuotes({
+    rawResult: {
+      score_ta_tr: 7.5, // Simulated inflated AI score
+      score_cc: 7.0,
+      score_lr: 7.0,
+      score_gra: 7.0,
+      feedback_ta_tr: 'Good overview.',
+      feedback_cc: 'Coherent.',
+      feedback_lr: 'Good lexis.',
+      feedback_gra: 'Accurate.',
+      strengths: ['Clear overview.'],
+      improvements: [],
+      evidence_quotes: [
+        {
+          criterion: 'task_achievement_or_response',
+          quote: 'Hallucinated quote that is not in the candidate essay at all',
+          comment: 'Test quote verification',
+        },
+      ],
+      corrections: [],
+      overall_feedback: 'Good.',
+      is_simulated: true,
+    },
+    taskType: 'academic_task_1',
+    taskNumber: 1,
+    subtype: 'chart',
+    prompt: 'The bar graph shows percentage growth in property prices between 2007 and 2010.',
+    minWords: 150,
+    teacherVisualDescription: 'Algeria fell from 6% to 3%, China rose from 2% to 6.5%.',
+    candidateEssay: noDataEssay,
+    actualWordCount: countWords(noDataEssay),
+  });
+
+  assert(
+    guardedNoData.score_ta_tr === 5.0,
+    `May 2023 Band 5 limiter caps Academic Task 1 TA at 5.0 when no figures/data are cited (got ${guardedNoData.score_ta_tr})`
+  );
+  assert(
+    noDataEssay.includes(guardedNoData.evidence_quotes[0].quote),
+    'Anti-hallucination quote guardrail replaces fabricated AI quote with verbatim sentence from candidate essay'
+  );
+
+  // Dynamic Calibration Store: add custom sample, verify retrieval, then delete
+  const customSample = await createCalibrationSample({
+    createdById: teacher.id,
+    taskType: 'academic_task_1',
+    subtype: 'map',
+    title: 'Custom Teacher Benchmark Map Sample (Band 8.0)',
+    prompt: 'The maps show changes to an island before and after tourist facilities were built.',
+    candidateScript:
+      'The two maps illustrate how an island changed following the construction of tourist amenities. Overall, the island was transformed from an undeveloped natural island into a resort with accommodation, a pier, and footpaths.',
+    overallBand: 8.0,
+    examinerComment: 'Clear overview and accurate spatial language.',
+    keyTakeaways: ['Uses passive voice for map developments.'],
+  });
+  assert(Boolean(customSample.id), 'Custom teacher calibration sample saved to database');
+
+  const mapAnchors = await getCalibrationAnchorsForEvaluation({
+    taskType: 'academic_task_1',
+    subtype: 'map',
+    maxSamples: 3,
+  });
+  assert(
+    mapAnchors.some((a) => a.id === customSample.id),
+    'Newly added custom calibration sample is automatically prioritized in few-shot anchor retrieval'
+  );
+
+  await deleteCalibrationSample(customSample.id);
 
   console.log(`\nWriting Tests Completed: ${passed} passed, ${failed} failed.`);
 
