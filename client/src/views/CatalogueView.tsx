@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ReadingTest, ListeningTest, WritingTask, WritingAttempt, WritingAllowanceBalance, QuestionGroupSummary } from '../types';
 import { api } from '../api';
-import { sortTestsChronological } from '../testOrder';
+import { sortTestsChronological, parseCambridgeTestInfo } from '../testOrder';
 import {
   BookOpen,
   Headphones,
@@ -281,7 +281,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
   );
 
   const filteredWritingTasks = writingTasks.filter((t) => {
-    if (filterType !== 'all' && t.testType !== filterType) return false;
+    if (filterType !== 'all' && t.testType !== filterType && t.testType !== 'both') return false;
     if (
       searchQuery &&
       !t.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -290,6 +290,59 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
       return false;
     return true;
   });
+
+  interface GroupedWritingTest {
+    key: string;
+    title: string;
+    testType: 'academic' | 'general' | 'both';
+    task1?: WritingTask;
+    task2?: WritingTask;
+    createdAt?: string;
+  }
+
+  const groupedWritingTests: GroupedWritingTest[] = (() => {
+    const groups = new Map<string, GroupedWritingTest>();
+
+    for (const task of filteredWritingTasks) {
+      const info = parseCambridgeTestInfo(task.title);
+      const isGeneral = task.title.toLowerCase().includes('general') || task.testType === 'general';
+      const groupKey = info
+        ? `cambridge-${info.series}-${isGeneral ? 'gt' : 'ac'}-test-${info.testNumber}`
+        : `single-${task.id}`;
+      const groupTitle = info
+        ? `Cambridge IELTS ${info.series} ${isGeneral ? 'General Training' : 'Academic'} Writing Test ${info.testNumber}`
+        : task.title;
+
+      let group = groups.get(groupKey);
+      if (!group) {
+        group = {
+          key: groupKey,
+          title: groupTitle,
+          testType: isGeneral ? 'general' : 'academic',
+          createdAt: task.createdAt,
+        };
+        groups.set(groupKey, group);
+      }
+
+      if (task.taskNumber === 1 && !group.task1) {
+        group.task1 = task;
+      } else if (task.taskNumber === 2 && !group.task2) {
+        group.task2 = task;
+      } else {
+        // Fallback if a duplicate task number exists in the same group
+        groups.set(`single-${task.id}`, {
+          key: `single-${task.id}`,
+          title: task.title,
+          testType: task.testType,
+          task1: task.taskNumber === 1 ? task : undefined,
+          task2: task.taskNumber === 2 ? task : undefined,
+          createdAt: task.createdAt,
+        });
+      }
+    }
+
+    return sortTestsChronological(Array.from(groups.values()));
+  })();
 
   const filteredSpeakingSets = speakingSets.filter((s) => {
     if (searchQuery && !s.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -307,7 +360,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           <p className="text-xs text-slate-500 mt-0.5">
             {selectedSkill === 'reading' && `${filteredReadingTests.length} activities available`}
             {selectedSkill === 'listening' && `${filteredListeningTests.length} activities available`}
-            {selectedSkill === 'writing' && `${filteredWritingTasks.length} tasks available`}
+            {selectedSkill === 'writing' && `${groupedWritingTests.length} tests available`}
             {selectedSkill === 'speaking' && `${filteredSpeakingSets.length} sets available`}
           </p>
         </div>
@@ -607,56 +660,126 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredWritingTasks.map((task) => (
-              <div
-                key={task.id}
-                className="bg-white rounded-2xl border border-[#E7E3D9] p-5 sm:p-6 hover:border-[#084F7D]/50 hover:shadow-xs transition-all flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2.5 text-xs">
-                    <span className="font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-[#EBF4F9] text-[#084F7D]">
-                      Task {task.taskNumber} • {task.testType === 'academic' ? 'Academic' : 'General'}
-                    </span>
-                    <span className="text-slate-400 font-normal text-xs">
-                      {task.taskNumber === 1 ? '20m • 150w' : '40m • 250w'}
-                    </span>
+            {groupedWritingTests.map((group) => {
+              const hasBoth = Boolean(group.task1 && group.task2);
+              const extractTopic = (fullTitle: string) => {
+                const colonIdx = fullTitle.indexOf(':');
+                return colonIdx !== -1 ? fullTitle.slice(colonIdx + 1).trim() : fullTitle;
+              };
+              const launchWriting = async (opts: {
+                task1Id?: string;
+                task2Id?: string;
+                mode: 'practice' | 'mock';
+              }) => {
+                if (!isLoggedIn) {
+                  onOpenLogin();
+                  return;
+                }
+                try {
+                  const res = await api.startWritingAttempt(opts);
+                  if (onStartWriting) onStartWriting(res.attempt.id);
+                } catch (err: any) {
+                  alert(err.message || 'Could not start writing test');
+                }
+              };
+
+              return (
+                <div
+                  key={group.key}
+                  className="bg-white rounded-2xl border border-[#E5E1D7] p-5 shadow-2xs hover:shadow-sm hover:border-[#084F7D]/35 transition-all flex flex-col justify-between group"
+                >
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2.5 text-xs">
+                      <span className="font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-[#EBF4F9] text-[#084F7D]">
+                        {group.testType === 'general' ? 'General Training' : 'Academic Writing'}
+                      </span>
+                      <span className="text-slate-400 font-normal text-xs">
+                        {hasBoth
+                          ? '60m • 2 Tasks'
+                          : group.task1
+                          ? '20m • 150w'
+                          : '40m • 250w'}
+                      </span>
+                    </div>
+
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors mb-3">
+                      {group.title}
+                    </h3>
+
+                    <div className="space-y-1.5 text-xs text-slate-600 bg-[#FAF9F6] border border-[#EFECE4] rounded-xl p-3">
+                      {group.task1 && (
+                        <div className="flex items-start gap-2">
+                          <span className="font-semibold text-[#084F7D] shrink-0">Task 1:</span>
+                          <span className="line-clamp-1">{extractTopic(group.task1.title)}</span>
+                        </div>
+                      )}
+                      {group.task2 && (
+                        <div className="flex items-start gap-2">
+                          <span className="font-semibold text-[#084F7D] shrink-0">Task 2:</span>
+                          <span className="line-clamp-1">{extractTopic(group.task2.title)}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <h3 className="text-sm sm:text-base font-semibold text-slate-900 mb-1.5 leading-snug line-clamp-2">
-                    {task.title}
-                  </h3>
-
-                  <p className="text-xs text-slate-500 line-clamp-3 mb-3.5 leading-relaxed">
-                    {task.prompt}
-                  </p>
+                  <div className="space-y-2">
+                    {hasBoth ? (
+                      <>
+                        <button
+                          onClick={() =>
+                            launchWriting({
+                              task1Id: group.task1!.id,
+                              task2Id: group.task2!.id,
+                              mode: 'mock',
+                            })
+                          }
+                          className="w-full py-2.5 px-3.5 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center shadow-2xs"
+                        >
+                          Mock Test (Task 1 &amp; 2)
+                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() =>
+                              launchWriting({
+                                task1Id: group.task1!.id,
+                                mode: 'practice',
+                              })
+                            }
+                            className="w-full py-2 px-3 bg-[#F6F4EE] hover:bg-[#EFECE3] text-slate-800 font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center border border-[#E5E1D7]"
+                          >
+                            Task 1 Only
+                          </button>
+                          <button
+                            onClick={() =>
+                              launchWriting({
+                                task2Id: group.task2!.id,
+                                mode: 'practice',
+                              })
+                            }
+                            className="w-full py-2 px-3 bg-[#F6F4EE] hover:bg-[#EFECE3] text-slate-800 font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center border border-[#E5E1D7]"
+                          >
+                            Task 2 Only
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() =>
+                          launchWriting({
+                            task1Id: group.task1?.id,
+                            task2Id: group.task2?.id,
+                            mode: 'practice',
+                          })
+                        }
+                        className="w-full py-2.5 px-3.5 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center shadow-2xs"
+                      >
+                        Start Writing Test
+                      </button>
+                    )}
+                  </div>
                 </div>
-
-                <div className="pt-3 border-t border-[#F2EFE8]">
-                  <button
-                    onClick={async () => {
-                      if (!isLoggedIn) {
-                        onOpenLogin();
-                        return;
-                      }
-                      try {
-                        const res = await api.startWritingAttempt({
-                          task1Id: task.taskNumber === 1 ? task.id : undefined,
-                          task2Id: task.taskNumber === 2 ? task.id : undefined,
-                          mode: 'practice',
-                        });
-                        if (onStartWriting) onStartWriting(res.attempt.id);
-                      } catch (err: any) {
-                        alert(err.message || 'Could not start writing session');
-                      }
-                    }}
-                    className="w-full py-2.5 px-4 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-                  >
-                    <PenTool className="w-3.5 h-3.5" />
-                    <span>Open Writing Workspace</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (
