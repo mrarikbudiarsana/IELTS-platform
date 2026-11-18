@@ -1222,6 +1222,324 @@ Nina`,
       'Informal letters to friends should use contractions, warm openings/closings, and natural phrasal verbs ("met up with", "chatting about") while still maintaining complex sentence accuracy.',
     ],
   },
+  // ─── OFFICIAL IELTS GENERAL TRAINING SAMPLES (2023 + Official GT Scripts) ─
+  {
+    id: 'official-gt-1a-script-a',
+    source: 'official_ielts',
+    taskType: 'gt_task_1',
+    taskNumber: 1,
+    subtype: 'letter_formal',
+    title: 'Official GT Task 1A – Sample Script A (Band 5.5)',
+    prompt:
+      'You live in a room in college which you share with another student. However, there are many problems with this arrangement and you find it very difficult to work. Write a letter to the accommodation officer at the college. In the letter: • describe the situation • explain your problems and why it is difficult to work • say what kind of accommodation you would prefer. Begin your letter as follows: Dear Sir or Madam,',
+    candidateScript: `Dear Sir/Madam,
+
+I am writing to express my dissatisfaction with my room-mate. As you know we share one room, I can not study in the room at all any more if I still stay there.
+
+She always has friend visiting and has parties in the room. They make lots of noise and switch on the radio very loudly, for me this environment is very difficult to study and I need a quiet room. Even borrows my things without asking, it is very impolite.
+
+I request you can give me a new room next term because I have been asked her has parties in other place many times they still have parties in the room. I really can not stay in the same room with her.
+
+I would be grateful if you could change me a single room.
+
+Your faithfully,
+Catherine`,
+    wordCount: 141,
+    overallBand: 5.5,
+    criteria: { taOrTr: 5.5, cc: 5.5, lr: 5.5, gra: 5.0 },
+    examinerComment:
+      'This response does address the requirements of the task and appears in a letter format. The second bullet point is well covered, with multiple ‘problems’ presented. However, overall there is some repetition of the task rubric, and there is room for more detail to be included, for example, coverage of the third bullet point. The organisation of ideas is not wholly logical and points are not always linked together well. Despite these problems, the introduction to the letter is appropriate and the purpose of the writer is clear. There is a range of vocabulary which is generally adequate and appropriate for the task. Complex structures are attempted but, overall, sentences are kept quite simple, grammatical errors are frequent and they do cause some difficulty for the reader.',
+    keyTakeaways: [
+      'Under-150-word scripts or thin coverage of one bullet point (such as preferred accommodation) limit Task Achievement.',
+      'Frequent grammatical errors and choppy, poorly linked sentences hold GRA and CC to Band 5–5.5.',
+    ],
+  },
+  {
+    id: 'official-gt-1a-script-b',
+    source: 'official_ielts',
+    taskType: 'gt_task_1',
+    taskNumber: 1,
+    subtype: 'letter_formal',
+    title: 'Official GT Task 1A – Sample Script B (Band 7)',
+    prompt:
+      'You live in a room in college which you share with another student. However, there are many problems with this arrangement and you find it very difficult to work. Write a letter to the accommodation officer at the college. In the letter: • describe the situation • explain your problems and why it is difficult to work • say what kind of accommodation you would prefer. Begin your letter as follows: Dear Sir or Madam,',
+    candidateScript: `Accommodation Officer
+13, Kings Road
+Edinburgh
+
+Dear Sir, Dear Madam,
+
+I am writing you to express my dissatisfaction with my room mate and request for another accommodation next term.
+
+My main problem is that I cannot study in my room because my room-mate always has friends visiting. He also has parties, which usually ends early in the morning, several times a week. Furthermore he often borrows my things without asking me. I cannot accept this situation any longer. Especially because I have very important exams next term and I really must study hard. This is why I would be very grateful if I could have another room next term. It would be most convenient for me if I not having to share my room with somebody else.
+
+I am looking forward to hear from you soon.
+
+Yours faithfully,
+[Signature]`,
+    wordCount: 152,
+    overallBand: 7.0,
+    criteria: { taOrTr: 7.0, cc: 7.0, lr: 7.0, gra: 6.5 },
+    examinerComment:
+      'The content of the letter is relevant to the task. The first two bullet points are covered in detail, with several ‘problems’ given; the third bullet point could be more fully illustrated, with details of what kind of accommodation (not just a single room). The information in the letter is logically organised and the appropriate use of linking devices means that it reads quite fluently. Vocabulary is used well, spelling is accurate and there are some less common words and expressions [borrows | having to share]. There is evidence of more complex sentence structures but also some grammatical errors, although these do not affect the reader greatly.',
+    keyTakeaways: [
+      'Logical organisation and clear linking ("Furthermore", "This is why") create fluent progression.',
+      'To push past Band 7 in Task Achievement, all three bullet points—including the specific kind of preferred accommodation—need full illustration.',
+    ],
+  },
+  {
+    id: 'official-gt-1b-script-a',
+    source: 'official_ielts',
+    taskType: 'gt_task_1',
+    taskNumber: 1,
+    subtype: 'letter_formal',
+    title: 'Official GT Task 1B – Sample Script A (Band 3)',
+    prompt:
+      'Your local public library wants to make improvements to their services and facilities. In order to get ideas from the public, they have asked library users to send them suggestions in writing. Write a letter to the librarian. In your letter: • describe what you like about the library • say what you don’t like • make suggestions for improvements. Begin your letter as follows: Dear Sir or Madam,',
+    candidateScript: `DEAR SIR OR MADAM
+
+The local public library wants to make improvements to their services and facilities. In order to get ideas the public. The local public library need to bring old and new boock from all countris. That is the becuse All People want to know for the world stories.
+
+The local public library want to big spece for cabinet to put good type line for the boock. Their is reselt because when peopel came to the library to get a boock easily. Your library dont have boock properly because their are one boock is another plese and another is another line so not get a easeur.
+
+The every boock put line with each cuntry to gether an year put difrent year put sepret. Then your library put cline and good type and good man. Even you cane put man to give people servis at home to dileverd for boock som old piople are problem to come your library to taike boock thet is my opinion for your local public library want
+
+your fiyethfuly`,
+    wordCount: 168,
+    overallBand: 3.0,
+    criteria: { taOrTr: 3.0, cc: 3.0, lr: 3.0, gra: 3.0 },
+    examinerComment:
+      'With some effort, the reader can discern ideas related to two of the bullet points but the first bullet is not covered. There is a definite attempt to address the task but the purpose of the letter is not clear and there is repetition of the minimal ideas produced. The ideas in the response are not organised in any logical way and, although linkers are present, they are not always used correctly and fail to help the reader follow the message. The lexical resource is inadequate for the task. Errors in word choice and spelling do impede meaning; some words cannot be deciphered. There is an attempt to produce sentences but this is often unsuccessful. Overall, errors predominate and there are no correct sentences, other than those that rely on the input material. This is a good example of a Band 3 performance.',
+    keyTakeaways: [
+      'Omitting an entire bullet point while relying heavily on copied prompt phrasing severely limits Task Achievement.',
+      'Predominant grammatical and spelling errors that impede meaning keep the script at Band 3.',
+    ],
+  },
+  {
+    id: 'official-gt-1b-script-b',
+    source: 'official_ielts',
+    taskType: 'gt_task_1',
+    taskNumber: 1,
+    subtype: 'letter_formal',
+    title: 'Official GT Task 1B – Sample Script B (Band 5.5)',
+    prompt:
+      'Your local public library wants to make improvements to their services and facilities. In order to get ideas from the public, they have asked library users to send them suggestions in writing. Write a letter to the librarian. In your letter: • describe what you like about the library • say what you don’t like • make suggestions for improvements. Begin your letter as follows: Dear Sir or Madam,',
+    candidateScript: `Dear Sir or Madam,
+
+I'm going to suggest some of my ideas about our local library. First of all I would like to have a bigger parking space so that it will be more easyer for those who use the library. This parking space can be done undernet the library which it will be provided with a lift. I think that this is the main problem for those who came to the library because everyone talkes about it and argue for the timewasting to park the car around so by means of this idea the main problem can be solved. Another thing that I want to be ganged is to give the place a new look because it has been like this for at least 25 years. I would suggest to make a new referbisment like painting, carpentry work and more natural light especially inside by means of big windows and sky lights. I even suggest that there can also be a small lift because elder people can take advantage of this too.
+
+In conclution the costomer care section must be prepared also to help people finding books more quicker and give them some advice as well so that this local public library will be more efficient to all kind of people`,
+    wordCount: 205,
+    overallBand: 5.5,
+    criteria: { taOrTr: 5.0, cc: 6.0, lr: 6.0, gra: 5.5 },
+    examinerComment:
+      'This is a good attempt at addressing the task but unfortunately the first bullet point is completely omitted and the letter format is incomplete, as there is no ‘closing’ (e.g. Best wishes, Yours Faithfully). These errors reduce the rating for Task Achievement. The other bullet points are highlighted and well covered. The response has quite a natural, clear progression, although paragraphing would assist this. There is a good range of cohesive devices that have been used appropriately and some good examples of referencing. Despite the range and effective use of lexis, there are noticeable spelling errors, but they only rarely impede communication. Sentence types are mixed and there are many attempts at complex structures, but control is uneven and there are punctuation errors. Although the response shows some features of higher-level performance, the omission of bullet point one and the incomplete letter closing limit the overall rating.',
+    keyTakeaways: [
+      'Omitting any single bullet point ("describe what you like") or forgetting the letter sign-off caps Task Achievement even when vocabulary and ideas are solid.',
+    ],
+  },
+  {
+    id: 'official-gt-1b-script-c',
+    source: 'official_ielts',
+    taskType: 'gt_task_1',
+    taskNumber: 1,
+    subtype: 'letter_formal',
+    title: 'Official GT Task 1B – Sample Script C (Band 6)',
+    prompt:
+      'Your local public library wants to make improvements to their services and facilities. In order to get ideas from the public, they have asked library users to send them suggestions in writing. Write a letter to the librarian. In your letter: • describe what you like about the library • say what you don’t like • make suggestions for improvements. Begin your letter as follows: Dear Sir or Madam,',
+    candidateScript: `Dear Sir or Madam,
+
+This is in reference to your enquiry regarding the suggestions to library I would like give opinion in this regard. I visited the library so many times and found facilities and problem side by side.
+
+A library must consist of substantial amount of books, CDS and Cassets. These material should be placed and organise in a scientific manner so that most of the people can be benefited in the same time. In your library I liked the numbers of books you have. It almost covers the major part of the requirment of people but the availability of the book at the right place and time is the biggest concern. In library seating arrangements are very good too. The opening and closing timing realy suits the people.
+
+But, the situation is not at its best. You do not have the facility of Electronic material which you normally finds now a days. As I said the placement of books must be given attention. I have also faced problems when wanted to take away the books. You should relax the problem in this procedure.
+
+Library should be calm and safe. All the books should be arranged as per catalog. This sequential arrangement will not only ease the pressure on staff but also reduce the complaints. More Electronic equipments should indulg in the library facilities and matter available in the shelves.
+
+Thanking you for your efforts to improve the services for the betterment of the people in the locality.`,
+    wordCount: 245,
+    overallBand: 6.0,
+    criteria: { taOrTr: 6.0, cc: 6.0, lr: 6.5, gra: 5.5 },
+    examinerComment:
+      'The test taker covers the task requirements and the content of the letter is relevant. The format of the letter is incomplete as there is no ‘closing’ (e.g. Yours Faithfully, Best wishes), this impacts Task Achievement. All bullet points are covered and the purpose is clearly presented. The tone, though assertive, is consistently polite. There is a clear overall progression, but the arrangement of ideas within paragraphs at times detracts from the clarity of the letter. At other times, the sentences are not as fluently linked as they might be. There is a good range of vocabulary that is more than adequate. Although there are errors in collocation and word choice, there are also many examples of accurate choice and appropriate modification. A mix of simple and complex structures is used, but mistakes in punctuation and in areas such as article use and subject-verb agreements, limit the rating for this criterion. This response shows some features of higher-level performance, but weaknesses in format, organisation and grammatical control limit the overall rating to Band 6.',
+    keyTakeaways: [
+      'Incomplete letter format (missing closing) plus article/subject-verb agreement errors limit an otherwise solid Band 6–7 effort to Band 6.',
+    ],
+  },
+  {
+    id: 'official-gt-1b-script-d',
+    source: 'official_ielts',
+    taskType: 'gt_task_1',
+    taskNumber: 1,
+    subtype: 'letter_formal',
+    title: 'Official GT Task 1B – Sample Script D (Band 7)',
+    prompt:
+      'Your local public library wants to make improvements to their services and facilities. In order to get ideas from the public, they have asked library users to send them suggestions in writing. Write a letter to the librarian. In your letter: • describe what you like about the library • say what you don’t like • make suggestions for improvements. Begin your letter as follows: Dear Sir or Madam,',
+    candidateScript: `Dear Sir or Madam,
+
+I am writing this letter to express my opinion about library services and send some suggestions to improve your operation. I have been using your library services for 25 years and even my son has started to use it as well. I really enjoy of your personel staff and the way they serve the library users. They are always polite, friendly and easy find what you want to. The library is equipped with the comfortable furniture which helps user to feel freely and work efficient. You also have the reading room with the daily newspapers, magazines and other informative resources. I really appreciate all above-mentioned things in your library. But, I have some concerns I would like to share with you. The thing is I can not find anymore the recent edition books or books of authors of the current century. Of course, I understand we can always find them in the bookstores or in Internet. But everybody will agree with me that there is a great pleasure to read a book alive than in computer or others resources. So, it would be nice if you check with your managment to update it. And plus, I know, it would be costly but may be saving your time, to buy a computer and load a data base of your collection of books. We live and work in the 21st of century.
+
+That is all I would like to share with you.
+
+Yours faithfully,`,
+    wordCount: 249,
+    overallBand: 7.0,
+    criteria: { taOrTr: 7.5, cc: 7.0, lr: 7.0, gra: 6.5 },
+    examinerComment:
+      'This is a strong response, presented in an appropriate letter format. All bullet points are clearly presented and illustrated. The presentation of information is clear throughout and cohesive devices, referencing and substitution are flexibly used, with occasional error, although the absence of effective paragraphing prevents the award of the highest ratings for this criterion. Vocabulary is also used with some flexibility and there is a good range, with evidence that the test taker can use less common expressions and has an awareness of collocation. There is occasional error in word form and choice. Although a variety of structures is apparent, with a mix of simple and complex sentences, the level and regularity of errors in articles, prepositions and some verb phrases limit the rating for this criterion. The density of grammatical error prevents this response from fully satisfying the descriptors of the higher band.',
+    keyTakeaways: [
+      'Clear coverage and illustration of all three bullets plus appropriate letter format reach Band 7 even with regular minor article/preposition slips.',
+      'Effective body paragraphing is required for Band 8+ in Coherence and Cohesion.',
+    ],
+  },
+  {
+    id: 'official-gt-2a-script-a',
+    source: 'official_ielts',
+    taskType: 'task_2',
+    taskNumber: 2,
+    subtype: 'opinion',
+    title: 'Official GT Task 2A – Sample Script A (Band 5)',
+    prompt:
+      'In Britain, when someone gets old they often go to live in a home with other old people where there are nurses to look after them. Sometimes the government has to pay for this care. Who do you think should pay for this care, the government or the family?',
+    candidateScript: `Who should be responsible for our people.
+
+It is true that the old Peoples situation gets worse in the many countries. The first question must be what they want's and what they needs? Especially their necessity are more benefit more respect more quiet life.
+
+If they have been working for a long time in the any company or in the Public Sector and when they get old that's means during their retire's time company or Government must be responsible of their welfare, it is just my opinion. They should take care of them.
+
+In addition to company or Government. If they have good money they can look after themselves. We can do something to make easier their life for example an organization or a voluntary association, unions.
+
+The families or Relative's responsibility depends on their wealthy situations. If they could do they should do anything.
+
+Government's or their former place could supply them with life insurance and a good Social Security Policy. The Social community center or old age pensioner like in the Britain are very useful for them.
+
+For all of them life is hard and gets harder, in the their old ages. They expect more attention and good life.
+
+The old people, if don't want lost them. We should do anything that what we able to do.
+
+I.Bozyil`,
+    wordCount: 215,
+    overallBand: 5.0,
+    criteria: { taOrTr: 5.0, cc: 5.0, lr: 5.5, gra: 4.5 },
+    examinerComment:
+      'There are quite a lot of relevant ideas in the answer but they are not sufficiently developed. There are some areas in the answer where the organisation becomes weak and the reader finds the message difficult to follow. Nevertheless, the writer’s view is apparent and there is a logical flow to the points given. There are a lot of mistakes and some parts, such as the conclusion, are very hard to follow because of these errors. Although there is some appropriate vocabulary, sentence control is very weak.',
+    keyTakeaways: [
+      'Listing multiple ideas across fragmented short paragraphs without developing them holds Task Response and Cohesion to Band 5.',
+      'Weak sentence control (fragments, subject-verb errors) makes parts such as the conclusion difficult to follow.',
+    ],
+  },
+  {
+    id: 'official-gt-2a-script-b',
+    source: 'official_ielts',
+    taskType: 'task_2',
+    taskNumber: 2,
+    subtype: 'opinion',
+    title: 'Official GT Task 2A – Sample Script B (Band 8)',
+    prompt:
+      'In Britain, when someone gets old they often go to live in a home with other old people where there are nurses to look after them. Sometimes the government has to pay for this care. Who do you think should pay for this care, the government or the family?',
+    candidateScript: `Who should be responsible for our old people?
+
+One of the most challenging problems of today's society is the question who should be responsible for our old people. It is not only a financial problem but also a question of the system we want our society to have. In my essay I would like to examine four different models.
+
+Firstly, the company can be responsible for their retired employees. For this reason a special fund could be established. The advantage of this model is, if you belief in the capitalist system, that it should be the cheapest solution. A possible problem is that the companies might have competition disadvantage due to higher staff costs.
+
+A second solution is that the government has to take the responsibility for the old people's care. It can finance this with its tax incomes. Actually this is the most democratic model since everybody gets as much money as he or she needs. Unfortunately, as the present situation in our country shows, this solution seems not to work very well. The government can no longer afford supporting all the old peoples.
+
+Another way of solving this problem is to give back the responsibility to the individual. That means that everybody has to save money during their working life for the time after their retirement. This seems to be not a very fair model because there will certainly exist people who can't afford to save part of their salary. In this case the government would have to care for them.
+
+A last solution is to go back to the old model of the "big family" who cares for all their members. I don't think this is possible in our days society because the family structures have so much changed.
+
+To sum up I have to admitt that I can't find a really good solution for this problem. All models have advantages and disadvantage. Certainly we have to think about this topic much more in the future.`,
+    wordCount: 317,
+    overallBand: 8.0,
+    criteria: { taOrTr: 8.0, cc: 8.5, lr: 8.0, gra: 7.5 },
+    examinerComment:
+      'This is a very well-organised response which analyses the topic from four different angles and fully answers the question. The ideas are relevant and well supported. The answer is easy to read. There are some inaccuracies in word choice but they have minimal impact on the reader. There are also occasional errors in spelling and grammatical structure, which prevent the awarding of the highest band scores.',
+    keyTakeaways: [
+      'Clear structural framing ("four different models") with balanced evaluation of each model produces Band 8 Task Response and Coherence.',
+      'Minor slips ("belief", "admitt", "disadvantage") do not stop Band 8 when clarity and organisation are consistently strong.',
+    ],
+  },
+  {
+    id: 'official-gt-2b-script-a',
+    source: 'official_ielts',
+    taskType: 'task_2',
+    taskNumber: 2,
+    subtype: 'direct_question',
+    title: 'Official GT Task 2B – Sample Script A (Band 4)',
+    prompt:
+      'Shopping is becoming more and more popular as a leisure activity. However, some people feel that this has both positive and negative effects. Why is shopping so popular? What effects does its increase in popularity have on individuals and on society?',
+    candidateScript: `I think shopping is becoming more and more popular as a leisure activity. For example, Tea Tree Plaza Shopping Center as a biggest shopping center in Adelaide. I'm working the take way shop in the T.T.P Shopping Center. There are huge number of costmer working around in the center every day. Many people buy lots of foods, drinks, clothes and they are hand carry or they put in the trolly. On the other hand some pople are only window shopping.
+
+I sometime worry about people who bought many things into trollys because I think may be they are use money alot, and also some ladies who wear a looks expensive juellies. I have one friend who bankenrupt his self, because he had a sxpensive car, a sxpensive cloth, etc.
+
+I think bad effect is many loan campany established these yearz. People are easy to borrow money from loan campany and easy to go to bankalpt. People must consider about when they go to the shopping. Therefore before buy something people must consider about shopping such as for yourself.`,
+    wordCount: 175,
+    overallBand: 4.0,
+    criteria: { taOrTr: 4.0, cc: 4.0, lr: 4.0, gra: 4.0 },
+    examinerComment:
+      'The first part of the task (Why is shopping so popular?) is not addressed. The opening paragraph describes a large shopping centre but does not tell us why shopping is popular. The second paragraph presents the effect on individuals, but not on society as a whole. We can see that the writer thinks there are negative effects but the main ideas presented do not relate directly to this question. The relationship between ideas can be followed but there is a lack of progression in relation to the question. Some cohesive devices are used, but not always correctly and this leads to some repetition. Spelling errors are intrusive and cause strain. There is some relevant vocabulary, but overall the range is inadequate for the task. Frequent errors in syntax, verb phrases and articles keep the rating down, despite basic structures being present. The failure to address the task and the weaknesses in vocabulary and grammar limit this response to an overall Band 4.',
+    keyTakeaways: [
+      'In two-part questions, failing to answer the first question ("Why is shopping so popular?") and omitting societal effects caps Task Response at Band 4.',
+    ],
+  },
+  {
+    id: 'official-gt-2b-script-b',
+    source: 'official_ielts',
+    taskType: 'task_2',
+    taskNumber: 2,
+    subtype: 'direct_question',
+    title: 'Official GT Task 2B – Sample Script B (Band 6)',
+    prompt:
+      'Shopping is becoming more and more popular as a leisure activity. However, some people feel that this has both positive and negative effects. Why is shopping so popular? What effects does its increase in popularity have on individuals and on society?',
+    candidateScript: `Shopping as a leisure activity is an issue that raises an endless debates. There are, therefore, many arguments about positive and negative effects. In this essay I am writing to about the reasons of shopping's popularity and the effects on individuals and on society.
+
+To begin with, shopping is regarded as a kind of leisure activities such as sports, reading books and watching movies. Sometimes shopping makes a person feel relexed, it is especially true for people who have a lot of money. Most of all many shopper feel proxy satisfaction when they have the right to choose something.
+
+Of course the effects of its popularity depend on individuals and society. But there are a number of effects on individual and society in general. Over consumption is a major problem. The excessive preference of shopping might result in over consuming. And abnormal consumption lead to a violence of nature.
+
+To satisfy consumers' need, a lot of companies have to exploit the nature.
+
+The excessive consumption beyond normal shopping is responsible for social tension and class divisions. Because many person who can not affort to buy life commodities might feel anti-society attitude.
+
+From the above we considered two issues. These are very important issues because shopping is an inevitable part of our life. In the future I can hope that shoppers have to consider the influence on the other persons, the nature and society. And the government educate the general public do sound consumption.`,
+    wordCount: 243,
+    overallBand: 6.0,
+    criteria: { taOrTr: 6.0, cc: 6.0, lr: 6.0, gra: 5.5 },
+    examinerComment:
+      'The main parts of the task are addressed, although the first part (Why is shopping so popular?) is presented more fully than the second (the effects). Ideas are relevant but there is a lack of clarity which prevents a higher band score. Nevertheless, there is a clear overall progression in the response because ideas are logically organised. A range of markers is used effectively to link ideas, although there are errors in the use of some basic connectives. The test taker attempts to use a range of vocabulary and introduces some less common expressions, although with mixed success. Some expressions remain unclear, while others are used repetitively. Nevertheless, there is sufficient range and control to be adequate for the task. A mix of simple and complex structures is evident, but errors in grammar and punctuation occur and indicate limitations in control, although these errors generally do not reduce communication.',
+    keyTakeaways: [
+      'Addressing all parts of a multi-part prompt with logical progression reaches Band 6 even when one part is less developed and grammar/collocations show strain.',
+    ],
+  },
+  {
+    id: 'official-gt-2b-script-c',
+    source: 'official_ielts',
+    taskType: 'task_2',
+    taskNumber: 2,
+    subtype: 'direct_question',
+    title: 'Official GT Task 2B – Sample Script C (Band 8.5)',
+    prompt:
+      'Shopping is becoming more and more popular as a leisure activity. However, some people feel that this has both positive and negative effects. Why is shopping so popular? What effects does its increase in popularity have on individuals and on society?',
+    candidateScript: `Shopping is very popular among the majority of the population, despite their age or social standards. This is due to the fact that most people find shopping as an experience which makes a difference in their day to day life. Some people find themselves in a different world, surrounded by various material things which they may or may not be able to purchase. Even if they are not able to finance these, they find much pleasure in looking and feeling these things and imagining owning them some day. Some people go shopping when they really want to purchase things and they prefer to look around and compare the prices before buying them. I think most people love to go shopping because then they could meet friends, make contacts with people, and get to know what is in the latest trend. It provides them a pleasant distraction from their routine and sometimes dull life.
+
+The most important effect shopping has on an individual is that it nourishes the self-esteem. An individual may find the social contact most gratifying and this makes people come out of their shells and be more extrovert. Purchasing something, as well as knowing that you are financially able to purchase something give more self confidence to people.
+
+The increase in popularity to go shopping has many effects on the society. People may be encouraged to go into new businesses and it will improve the economy. More job opportunities will be created for people in these businesses. Encouraged by the increase of popularity manufacturers will try to improve their products, so that the consumers can have a wide range of products at competitive prices. The overall quality of the product as well as the services provided by the sales staff will be improved.
+
+More job opportunities will be created in advertising as the manufacturers try to sell their product. Consumers will have a better knowledge of the product so that they will not be misleaded by inferior quality products.
+
+I find shopping an interesting and pleasurable experience, as each year passes by, simply because it enriches my heart and mind.`,
+    wordCount: 342,
+    overallBand: 8.5,
+    criteria: { taOrTr: 8.5, cc: 8.5, lr: 8.5, gra: 8.5 },
+    examinerComment:
+      'This is a very strong response which directly answers the question. Each part of the task is explored in depth, ideas are set out clearly and well-developed. There is a clear progression throughout the response and lapses in coherence and cohesion are minimal. The personal comment in the final paragraph means that the ending does not relate directly to the question, but this is considered a minor lapse. A wide range of vocabulary is used with flexibility and precision throughout the response and errors are very rare. The occasional minor errors or omissions in structures do not detract from the wide range, flexible and accurate use generally, and the majority of structures are error-free. This is a clear example of a strong performance at overall Band 8.5.',
+    keyTakeaways: [
+      'Deep exploration of every part of the prompt (reasons, individual effects, societal effects) with precise lexis ("nourishes the self-esteem", "most gratifying", "come out of their shells") achieves Band 8.5 even with a minor personal-comment ending.',
+    ],
+  },
 ];
 
 /**
@@ -1382,5 +1700,265 @@ export function detectCopiedRubric(prompt: string, candidateEssay: string): {
     copiedPhrases,
     copiedWordCount,
     effectiveWordCount,
+  };
+}
+
+export interface VisualTaskAchievementAudit {
+  hasVisualInput: boolean;
+  overviewPresent: boolean;
+  comparisonsPresent: boolean;
+  hasSupportingData: boolean;
+  hasInappropriateSpeculationOrFormat: boolean;
+  expectedKeyFeatures: string[];
+  coveredKeyFeatures: string[];
+  missingKeyFeatures: string[];
+  expectedDataPointsOrPeriods: string[];
+  coveredDataPointsOrPeriods: string[];
+  featureCoverageRatio: number;
+  dataPointCoverageRatio: number;
+  visualAuditSummary: string;
+}
+
+const VISUAL_SYNONYM_GROUPS: Record<string, string[]> = {
+  male: ['male', 'males', 'men', 'man', 'boy', 'boys'],
+  female: ['female', 'females', 'women', 'woman', 'girl', 'girls'],
+  'part-time': ['part-time', 'part time'],
+  'full-time': ['full-time', 'full time'],
+  television: ['television', 'tv'],
+  radio: ['radio'],
+  digger: ['digger', 'excavator', 'excavated', 'dug'],
+  clay: ['clay', 'earth', 'soil'],
+  'metal grid': ['metal grid', 'grid', 'screen', 'sieve', 'mesh'],
+  roller: ['roller', 'rollers', 'conveyor'],
+  'sand + water': ['sand', 'water'],
+  'wire cutter': ['wire cutter', 'wire cutters', 'cutter'],
+  mould: ['mould', 'moulds', 'mold', 'molds', 'moulding'],
+  'drying oven': ['drying oven', 'oven', 'dried', 'drying'],
+  kiln: ['kiln', 'kilns', 'high temperature oven', 'fired', 'baked'],
+  'cooling chamber': ['cooling chamber', 'cooling', 'cooled'],
+  packaging: ['packaging', 'packaged', 'pack', 'packed', 'pallets'],
+  delivery: ['delivery', 'delivered', 'lorry', 'lorries', 'truck', 'trucks', 'vans', 'transported'],
+  farmland: ['farmland', 'agricultural', 'farm'],
+  park: ['park'],
+  housing: ['housing', 'houses', 'homes', 'residential', 'living area', 'buildings'],
+  shop: ['shop', 'shops', 'stores'],
+  hotel: ['hotel'],
+  carpark: ['carpark', 'car park', 'parking'],
+  market: ['market', 'markets'],
+  restaurants: ['restaurant', 'restaurants', 'cafes'],
+  dock: ['dock', 'pier', 'jetty'],
+};
+
+/**
+ * Audits a candidate's Academic Task 1 essay against the visual picture's labels,
+ * structured data table, and verified teacher visual description to ground Task Achievement.
+ */
+export function analyzeVisualTaskAchievement(params: {
+  subtype?: WritingTaskSubtype | string;
+  structuredData?: any;
+  teacherVisualDescription?: string;
+  svgLabels?: string[];
+  images?: string[];
+  candidateEssay: string;
+}): VisualTaskAchievementAudit {
+  const {
+    subtype,
+    structuredData,
+    teacherVisualDescription = '',
+    svgLabels = [],
+    images = [],
+    candidateEssay,
+  } = params;
+
+  const lowerEssay = (candidateEssay || '').toLowerCase();
+  const hasVisualInput =
+    images.length > 0 ||
+    svgLabels.length > 0 ||
+    Boolean(structuredData) ||
+    teacherVisualDescription.trim().length > 0;
+
+  // 1. Check Overview presence (including process step summary or map transformation summary)
+  const overviewPresent =
+    /\b(overall|in summary|in general|generally speaking|it is clear that|the most noticeable|main trend|can be outlined in|consists of|main stages|undergone significant changes|completely transformed|transformed into)\b/i.test(
+      candidateEssay
+    );
+
+  // 2. Check Comparative / Contrastive structures
+  const comparisonsPresent =
+    /\b(more than|less than|fewer than|higher|lower|highest|lowest|largest|smallest|most|least|whereas|while|in contrast|by contrast|compared to|in comparison|on the other hand|unlike|surpassed|overtook|outperformed|double|doubled|twice|triple|tripled|equal|same)\b/i.test(
+      candidateEssay
+    );
+
+  // 3. Check supporting data / figures
+  const hasSupportingData =
+    /\d+|\b(half|quarter|third|fifth|tenth|double|doubled|triple|tripled|fourfold|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)\b/i.test(
+      candidateEssay
+    );
+
+  // 4. Check inappropriate speculation / personal opinion / letter format in Academic Task 1
+  const hasInappropriateSpeculationOrFormat =
+    /^\s*dear\s+(sir|madam|mr|mrs|ms|friend)/i.test(candidateEssay) ||
+    /\b(in my opinion|i personally believe|governments should|people must|as the manager told me|bothered me)\b/i.test(
+      candidateEssay
+    );
+
+  // 5. Extract expected key visual features from structuredData, svgLabels, and teacherVisualDescription
+  const rawFeatureCandidates = new Set<string>();
+
+  if (structuredData?.sectors && typeof structuredData.sectors === 'object') {
+    for (const sectorKey of Object.keys(structuredData.sectors)) {
+      const parts = sectorKey
+        .split(/[-–—:/(),]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => s.length >= 2 && !['audience', 'education', 'students', '%'].includes(s));
+      for (const p of parts) rawFeatureCandidates.add(p);
+    }
+  }
+
+  for (const label of svgLabels) {
+    const clean = label.replace(/\*/g, '').trim().toLowerCase();
+    if (
+      clean.length >= 3 &&
+      !/^\d/.test(clean) &&
+      ![
+        'men and women in further education',
+        '(thousands)',
+        'time of day or night',
+        'percentage of uk population (over 4 years old)',
+        'brick manufacturing',
+        'present',
+        'or',
+        'high',
+        'moderate',
+      ].includes(clean)
+    ) {
+      rawFeatureCandidates.add(clean);
+    }
+  }
+
+  // Also scan teacherVisualDescription for known canonical visual concepts
+  const lowerVisualDesc = teacherVisualDescription.toLowerCase();
+  for (const canonicalKey of Object.keys(VISUAL_SYNONYM_GROUPS)) {
+    if (lowerVisualDesc.includes(canonicalKey)) {
+      rawFeatureCandidates.add(canonicalKey);
+    }
+  }
+
+  // Extract distinct capitalized proper nouns / entities from teacherVisualDescription (e.g. Province A, China, Algeria, Rent, Utilities)
+  const properMatches =
+    teacherVisualDescription.match(/\b(?:Province\s+[A-Z]|[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)\b/g) ||
+    [];
+  const stopProper = new Set([
+    'Verified',
+    'Bar',
+    'Line',
+    'Pie',
+    'Table',
+    'Map',
+    'Two',
+    'Three',
+    'Process',
+    'Step',
+    'Overall',
+    'The',
+    'From',
+    'After',
+    'Once',
+    'While',
+    'First',
+    'Next',
+    'Finally',
+    'Total',
+    'Part',
+    'Full',
+    'October',
+    'December',
+  ]);
+  for (const pm of properMatches) {
+    if (!stopProper.has(pm) && pm.length >= 3) {
+      rawFeatureCandidates.add(pm.toLowerCase());
+    }
+  }
+
+  // Normalize feature candidates and check coverage in candidateEssay
+  const expectedKeyFeatures = Array.from(rawFeatureCandidates).slice(0, 14);
+  const coveredKeyFeatures: string[] = [];
+  const missingKeyFeatures: string[] = [];
+
+  for (const feat of expectedKeyFeatures) {
+    const synonyms = VISUAL_SYNONYM_GROUPS[feat] || [feat];
+    const isCovered = synonyms.some((syn) => lowerEssay.includes(syn.toLowerCase()));
+    if (isCovered) {
+      coveredKeyFeatures.push(feat);
+    } else {
+      missingKeyFeatures.push(feat);
+    }
+  }
+
+  // 6. Extract expected years / time periods / key numbers from structuredData & teacherVisualDescription
+  const expectedDataPointsSet = new Set<string>();
+  if (Array.isArray(structuredData?.years)) {
+    for (const y of structuredData.years) {
+      const yearMatch = String(y).match(/\b(19\d{2}|20\d{2})\b/);
+      if (yearMatch) expectedDataPointsSet.add(yearMatch[1]);
+    }
+  }
+  const descYears = teacherVisualDescription.match(/\b(19\d{2}|20\d{2})\b/g) || [];
+  for (const y of descYears) expectedDataPointsSet.add(y);
+
+  if (subtype === 'process') {
+    const processNums = teacherVisualDescription.match(/\b(24|48|72|200|980|870|1300)\b/g) || [];
+    for (const n of processNums) expectedDataPointsSet.add(n);
+  }
+
+  const expectedDataPointsOrPeriods = Array.from(expectedDataPointsSet).slice(0, 10);
+  const coveredDataPointsOrPeriods = expectedDataPointsOrPeriods.filter((dp) =>
+    lowerEssay.includes(dp.toLowerCase())
+  );
+
+  const featureCoverageRatio =
+    expectedKeyFeatures.length > 0
+      ? coveredKeyFeatures.length / expectedKeyFeatures.length
+      : 1.0;
+
+  const dataPointCoverageRatio =
+    expectedDataPointsOrPeriods.length > 0
+      ? coveredDataPointsOrPeriods.length / expectedDataPointsOrPeriods.length
+      : hasSupportingData
+      ? 1.0
+      : 0.0;
+
+  const summaryParts: string[] = [];
+  summaryParts.push(
+    `Overview: ${overviewPresent ? 'Present' : 'Missing/Unclear'}.`,
+    `Comparisons: ${comparisonsPresent ? 'Present' : 'Limited'}.`,
+    `Visual Feature Coverage: ${coveredKeyFeatures.length}/${expectedKeyFeatures.length} (${Math.round(
+      featureCoverageRatio * 100
+    )}%)${
+      missingKeyFeatures.length > 0
+        ? ` [Omitted features: ${missingKeyFeatures.slice(0, 5).join(', ')}]`
+        : ''
+    }.`
+  );
+  if (expectedDataPointsOrPeriods.length > 0) {
+    summaryParts.push(
+      `Timeframes/Key Figures Referenced: ${coveredDataPointsOrPeriods.length}/${expectedDataPointsOrPeriods.length} (${coveredDataPointsOrPeriods.join(', ') || 'none'}).`
+    );
+  }
+
+  return {
+    hasVisualInput,
+    overviewPresent,
+    comparisonsPresent,
+    hasSupportingData,
+    hasInappropriateSpeculationOrFormat,
+    expectedKeyFeatures,
+    coveredKeyFeatures,
+    missingKeyFeatures,
+    expectedDataPointsOrPeriods,
+    coveredDataPointsOrPeriods,
+    featureCoverageRatio,
+    dataPointCoverageRatio,
+    visualAuditSummary: summaryParts.join(' '),
   };
 }

@@ -505,6 +505,76 @@ export const WritingFeedbackView: React.FC<WritingFeedbackViewProps> = ({
               </div>
             )}
 
+            {/* Task Prompt & Visual Picture Reference (For Task Achievement Review) */}
+            {currentVersion && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                    Task {activeTaskNum} Prompt & Visual Reference
+                  </span>
+                  <h4 className="text-sm font-bold text-slate-800 mt-1">
+                    {currentVersion.title}
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-1 whitespace-pre-line leading-relaxed">
+                    {currentVersion.prompt}
+                  </p>
+                </div>
+
+                {currentVersion.images && currentVersion.images.length > 0 && (
+                  <div className="space-y-3">
+                    {currentVersion.images.map((img: string, idx: number) => (
+                      <div
+                        key={idx}
+                        className="border border-slate-200 rounded-xl p-3 bg-white flex justify-center"
+                      >
+                        <img
+                          src={img}
+                          alt={`Task ${activeTaskNum} visual ${idx + 1}`}
+                          className="max-w-full max-h-[420px] object-contain"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {currentVersion.structuredData && (
+                  <div className="border border-slate-200 rounded-xl p-4 overflow-x-auto bg-slate-50/50">
+                    <h5 className="text-[11px] font-bold text-slate-700 uppercase mb-2">
+                      Verified Chart Data ({currentVersion.structuredData.unit || 'Values'})
+                    </h5>
+                    <table className="min-w-full text-xs text-slate-800 border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-300 bg-slate-100">
+                          <th className="text-left py-2 px-3 font-bold">Category</th>
+                          {currentVersion.structuredData.years?.map((y: string) => (
+                            <th key={y} className="text-right py-2 px-3 font-bold">
+                              {y}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentVersion.structuredData.sectors &&
+                          Object.entries(currentVersion.structuredData.sectors).map(
+                            ([sector, values]: [string, any]) => (
+                              <tr key={sector} className="border-b border-slate-200">
+                                <td className="py-1.5 px-3 font-medium">{sector}</td>
+                                {Array.isArray(values) &&
+                                  values.map((val: any, idx: number) => (
+                                    <td key={idx} className="py-1.5 px-3 text-right font-mono">
+                                      {val}
+                                    </td>
+                                  ))}
+                              </tr>
+                            )
+                          )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Candidate Submission Text Reference */}
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
               <h4 className="text-sm font-bold text-slate-800 mb-2">

@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Sparkles,
   ArrowRight,
+  ArrowUpRight,
   RotateCcw,
   Layers,
   Award,
@@ -73,6 +74,12 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
   const [filterType, setFilterType] = useState<'all' | 'academic' | 'general'>('all');
   const [filterCategory, setFilterCategory] = useState<'all' | 'mock' | 'practice'>('all');
   const [selectedQuestionTypeFilter, setSelectedQuestionTypeFilter] = useState<string>('all');
+
+  // Test mode selection modal state (Practice / Mock Test / Practice by Question Type)
+  const [modeModalTest, setModeModalTest] = useState<{
+    test: ReadingTest | ListeningTest;
+    skill: 'reading' | 'listening';
+  } | null>(null);
 
   // Skill drill selection modal state
   const [drillModalTest, setDrillModalTest] = useState<{
@@ -428,93 +435,27 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredReadingTests.map((test) => {
-              const activeAttempt = readingAttempts.find(
-                (a) => !a.questionTypeFilter && a.testId === test.id && a.status === 'in_progress'
-              );
-              const completedAttempt = readingAttempts.find(
-                (a) => !a.questionTypeFilter && a.testId === test.id && (a.status === 'submitted' || a.status === 'expired')
-              );
-              const partsCount = test.passageCount || 3;
-              const hasGroupSummary = test.questionGroupsSummary && test.questionGroupsSummary.length > 0;
+            {filteredReadingTests.map((test) => (
+              <button
+                key={test.id}
+                type="button"
+                onClick={() => setModeModalTest({ test, skill: 'reading' })}
+                className="w-full text-left bg-[#F4F4F3] hover:bg-[#ECECE9] rounded-2xl border border-[#E5E3DD] hover:border-[#084F7D]/40 p-5 sm:p-6 transition-all flex flex-col justify-between min-h-[144px] group cursor-pointer"
+              >
+                <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors">
+                  {test.title}
+                </h3>
 
-              return (
-                <div
-                  key={test.id}
-                  className="bg-white rounded-2xl border border-[#E5E1D7] p-5 shadow-2xs hover:shadow-sm hover:border-[#084F7D]/35 transition-all flex flex-col justify-between group"
-                >
-                  <div className="mb-4">
-                    {/* Clean, readable Title */}
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors">
-                      {test.title}
-                    </h3>
-                  </div>
-
-                  {/* Clean Action Buttons */}
-                  <div className="space-y-2">
-                    {/* PRACTICE BUTTON */}
-                    <button
-                      onClick={() => {
-                        if (!isLoggedIn) {
-                          onOpenLogin();
-                          return;
-                        }
-                        if (activeAttempt && selectedQuestionTypeFilter === 'all') {
-                          setResumePromptModal({
-                            test,
-                            skill: 'reading',
-                            mode: 'practice',
-                            attemptId: activeAttempt.id,
-                          });
-                          return;
-                        }
-                        onStartTest(
-                          test.id,
-                          'practice',
-                          undefined,
-                          undefined,
-                          selectedQuestionTypeFilter !== 'all' ? selectedQuestionTypeFilter : undefined
-                        );
-                      }}
-                      className="w-full py-2.5 px-3.5 bg-[#F6F4EE] hover:bg-[#EFECE3] text-slate-800 font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center border border-[#E5E1D7]"
-                    >
-                      Practice
-                    </button>
-
-                    {/* MOCK TEST BUTTON (Brand Navy) */}
-                    <button
-                      onClick={() => {
-                        if (!isLoggedIn) {
-                          onOpenLogin();
-                          return;
-                        }
-                        if (activeAttempt) {
-                          setResumePromptModal({
-                            test,
-                            skill: 'reading',
-                            mode: 'mock',
-                            attemptId: activeAttempt.id,
-                          });
-                          return;
-                        }
-                        onStartTest(test.id, 'mock');
-                      }}
-                      className="w-full py-2.5 px-3.5 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center shadow-2xs"
-                    >
-                      Mock Test
-                    </button>
-
-                    {/* PRACTICE BY QUESTION TYPE BUTTON */}
-                    <button
-                      onClick={() => setDrillModalTest({ test, skill: 'reading' })}
-                      className="w-full py-2.5 px-3 bg-[#F6F4EE] hover:bg-[#EFECE3] text-slate-800 font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center border border-[#E5E1D7]"
-                    >
-                      Practice by Question Type
-                    </button>
-                  </div>
+                <div className="mt-6 flex items-center justify-between gap-3">
+                  <span className="text-xs sm:text-sm text-slate-500 font-normal">
+                    Select a test mode
+                  </span>
+                  <span className="w-9 h-9 rounded-full bg-white border border-slate-200/70 shadow-2xs flex items-center justify-center text-slate-700 group-hover:bg-[#084F7D] group-hover:text-white group-hover:border-[#084F7D] transition-all shrink-0">
+                    <ArrowUpRight className="w-4 h-4" />
+                  </span>
                 </div>
-              );
-            })}
+              </button>
+            ))}
           </div>
         )
       ) : selectedSkill === 'listening' ? (
@@ -527,92 +468,27 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredListeningTests.map((test) => {
-              const activeAttempt = listeningAttempts.find(
-                (a) => !a.questionTypeFilter && a.testId === test.id && a.status === 'in_progress'
-              );
-              const completedAttempt = listeningAttempts.find(
-                (a) => !a.questionTypeFilter && a.testId === test.id && (a.status === 'submitted' || a.status === 'expired')
-              );
-              const partsCount = test.partCount || 4;
+            {filteredListeningTests.map((test) => (
+              <button
+                key={test.id}
+                type="button"
+                onClick={() => setModeModalTest({ test, skill: 'listening' })}
+                className="w-full text-left bg-[#F4F4F3] hover:bg-[#ECECE9] rounded-2xl border border-[#E5E3DD] hover:border-[#084F7D]/40 p-5 sm:p-6 transition-all flex flex-col justify-between min-h-[144px] group cursor-pointer"
+              >
+                <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors">
+                  {test.title}
+                </h3>
 
-              return (
-                <div
-                  key={test.id}
-                  className="bg-white rounded-2xl border border-[#E5E1D7] p-5 shadow-2xs hover:shadow-sm hover:border-[#084F7D]/35 transition-all flex flex-col justify-between group"
-                >
-                  <div className="mb-4">
-                    {/* Clean, readable Title */}
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors">
-                      {test.title}
-                    </h3>
-                  </div>
-
-                  {/* Clean Action Buttons */}
-                  <div className="space-y-2">
-                    {/* PRACTICE BUTTON */}
-                    <button
-                      onClick={() => {
-                        if (!isLoggedIn) {
-                          onOpenLogin();
-                          return;
-                        }
-                        if (activeAttempt && selectedQuestionTypeFilter === 'all') {
-                          setResumePromptModal({
-                            test,
-                            skill: 'listening',
-                            mode: 'practice',
-                            attemptId: activeAttempt.id,
-                          });
-                          return;
-                        }
-                        onStartListeningTest(
-                          test.id,
-                          'practice',
-                          undefined,
-                          undefined,
-                          selectedQuestionTypeFilter !== 'all' ? selectedQuestionTypeFilter : undefined
-                        );
-                      }}
-                      className="w-full py-2.5 px-3.5 bg-[#F6F4EE] hover:bg-[#EFECE3] text-slate-800 font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center border border-[#E5E1D7]"
-                    >
-                      Practice
-                    </button>
-
-                    {/* MOCK TEST BUTTON (Brand Navy) */}
-                    <button
-                      onClick={() => {
-                        if (!isLoggedIn) {
-                          onOpenLogin();
-                          return;
-                        }
-                        if (activeAttempt) {
-                          setResumePromptModal({
-                            test,
-                            skill: 'listening',
-                            mode: 'mock',
-                            attemptId: activeAttempt.id,
-                          });
-                          return;
-                        }
-                        onStartListeningTest(test.id, 'mock');
-                      }}
-                      className="w-full py-2.5 px-3.5 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center shadow-2xs"
-                    >
-                      Mock Test
-                    </button>
-
-                    {/* PRACTICE BY QUESTION TYPE BUTTON */}
-                    <button
-                      onClick={() => setDrillModalTest({ test, skill: 'listening' })}
-                      className="w-full py-2.5 px-3 bg-[#F6F4EE] hover:bg-[#EFECE3] text-slate-800 font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center border border-[#E5E1D7]"
-                    >
-                      Practice by Question Type
-                    </button>
-                  </div>
+                <div className="mt-6 flex items-center justify-between gap-3">
+                  <span className="text-xs sm:text-sm text-slate-500 font-normal">
+                    Select a test mode
+                  </span>
+                  <span className="w-9 h-9 rounded-full bg-white border border-slate-200/70 shadow-2xs flex items-center justify-center text-slate-700 group-hover:bg-[#084F7D] group-hover:text-white group-hover:border-[#084F7D] transition-all shrink-0">
+                    <ArrowUpRight className="w-4 h-4" />
+                  </span>
                 </div>
-              );
-            })}
+              </button>
+            ))}
           </div>
         )
       ) : selectedSkill === 'writing' ? (
@@ -820,6 +696,143 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* TEST MODE SELECTION MODAL */}
+      {modeModalTest && (() => {
+        const { test, skill } = modeModalTest;
+        const attempts = skill === 'reading' ? readingAttempts : listeningAttempts;
+        const activeAttempt = attempts.find(
+          (a) => !a.questionTypeFilter && a.testId === test.id && a.status === 'in_progress'
+        );
+
+        const launchMode = (mode: 'practice' | 'mock') => {
+          setModeModalTest(null);
+          if (!isLoggedIn) {
+            onOpenLogin();
+            return;
+          }
+          if (activeAttempt && (mode === 'mock' || selectedQuestionTypeFilter === 'all')) {
+            setResumePromptModal({
+              test,
+              skill,
+              mode,
+              attemptId: activeAttempt.id,
+            });
+            return;
+          }
+          const qFilter = mode === 'practice' && selectedQuestionTypeFilter !== 'all'
+            ? selectedQuestionTypeFilter
+            : undefined;
+          if (skill === 'reading') {
+            onStartTest(test.id, mode, undefined, undefined, qFilter);
+          } else {
+            onStartListeningTest(test.id, mode, undefined, undefined, qFilter);
+          }
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+            onClick={() => setModeModalTest(null)}
+          >
+            <div
+              className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-[#E5E1D7] space-y-5 animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-[#EBF4F9] text-[#084F7D] mb-1.5 inline-block">
+                    {skill === 'reading' ? 'Reading Test' : 'Listening Test'}
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
+                    {test.title}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Select how you would like to take this test.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModeModalTest(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+                  aria-label="Close modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 3 Exercise Types */}
+              <div className="space-y-2.5">
+                {/* 1. Practice */}
+                <button
+                  type="button"
+                  onClick={() => launchMode('practice')}
+                  className="w-full text-left p-4 rounded-2xl border border-[#E5E1D7] bg-[#F6F4EE] hover:bg-[#EFECE3] hover:border-[#084F7D]/40 transition-all flex items-center justify-between gap-3 group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-white border border-[#E5E1D7] text-[#084F7D] flex items-center justify-center shrink-0">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">Practice</div>
+                      <div className="text-xs text-slate-500">
+                        {selectedQuestionTypeFilter !== 'all'
+                          ? `Filtered by ${formatQuestionTypeName(selectedQuestionTypeFilter)}`
+                          : 'Untimed · Instant answers & explanations'}
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#084F7D] group-hover:translate-x-0.5 transition-all shrink-0" />
+                </button>
+
+                {/* 2. Mock Test (Brand Navy) */}
+                <button
+                  type="button"
+                  onClick={() => launchMode('mock')}
+                  className="w-full text-left p-4 rounded-2xl bg-[#084F7D] hover:bg-[#063D62] text-white transition-all flex items-center justify-between gap-3 shadow-2xs group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-white/15 text-white flex items-center justify-center shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold">Mock Test</div>
+                      <div className="text-xs text-white/80">
+                        Timed exam conditions · Full test simulation
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-white/80 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                </button>
+
+                {/* 3. Practice by Question Type */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModeModalTest(null);
+                    setDrillModalTest({ test, skill });
+                  }}
+                  className="w-full text-left p-4 rounded-2xl border border-[#E5E1D7] bg-[#F6F4EE] hover:bg-[#EFECE3] hover:border-[#084F7D]/40 transition-all flex items-center justify-between gap-3 group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-white border border-[#E5E1D7] text-[#084F7D] flex items-center justify-center shrink-0">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">Practice by Question Type</div>
+                      <div className="text-xs text-slate-500">
+                        Focus on specific question types in this test
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#084F7D] group-hover:translate-x-0.5 transition-all shrink-0" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* SKILL / QUESTION TYPE PRACTICE MODAL */}
       {drillModalTest && (

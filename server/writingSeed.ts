@@ -1,5 +1,5 @@
 import { db } from './db';
-import { createWritingTask, publishWritingTask } from './writingService';
+import { createWritingTask, publishWritingTask, getWritingTaskById } from './writingService';
 import { WritingTask } from '../shared/types';
 
 export function seedWritingData() {
@@ -20,6 +20,7 @@ export const OFFICIAL_AND_ADVANTAGE_WRITING_TASKS = [
     instructions: 'You should spend about 20 minutes on this task. Write at least 150 words.',
     minWords: 150,
     suggestedTimeMinutes: 20,
+    images: ['/diagrams/writing_task1a_further_education.svg'],
     structuredData: {
       unit: 'Thousands of students',
       years: ['1970/71', '1980/81', '1990/91'],
@@ -53,6 +54,7 @@ Full-time enrolment figures were considerably lower but showed steady upward tre
     instructions: 'You should spend about 20 minutes on this task. Write at least 150 words.',
     minWords: 150,
     suggestedTimeMinutes: 20,
+    images: ['/diagrams/writing_task1b_radio_tv_audiences.svg'],
     structuredData: {
       unit: '% of UK population (over 4 years old)',
       years: ['6:00 AM', '8:00 AM', '12:00 Noon', '2:00 PM', '8:00 PM', '12:00 Midnight', '4:00 AM'],
@@ -84,6 +86,7 @@ In contrast, television audiences were negligible at 6:00 am and rose modestly t
     instructions: 'You should spend about 20 minutes on this task. Write at least 150 words.',
     minWords: 150,
     suggestedTimeMinutes: 20,
+    images: ['/diagrams/writing_task1c_brick_manufacturing.svg'],
     teacherVisualDescription:
       'Process diagram: Brick Manufacturing in 7 steps. Step 1: Digger excavates clay from the ground. Step 2: Clay is sifted through a metal grid onto a roller. Step 3: Sand and water are added. Step 4: Mixture is shaped into bricks using either a wire cutter or a mould. Step 5: Bricks are placed in a drying oven for 24 to 48 hours. Step 6: Bricks are fired in a kiln (first at moderate temperature 200°C-980°C, then high temperature 870°C-1300°C) and cooled in a cooling chamber for 48 to 72 hours. Step 7: Bricks are packaged and delivered by truck.',
     teacherAssessmentGuidance:
@@ -95,6 +98,30 @@ Overall, brick manufacturing is a linear process that begins with the excavation
 In the initial stage, a mechanical digger excavates clay from the earth. These large lumps of clay are then placed onto a metal grid, which breaks them down into smaller particles that drop onto a moving roller. Next, sand and water are added to the segregated clay to form a homogenous mixture, which is either pressed into moulds or sliced into brick-shaped blocks using a wire cutter.
 
 Once shaped, the raw bricks are placed in a drying oven for 24 to 48 hours. Subsequently, the dried bricks are transferred to a kiln, where they are fired first at a moderate temperature of 200°C to 980°C and then at a high temperature ranging from 870°C to 1300°C. They are then cooled for 48 to 72 hours in a cooling chamber before being packaged onto pallets and delivered by lorry.`,
+  },
+  {
+    title: 'IELTS Advantage Academic Task 1: Transformation of a Village in the West of Ireland (Maps)',
+    taskType: 'academic_task_1' as const,
+    taskNumber: 1 as const,
+    testType: 'academic' as const,
+    subtype: 'map' as const,
+    prompt:
+      'The two maps below show a small village in the west of Ireland in the year 2000 and at the present time.\n\nSummarise the information by selecting and reporting the main features and make comparisons where relevant.',
+    instructions: 'You should spend about 20 minutes on this task. Write at least 150 words.',
+    minWords: 150,
+    suggestedTimeMinutes: 20,
+    images: ['/diagrams/writing_task1_ireland_village_map.svg'],
+    teacherVisualDescription:
+      'Two maps (2000 vs Present) with compass rose. In 2000: Farmland in the northwest, 4 houses along a side road to the west of the main north-south road, shops and a hotel on the northern side of the east-west coastal road, a market on the southern side of the coastal road, and a dock on the southern seafront. At Present: Farmland in the northwest has been replaced by a park; the west side road has been extended with 10 houses total; a new northeast road branch has been built with 3 additional houses; a carpark has been constructed east of the hotel; the shops and hotel remain unchanged; the market has been replaced by restaurants; the dock has been demolished.',
+    teacherAssessmentGuidance:
+      'Must use accurate cardinal directions (northwest, east, west, south), present perfect passive for developments from 2000 to Present, and explicitly mention unchanged features (shops and hotel) alongside new additions and removals.',
+    modelResponse: `The two maps display the transformation of a small village in the west of Ireland from 2000 to the present time.
+
+Overall, the village has undergone significant changes with the construction of more housing and restaurants. Another noticeable feature is that the farmland has been turned into a new park over the period.
+
+In 2000, there was a dock at the seafront which has been removed. There were some shops, a hotel, and a market on both sides of the coastal road running from west to east. While the shops and the hotel on the northern side of the road remain relatively the same now, the market on the southern side of the road has been replaced by some restaurants. A new car park has been built east of the hotel.
+
+From the coastal road, there is a main road running northward. There used to be only four houses on the side road, leading from the main road to the west. This side road has been extended westward with more housing on both sides of it, and a new side road with additional housing has been constructed to the east of the main road. Lastly, the farmland that once occupied the northwest of the village has been replaced by a new park.`,
   },
   {
     title: 'Official IELTS Task 2A: Family Wealth and Preparation for Adult Life',
@@ -140,24 +167,134 @@ Nevertheless, the economic and social benefits of international tourism are tran
 
 In conclusion, while unmanaged tourism can harm the environment and inconvenience local residents, these drawbacks do not outweigh the immense economic lifeline and cultural exchange that international travel provides.`,
   },
+  {
+    title: 'Official IELTS General Training Task 1A: Letter to College Accommodation Officer',
+    taskType: 'gt_task_1' as const,
+    taskNumber: 1 as const,
+    testType: 'general' as const,
+    subtype: 'letter_formal' as const,
+    prompt:
+      'You live in a room in college which you share with another student. However, there are many problems with this arrangement and you find it very difficult to work.\n\nWrite a letter to the accommodation officer at the college. In the letter\n• describe the situation\n• explain your problems and why it is difficult to work\n• say what kind of accommodation you would prefer\n\nYou do NOT need to write any addresses.\nBegin your letter as follows:\nDear Sir or Madam,',
+    instructions: 'You should spend about 20 minutes on this task. Write at least 150 words.',
+    minWords: 150,
+    suggestedTimeMinutes: 20,
+    teacherAssessmentGuidance:
+      'Must use a formal letter register ("Dear Sir or Madam," / "Yours faithfully,"), clearly state the purpose in the opening, cover all three bullet points with specific detail (especially the type of preferred accommodation, not just a single word), and write at least 150 words.',
+    modelResponse: `Dear Sir or Madam,
+
+I am writing to inform you about ongoing difficulties I am experiencing in my current shared room in Maple Hall and to request a transfer to alternative accommodation for the upcoming term.
+
+At present, I share Room 204 with another first-year student. Unfortunately, our daily routines and study habits are completely incompatible, which has made it almost impossible for me to concentrate on my coursework. My roommate regularly invites groups of friends over in the evenings and plays loud music until past midnight, even on weeknights. In addition, he frequently borrows my textbooks and personal items without asking, and leaves the desk area cluttered. Because I have major examinations approaching next month, I urgently need a calm and orderly environment in the evenings.
+
+I would be extremely grateful if you could relocate me to a quiet single-occupancy study bedroom, ideally on an upper floor or in one of the postgraduate quiet-zone residences, with a dedicated desk and access to a shared kitchen.
+
+Thank you very much for considering my request. I look forward to hearing from you soon.
+
+Yours faithfully,
+Alex Rivera`,
+  },
+  {
+    title: 'Official IELTS General Training Task 1B: Suggestions for Local Public Library',
+    taskType: 'gt_task_1' as const,
+    taskNumber: 1 as const,
+    testType: 'general' as const,
+    subtype: 'letter_formal' as const,
+    prompt:
+      'Your local public library wants to make improvements to their services and facilities. In order to get ideas from the public, they have asked library users to send them suggestions in writing.\n\nWrite a letter to the librarian. In your letter\n• describe what you like about the library\n• say what you don’t like\n• make suggestions for improvements\n\nYou do NOT need to write any addresses.\nBegin your letter as follows:\nDear Sir or Madam,',
+    instructions: 'You should spend about 20 minutes on this task. Write at least 150 words.',
+    minWords: 150,
+    suggestedTimeMinutes: 20,
+    teacherAssessmentGuidance:
+      'Must include all three bullet points—candidates often omit "what you like about the library" or forget a formal closing ("Yours faithfully,"), which caps Task Achievement. Ensure clear paragraphing and polite formal suggestions.',
+    modelResponse: `Dear Sir or Madam,
+
+I am writing in response to your invitation for feedback regarding our local public library. As a regular member for the past ten years, I appreciate the opportunity to share my views.
+
+First of all, there is a great deal that I value about the library. The staff are consistently welcoming and knowledgeable, and the quiet reading room on the first floor provides a comfortable, well-lit space for study. I also enjoy the wide selection of daily newspapers and local history archives.
+
+However, there are a few areas that currently limit my experience. Many of the fiction shelves are poorly labelled, making it time-consuming to locate recently published titles. Furthermore, the library’s opening hours on weekdays—closing at 5:30 p.m.—make it difficult for full-time workers to visit after work, and the lack of power outlets near the study desks is inconvenient for laptop users.
+
+To improve these services, I would suggest installing a digital self-service catalogue terminal near the entrance and extending evening hours until 8:00 p.m. on at least two weekdays. Adding charging sockets along the main study tables would also be greatly appreciated by students and remote workers.
+
+Thank you for your continued efforts to serve our community.
+
+Yours faithfully,
+Priya Nair`,
+  },
+  {
+    title: 'Official IELTS General Training Task 2A: Paying for Care of Elderly People',
+    taskType: 'task_2' as const,
+    taskNumber: 2 as const,
+    testType: 'general' as const,
+    subtype: 'opinion' as const,
+    prompt:
+      'In Britain, when someone gets old they often go to live in a home with other old people where there are nurses to look after them. Sometimes the government has to pay for this care.\n\nWho do you think should pay for this care, the government or the family?',
+    instructions: 'You should spend about 40 minutes on this task. Write at least 250 words.',
+    minWords: 250,
+    suggestedTimeMinutes: 40,
+    teacherAssessmentGuidance:
+      'Requires a clear position on whether the government or the family (or a shared model) should fund residential nursing care for the elderly, with well-developed reasoning, clear topic sentences per paragraph, and a coherent conclusion.',
+    modelResponse: `As life expectancy rises in many developed nations, the question of who should bear the financial responsibility for residential nursing care for the elderly has become increasingly urgent. While families naturally feel a moral obligation toward their ageing relatives, I believe that the government should be the primary funder of such care, with families contributing only according to their means.
+
+There are compelling reasons why the state must take main responsibility for elderly care. First, most senior citizens have contributed to society throughout their working lives through income taxes and national insurance. Ensuring dignified, professional nursing care in their final years is therefore a fair return on a lifetime of civic contribution. Second, specialised nursing homes are prohibitively expensive for average households. If families were forced to cover the full cost alone, lower-income relatives would face severe financial hardship or be compelled to leave their jobs to become untrained full-time carers, which would harm both the quality of care and the wider economy.
+
+At the same time, families should not be entirely absolved of involvement. Relatives who have substantial savings or property can reasonably be asked to make a means-tested contribution toward accommodation and personal amenities, ensuring that limited public funds are prioritised for those who genuinely cannot afford them. Moreover, emotional support, regular visits, and advocacy remain irreplaceable duties that only family members can provide.
+
+In conclusion, although affluent families can share part of the financial burden, guaranteeing universal access to professional care for older citizens is fundamentally a public responsibility that the government should lead.`,
+  },
+  {
+    title: 'Official IELTS General Training Task 2B: Shopping as a Leisure Activity',
+    taskType: 'task_2' as const,
+    taskNumber: 2 as const,
+    testType: 'general' as const,
+    subtype: 'direct_question' as const,
+    prompt:
+      'Shopping is becoming more and more popular as a leisure activity. However, some people feel that this has both positive and negative effects.\n\nWhy is shopping so popular?\n\nWhat effects does its increase in popularity have on individuals and on society?',
+    instructions: 'You should spend about 40 minutes on this task. Write at least 250 words.',
+    minWords: 250,
+    suggestedTimeMinutes: 40,
+    teacherAssessmentGuidance:
+      'Two-part prompt: candidates must address BOTH (1) why shopping has become so popular as leisure AND (2) its effects on both individuals and society. Omitting either question or ignoring societal effects limits Task Response.',
+    modelResponse: `In recent decades, shopping has evolved from a routine necessity into one of the most widespread forms of recreation. This shift is driven by the design of modern retail spaces and social habits, and while it brings economic vitality, it also carries notable drawbacks for individuals and communities alike.
+
+Shopping has become so popular largely because modern malls and online platforms deliberately combine commerce with entertainment. Shopping centres now feature cinemas, cafes, and climate-controlled walkways, turning a trip to buy goods into an effortless social outing with friends or family. Furthermore, targeted advertising and seasonal sales create a sense of excitement and novelty, offering people an accessible distraction from daily work stress even when they are merely browsing.
+
+On an individual level, the effects of recreational shopping are mixed. On the positive side, treating oneself occasionally or socialising in lively public spaces can boost mood and reduce feelings of isolation. However, habitual leisure shopping frequently encourages impulse buying and excessive reliance on consumer credit, leaving many individuals burdened by debt and clutter rather than genuine satisfaction.
+
+At the societal level, rising consumer spending stimulates business growth, supports retail and hospitality employment, and generates tax revenue for public services. Yet this consumer-driven culture also accelerates resource depletion and packaging waste, while widening visible material inequalities between affluent shoppers and those with limited disposable income.
+
+In conclusion, shopping thrives as a leisure activity because it offers social stimulation and emotional escape. Although it fuels jobs and economic activity, its long-term personal and environmental costs require more mindful consumption habits.`,
+  },
 ];
 
 /**
- * Seeds the Official IELTS and IELTS Advantage sample tasks into `writing_tasks` if they do not already exist.
+ * Seeds the Official IELTS and IELTS Advantage sample tasks into `writing_tasks` if they do not already exist,
+ * and ensures existing seeded tasks have their visual diagram images attached.
  */
 export async function seedOfficialWritingTasks(createdById: string): Promise<WritingTask[]> {
-  const existing = await db.prepare('SELECT title FROM writing_tasks').all();
-  const existingTitles = new Set(existing.map((r: any) => String(r.title).toLowerCase()));
+  const existing = await db.prepare('SELECT id, title FROM writing_tasks').all();
+  const existingByTitle = new Map<string, string>();
+  for (const r of existing as any[]) {
+    existingByTitle.set(String(r.title).toLowerCase(), r.id);
+  }
 
-  const created: WritingTask[] = [];
+  const createdOrUpdated: WritingTask[] = [];
   for (const item of OFFICIAL_AND_ADVANTAGE_WRITING_TASKS) {
-    if (existingTitles.has(item.title.toLowerCase())) continue;
+    const existingId = existingByTitle.get(item.title.toLowerCase());
+    if (existingId) {
+      if ('images' in item && item.images && item.images.length > 0) {
+        await db
+          .prepare('UPDATE writing_task_versions SET images_json = ? WHERE task_id = ?')
+          .run(JSON.stringify(item.images), existingId);
+      }
+      continue;
+    }
     const draft = await createWritingTask({
       createdById,
       ...item,
     });
     const published = await publishWritingTask(draft.id);
-    created.push(published);
+    createdOrUpdated.push(published);
   }
-  return created;
+  return createdOrUpdated;
 }

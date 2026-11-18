@@ -1,5 +1,7 @@
 import { db } from './db';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'node:fs';
+import path from 'node:path';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from './auth';
 import {
@@ -20,6 +22,8 @@ import {
   formatRubricForPrompt,
   IELTS_WRITING_CORE_PRINCIPLES,
   detectCopiedRubric,
+  analyzeVisualTaskAchievement,
+  VisualTaskAchievementAudit,
   WritingCalibrationSample,
 } from '../shared/writingRubricAndCalibration';
 import { getCalibrationAnchorsForEvaluation } from './writingCalibrationService';
@@ -190,6 +194,13 @@ export async function processAssessmentJob(assessmentId: string): Promise<void> 
     .get(response.task_version_id)) as any;
 
   try {
+    const parsedImages: string[] = taskVersion.images_json
+      ? JSON.parse(taskVersion.images_json)
+      : [];
+    const parsedStructuredData = taskVersion.structured_data_json
+      ? JSON.parse(taskVersion.structured_data_json)
+      : undefined;
+
     const evaluation = await runAiEvaluation({
       taskType: taskVersion.task_type,
       taskNumber: response.task_number,
@@ -197,6 +208,8 @@ export async function processAssessmentJob(assessmentId: string): Promise<void> 
       prompt: taskVersion.prompt,
       instructions: taskVersion.instructions,
       minWords: taskVersion.min_words,
+      images: parsedImages,
+      structuredData: parsedStructuredData,
       teacherVisualDescription: taskVersion.teacher_visual_description,
       teacherAssessmentGuidance: taskVersion.teacher_assessment_guidance,
       modelResponse: taskVersion.model_response,
@@ -381,6 +394,83 @@ export interface AiEvaluationResult {
   is_simulated: boolean;
 }
 
+/**
+ * Resolves attached Task 1 visual images for multimodal Vision evaluation and SVG label extraction.
+ * - Raster URLs (https:// or data:image/png|jpeg|webp|gif) and local raster files in public/
+ *   are prepared as Vision `image_url` entries so the AI model directly inspects the picture.
+ * - Local SVG diagrams in public/ are parsed to extract every visible text label on the graphic.
+ */
+export function resolveVisualAssetsForEvaluation(images?: string[]): {
+  visionImageUrls: string[];
+  svgLabels: string[];
+} {
+  const visionImageUrls: string[] = [];
+  const svgLabelsSet = new Set<string>();
+
+  if (!Array.isArray(images) || images.length === 0) {
+    return { visionImageUrls, svgLabels: [] };
+  }
+
+  for (const rawImg of images) {
+    if (!rawImg || typeof rawImg !== 'string') continue;
+    const trimmed = rawImg.trim();
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      if (!trimmed.toLowerCase().endsWith('.svg')) {
+        visionImageUrls.push(trimmed);
+      }
+      continue;
+    }
+
+    if (/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(trimmed)) {
+      visionImageUrls.push(trimmed);
+      continue;
+    }
+
+    // Check if it is a local path inside public/ or client/public/ (e.g. "/diagrams/writing_task1a_further_education.svg")
+    const relativeClean = trimmed.replace(/^\/+/, '');
+    const candidatePaths = [
+      path.resolve(__dirname, '../public', relativeClean),
+      path.resolve(__dirname, '../client/public', relativeClean),
+    ];
+
+    for (const filePath of candidatePaths) {
+      if (fs.existsSync(filePath)) {
+        const ext = path.extname(filePath).toLowerCase();
+        try {
+          if (ext === '.svg') {
+            const svgContent = fs.readFileSync(filePath, 'utf8');
+            const textMatches = svgContent.match(/<text[^>]*>([\s\S]*?)<\/text>/gi) || [];
+            for (const tm of textMatches) {
+              const inner = tm.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+              if (inner.length > 0) svgLabelsSet.add(inner);
+            }
+          } else if (['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) {
+            const buf = fs.readFileSync(filePath);
+            const mime =
+              ext === '.png'
+                ? 'image/png'
+                : ext === '.webp'
+                ? 'image/webp'
+                : ext === '.gif'
+                ? 'image/gif'
+                : 'image/jpeg';
+            visionImageUrls.push(`data:${mime};base64,${buf.toString('base64')}`);
+          }
+        } catch {
+          // Ignore file read errors
+        }
+        break;
+      }
+    }
+  }
+
+  return {
+    visionImageUrls,
+    svgLabels: Array.from(svgLabelsSet),
+  };
+}
+
 async function runAiEvaluation(params: {
   taskType: WritingTaskType;
   taskNumber: WritingTaskNumber;
@@ -388,6 +478,8 @@ async function runAiEvaluation(params: {
   prompt: string;
   instructions: string;
   minWords: number;
+  images?: string[];
+  structuredData?: any;
   teacherVisualDescription?: string;
   teacherAssessmentGuidance?: string;
   modelResponse?: string;
@@ -400,6 +492,8 @@ async function runAiEvaluation(params: {
     prompt,
     instructions,
     minWords,
+    images,
+    structuredData,
     teacherVisualDescription,
     teacherAssessmentGuidance,
     modelResponse,
@@ -408,6 +502,20 @@ async function runAiEvaluation(params: {
 
   const actualWordCount = countWords(candidateEssay);
   const copiedAnalysis = detectCopiedRubric(prompt, candidateEssay);
+  const { visionImageUrls, svgLabels } = resolveVisualAssetsForEvaluation(images);
+
+  const visualAudit =
+    taskType === 'academic_task_1'
+      ? analyzeVisualTaskAchievement({
+          subtype,
+          structuredData,
+          teacherVisualDescription,
+          svgLabels,
+          images,
+          candidateEssay,
+        })
+      : undefined;
+
   const calibrationAnchors = await getCalibrationAnchorsForEvaluation({
     taskType,
     subtype,
@@ -426,13 +534,17 @@ async function runAiEvaluation(params: {
         prompt,
         instructions,
         minWords,
+        visionImageUrls,
+        svgLabels,
+        structuredData,
+        visualAudit,
         teacherVisualDescription,
         teacherAssessmentGuidance,
         modelResponse,
         calibrationAnchors,
         copiedAnalysis,
         candidateEssay,
-        timeoutMs: 15000,
+        timeoutMs: 18000,
       });
 
       if (response) {
@@ -443,6 +555,8 @@ async function runAiEvaluation(params: {
           subtype,
           prompt,
           minWords,
+          structuredData,
+          visualAudit,
           teacherVisualDescription,
           candidateEssay,
           actualWordCount,
@@ -464,6 +578,8 @@ async function runAiEvaluation(params: {
     subtype,
     prompt,
     minWords,
+    structuredData,
+    visualAudit,
     teacherVisualDescription,
     candidateEssay,
     actualWordCount,
@@ -477,6 +593,8 @@ async function runAiEvaluation(params: {
     subtype,
     prompt,
     minWords,
+    structuredData,
+    visualAudit,
     teacherVisualDescription,
     candidateEssay,
     actualWordCount,
@@ -486,10 +604,11 @@ async function runAiEvaluation(params: {
 
 /**
  * Calls OpenAI API with:
+ * - Direct Multimodal Vision (`image_url`) when chart/map/process images are attached
+ * - Structured Data Matrix & Pre-Computed Visual Key-Feature Audit
  * - Exact May 2023 Official IELTS Writing Band Descriptors & Bolded Negative Limiters
  * - Subtype-matched Few-Shot Calibration Samples (Official IELTS + IELTS Advantage)
- * - Copied Rubric Detection & Visual Ground-Truth Verification
- * - Prompt Injection Defense
+ * - Copied Rubric Detection & Prompt Injection Defense
  */
 async function callOpenAiWithTimeout(params: {
   apiKey: string;
@@ -499,6 +618,10 @@ async function callOpenAiWithTimeout(params: {
   prompt: string;
   instructions: string;
   minWords: number;
+  visionImageUrls?: string[];
+  svgLabels?: string[];
+  structuredData?: any;
+  visualAudit?: VisualTaskAchievementAudit;
   teacherVisualDescription?: string;
   teacherAssessmentGuidance?: string;
   modelResponse?: string;
@@ -515,6 +638,10 @@ async function callOpenAiWithTimeout(params: {
     prompt,
     instructions,
     minWords,
+    visionImageUrls = [],
+    svgLabels = [],
+    structuredData,
+    visualAudit,
     teacherVisualDescription,
     teacherAssessmentGuidance,
     modelResponse,
@@ -543,6 +670,37 @@ async function callOpenAiWithTimeout(params: {
           .join('\n\n')
       : '';
 
+  const visualDataBlock: string[] = [];
+  if (isTask1 && taskType === 'academic_task_1') {
+    visualDataBlock.push('=== MULTIMODAL VISUAL & PICTURE GROUND TRUTH FOR TASK ACHIEVEMENT ===');
+    if (visionImageUrls.length > 0) {
+      visualDataBlock.push(
+        `- ${visionImageUrls.length} task visual image(s) are attached to the user message. Inspect the chart/map/process picture directly (axes, units, legend, peaks, troughs, map compass directions, and process arrows).`
+      );
+    }
+    if (svgLabels.length > 0) {
+      visualDataBlock.push(`- Diagram / Chart Visible Text Labels: ${svgLabels.join(' | ')}`);
+    }
+    if (structuredData) {
+      visualDataBlock.push(`- Exact Structured Chart/Table Values: ${JSON.stringify(structuredData)}`);
+    }
+    if (teacherVisualDescription) {
+      visualDataBlock.push(
+        `- Verified Instructor Visual Ground Truth:\n[GROUND TRUTH VISUAL DATA]\n${teacherVisualDescription}\n[END GROUND TRUTH]`
+      );
+    }
+    if (visualAudit) {
+      visualDataBlock.push(`- Automated Visual Feature Audit: ${visualAudit.visualAuditSummary}`);
+    }
+    visualDataBlock.push(
+      '- TASK ACHIEVEMENT PICTURE VERIFICATION RULES:\n' +
+        '  1) Overview Check: Did the candidate write a clear Overview summarizing the main visual trend, process stages, or map transformation? (Without a clear overview, Task Achievement cannot exceed Band 6.0).\n' +
+        '  2) Key Features Selection: Did the candidate cover all major categories/lines/bars/stages shown in the picture, including extremes (highest/lowest) and key comparisons? If key visual features are omitted, penalize Task Achievement and explicitly name the missed visual features in feedback_ta_tr.\n' +
+        '  3) Data & Unit Accuracy: Cross-check every number, percentage, unit (e.g. thousands vs millions), year, temperature, or compass direction in the candidate essay against the picture and ground truth. Penalize inaccurate figures or misread axes.\n' +
+        '  4) No Speculation: Academic Task 1 is strictly an information-transfer task; penalize subjective opinions or invented reasons outside the picture.'
+    );
+  }
+
   const systemPrompt = `You are a certified, senior IELTS Writing Examiner. You assess essays strictly according to the Official IELTS Writing Band Descriptors (Updated May 2023) and the verified calibration anchors below.
 
 You assess four criteria on a scale of 1.0 to 9.0 in 0.5 increments:
@@ -557,12 +715,9 @@ ${IELTS_WRITING_CORE_PRINCIPLES.join('\n')}
 ${rubricText}
 ${calibrationBlock}
 
+${visualDataBlock.join('\n')}
+
 === TASK-SPECIFIC GROUNDING & ANTI-HALLUCINATION RULES ===
-- Grounding: ${
-    isTask1 && teacherVisualDescription
-      ? `For this Academic Task 1, you MUST ground factual accuracy against the following verified visual description provided by the instructor:\n[GROUND TRUTH VISUAL DATA]\n${teacherVisualDescription}\n[END GROUND TRUTH]\nDo NOT accept factual statements in the candidate's essay as true if they contradict the verified visual data.`
-      : 'Evaluate adherence to the task prompt and instructions.'
-  }
 ${
   teacherAssessmentGuidance
     ? `- Confidential Instructor Assessment Guidance: ${teacherAssessmentGuidance}`
@@ -586,7 +741,7 @@ Respond ONLY with a valid JSON object matching this schema:
   "score_cc": number (1.0-9.0 in 0.5 steps),
   "score_lr": number (1.0-9.0 in 0.5 steps),
   "score_gra": number (1.0-9.0 in 0.5 steps),
-  "feedback_ta_tr": "string referencing specific May 2023 descriptor features",
+  "feedback_ta_tr": "string referencing specific May 2023 descriptor features and visual accuracy",
   "feedback_cc": "string referencing specific May 2023 descriptor features",
   "feedback_lr": "string referencing specific May 2023 descriptor features",
   "feedback_gra": "string referencing specific May 2023 descriptor features",
@@ -610,7 +765,7 @@ Respond ONLY with a valid JSON object matching this schema:
   "overall_feedback": "string examiner summary"
 }`;
 
-  const userPrompt = `TASK DETAILS:
+  const userPromptText = `TASK DETAILS:
 Task Number: ${taskNumber} (${taskType}${subtype ? ` / subtype: ${subtype}` : ''})
 Prompt: ${prompt}
 Instructions: ${instructions}
@@ -619,6 +774,17 @@ Required minimum words: ${minWords}
 <candidate_essay>
 ${candidateEssay}
 </candidate_essay>`;
+
+  const userMessageContent: any =
+    visionImageUrls.length > 0
+      ? [
+          { type: 'text', text: userPromptText },
+          ...visionImageUrls.slice(0, 3).map((url) => ({
+            type: 'image_url',
+            image_url: { url, detail: 'high' },
+          })),
+        ]
+      : userPromptText;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -634,7 +800,7 @@ ${candidateEssay}
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          { role: 'user', content: userMessageContent },
         ],
         response_format: { type: 'json_object' },
         temperature: 0.15,
@@ -696,6 +862,8 @@ export function enforceRubricGuardrailsAndVerifyQuotes(params: {
   subtype?: WritingTaskSubtype | string;
   prompt: string;
   minWords: number;
+  structuredData?: any;
+  visualAudit?: VisualTaskAchievementAudit;
   teacherVisualDescription?: string;
   candidateEssay: string;
   actualWordCount: number;
@@ -707,10 +875,22 @@ export function enforceRubricGuardrailsAndVerifyQuotes(params: {
     taskNumber,
     subtype,
     prompt,
+    structuredData,
     teacherVisualDescription,
     candidateEssay,
     actualWordCount,
   } = params;
+
+  const visualAudit =
+    params.visualAudit ||
+    (taskType === 'academic_task_1'
+      ? analyzeVisualTaskAchievement({
+          subtype,
+          structuredData,
+          teacherVisualDescription,
+          candidateEssay,
+        })
+      : undefined);
 
   const copied = params.copiedAnalysis || detectCopiedRubric(prompt, candidateEssay);
   const effectiveWords =
@@ -765,6 +945,7 @@ export function enforceRubricGuardrailsAndVerifyQuotes(params: {
     // "There may be no data to support the description."
     if (taskType === 'academic_task_1' && subtype !== 'process' && subtype !== 'map' && subtype !== 'diagram') {
       const visualHasData =
+        Boolean(structuredData) ||
         !teacherVisualDescription ||
         /\d+|%|percent|million|billion|thousand/i.test(teacherVisualDescription);
       const essayHasData =
@@ -783,6 +964,40 @@ export function enforceRubricGuardrailsAndVerifyQuotes(params: {
             'Support your trend descriptions with specific figures, percentages, or data points from the visual.'
           );
         }
+      }
+    }
+
+    // VISUAL PICTURE KEY-FEATURE COVERAGE GUARDRAIL (Academic Task 1)
+    if (
+      taskType === 'academic_task_1' &&
+      visualAudit &&
+      visualAudit.expectedKeyFeatures.length >= 3 &&
+      visualAudit.missingKeyFeatures.length > 0
+    ) {
+      if (visualAudit.featureCoverageRatio < 0.45 && ta > 5.0) {
+        ta = 5.0;
+        feedbackTa += ` [Visual Picture Audit: Key features from the visual were omitted (${visualAudit.missingKeyFeatures
+          .slice(0, 4)
+          .join(', ')}), capping Task Achievement at Band 5.0 per May 2023 descriptors.]`;
+      } else if (
+        (visualAudit.featureCoverageRatio < 0.75 || visualAudit.missingKeyFeatures.length >= 3) &&
+        ta > 6.0
+      ) {
+        ta = 6.0;
+        feedbackTa += ` [Visual Picture Audit: Key features from the visual were not covered (${visualAudit.missingKeyFeatures
+          .slice(0, 4)
+          .join(', ')}), limiting Task Achievement to Band 6.0.]`;
+      }
+
+      if (
+        visualAudit.missingKeyFeatures.length > 0 &&
+        !improvements.some((i) => i.toLowerCase().includes('omitted visual'))
+      ) {
+        improvements.push(
+          `Ensure you cover all key visual features shown in the picture (omitted visual elements: ${visualAudit.missingKeyFeatures
+            .slice(0, 4)
+            .join(', ')}).`
+        );
       }
     }
 
@@ -868,6 +1083,8 @@ export function evaluateWritingHeuristically(params: {
   subtype?: WritingTaskSubtype | string;
   prompt: string;
   minWords: number;
+  structuredData?: any;
+  visualAudit?: VisualTaskAchievementAudit;
   teacherVisualDescription?: string;
   candidateEssay: string;
   actualWordCount: number;
@@ -879,10 +1096,22 @@ export function evaluateWritingHeuristically(params: {
     subtype,
     prompt,
     minWords,
+    structuredData,
     teacherVisualDescription,
     candidateEssay,
     actualWordCount,
   } = params;
+
+  const visualAudit =
+    params.visualAudit ||
+    (taskType === 'academic_task_1'
+      ? analyzeVisualTaskAchievement({
+          subtype,
+          structuredData,
+          teacherVisualDescription,
+          candidateEssay,
+        })
+      : undefined);
 
   const isTask1 = taskNumber === 1;
   const copied = params.copiedAnalysis || detectCopiedRubric(prompt, candidateEssay);
@@ -950,7 +1179,7 @@ export function evaluateWritingHeuristically(params: {
     );
 
   if (taskType === 'academic_task_1') {
-    if (hasOverviewMarker) {
+    if (visualAudit?.overviewPresent || hasOverviewMarker) {
       ta = Math.min(8.5, ta + 0.5);
     } else {
       // Without a clear overview, Academic Task 1 TA is typically capped around Band 6 (Official Sample 1B Script A)
@@ -958,6 +1187,15 @@ export function evaluateWritingHeuristically(params: {
     }
     if (!hasDataFigures && subtype !== 'process' && subtype !== 'map' && subtype !== 'diagram') {
       ta = Math.min(5.0, ta);
+    }
+    if (visualAudit && visualAudit.expectedKeyFeatures.length >= 3) {
+      if (visualAudit.featureCoverageRatio >= 0.8 && visualAudit.comparisonsPresent && effectiveWords >= minWords) {
+        ta = Math.min(8.5, ta + 0.5);
+      } else if (visualAudit.featureCoverageRatio < 0.35) {
+        ta = Math.min(5.0, ta);
+      } else if (visualAudit.featureCoverageRatio < 0.6) {
+        ta = Math.min(6.0, ta);
+      }
     }
   } else if (taskType === 'gt_task_1') {
     const hasSalutation = /^\s*dear\s+/i.test(candidateEssay);
@@ -1030,17 +1268,10 @@ export function evaluateWritingHeuristically(params: {
   // Visual / Task Grounding Feedback
   let visualFeedback = '';
   if (taskType === 'academic_task_1') {
+    const auditDetail = visualAudit ? ` ${visualAudit.visualAuditSummary}` : '';
     visualFeedback = teacherVisualDescription
-      ? `Key trends and figures were cross-checked against the verified visual description. ${
-          hasOverviewMarker
-            ? 'A clear overview is presented (Band 7+ feature).'
-            : 'An explicit overview sentence summarizing the main trends is needed to reach Band 7+.'
-        }`
-      : `Academic Task 1 information-transfer criteria applied. ${
-          hasOverviewMarker
-            ? 'Clear overview identified.'
-            : 'Add a clear overview paragraph summarizing the main features.'
-        }`;
+      ? `Key trends and figures were cross-checked against the verified visual picture and ground-truth data.${auditDetail}`
+      : `Academic Task 1 information-transfer criteria applied.${auditDetail}`;
   } else if (taskType === 'gt_task_1') {
     visualFeedback =
       'Letter purpose, bullet point coverage, and register consistency evaluated against General Training Task 1 descriptors.';

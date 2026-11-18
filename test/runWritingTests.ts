@@ -25,6 +25,7 @@ import {
   processAssessmentJob,
   enforceRubricGuardrailsAndVerifyQuotes,
   evaluateWritingHeuristically,
+  resolveVisualAssetsForEvaluation,
 } from '../server/aiWritingService';
 import {
   listCalibrationSamples,
@@ -33,7 +34,10 @@ import {
   getCalibrationAnchorsForEvaluation,
   getWritingRubricOverview,
 } from '../server/writingCalibrationService';
-import { detectCopiedRubric } from '../shared/writingRubricAndCalibration';
+import {
+  detectCopiedRubric,
+  analyzeVisualTaskAchievement,
+} from '../shared/writingRubricAndCalibration';
 import {
   calculateIeltsWritingTaskBand,
   calculateIeltsWritingOverallBand,
@@ -448,7 +452,7 @@ async function runWritingTestSuite() {
     'Complete Band 0-9 descriptors loaded for both Task 1 and Task 2 (May 2023 update)'
   );
   assert(
-    rubricOverview.sampleCounts.officialIelts >= 12 && rubricOverview.sampleCounts.ieltsAdvantage >= 10,
+    rubricOverview.sampleCounts.officialIelts >= 23 && rubricOverview.sampleCounts.ieltsAdvantage >= 10,
     `Calibration store contains ${rubricOverview.sampleCounts.officialIelts} official IELTS scripts and ${rubricOverview.sampleCounts.ieltsAdvantage} IELTS Advantage samples`
   );
 
@@ -551,6 +555,73 @@ async function runWritingTestSuite() {
   );
 
   await deleteCalibrationSample(customSample.id);
+
+  // 8. Multimodal Picture Resolution & Visual Task Achievement Audit
+  console.log('\n8. Multimodal Picture Resolution & Visual Task Achievement Audit:');
+
+  const brickAssets = resolveVisualAssetsForEvaluation([
+    '/diagrams/writing_task1c_brick_manufacturing.svg',
+    '/images/listening/c16_l1_map.png',
+  ]);
+  assert(
+    brickAssets.svgLabels.some((l) => l.toLowerCase().includes('digger')) &&
+      brickAssets.svgLabels.some((l) => l.toLowerCase().includes('kiln')),
+    `SVG diagram parser extracts visible labels from Brick Manufacturing picture (${brickAssets.svgLabels.length} labels extracted)`
+  );
+  assert(
+    brickAssets.visionImageUrls.length === 1 &&
+      brickAssets.visionImageUrls[0].startsWith('data:image/png;base64,'),
+    'Local raster PNG image is converted to base64 data URI for direct OpenAI Vision inspection'
+  );
+
+  // Test Visual Task Achievement Audit when candidate omits half of the process diagram stages
+  const incompleteBrickEssay =
+    'The diagram shows how bricks are made. Overall, there are several steps starting with digging clay. First, a digger digs up clay from the ground and puts it on a metal grid and roller. Then sand and water are added and shaped using a wire cutter or mould into bricks.';
+  const brickAudit = analyzeVisualTaskAchievement({
+    subtype: 'process',
+    svgLabels: brickAssets.svgLabels,
+    teacherVisualDescription:
+      'Step 1: Digger excavates clay. Step 2: Metal grid and roller. Step 3: Sand + water. Step 4: Wire cutter or mould. Step 5: Drying oven (24-48 hrs). Step 6: Kiln (200C-1300C) and cooling chamber (48-72 hrs). Step 7: Packaging and delivery.',
+    candidateEssay: incompleteBrickEssay,
+  });
+  assert(
+    brickAudit.coveredKeyFeatures.includes('digger') &&
+      brickAudit.missingKeyFeatures.includes('kiln') &&
+      brickAudit.missingKeyFeatures.includes('packaging'),
+    `Visual picture audit detects covered stages (digger, roller) and omitted stages (${brickAudit.missingKeyFeatures.join(', ')})`
+  );
+
+  const guardedIncompleteProcess = enforceRubricGuardrailsAndVerifyQuotes({
+    rawResult: {
+      score_ta_tr: 7.5,
+      score_cc: 6.5,
+      score_lr: 6.5,
+      score_gra: 6.5,
+      feedback_ta_tr: 'Good start.',
+      feedback_cc: 'Clear.',
+      feedback_lr: 'Good.',
+      feedback_gra: 'Good.',
+      strengths: ['Good opening.'],
+      improvements: [],
+      evidence_quotes: [],
+      corrections: [],
+      overall_feedback: 'Good.',
+      is_simulated: true,
+    },
+    taskType: 'academic_task_1',
+    taskNumber: 1,
+    subtype: 'process',
+    prompt: 'The diagram below shows the process by which bricks are manufactured.',
+    minWords: 150,
+    visualAudit: brickAudit,
+    candidateEssay: incompleteBrickEssay,
+    actualWordCount: countWords(incompleteBrickEssay),
+  });
+  assert(
+    guardedIncompleteProcess.score_ta_tr <= 6.0 &&
+      guardedIncompleteProcess.improvements.some((i) => i.toLowerCase().includes('omitted visual')),
+    `Incomplete coverage of picture features caps TA at ${guardedIncompleteProcess.score_ta_tr} and lists omitted visual elements in improvements`
+  );
 
   console.log(`\nWriting Tests Completed: ${passed} passed, ${failed} failed.`);
 
