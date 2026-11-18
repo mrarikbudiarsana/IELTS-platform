@@ -1,3 +1,4 @@
+import { completeAssessmentIfReady } from './assignedMaterial';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import {
@@ -603,6 +604,7 @@ export async function releaseSpeakingAssessment(
       SET speaking_assessment_id = ?
       WHERE id = ?
     `).run(assessmentId, row.package_attempt_id));
+    await completeAssessmentIfReady('speaking', assessmentId);
   }
 
   return (await getSpeakingAssessmentById(assessmentId, teacherId, 'teacher'))!;
@@ -798,6 +800,11 @@ async function mapSpeakingAssessmentRow(row: any, requestingUserId: string, requ
     partComments: JSON.parse(row.part_comments_json || '{}'),
     // Teacher private notes: STRIPPED for students!
     teacherPrivateNotes: isTeacherOrAdmin ? row.teacher_private_notes || undefined : undefined,
+    evidenceQuotes: row.evidence_quotes_json ? JSON.parse(row.evidence_quotes_json) : undefined,
+    suggestedPractice: row.suggested_practice_json ? JSON.parse(row.suggested_practice_json) : undefined,
+    acousticObservations: row.acoustic_observations_json ? JSON.parse(row.acoustic_observations_json) : undefined,
+    providerModel: row.provider_model || undefined,
+    isSimulated: Boolean(row.is_simulated),
     recordingUrl: row.recording_url || undefined,
     recordingRetentionAcknowledged: Boolean(row.recording_retention_acknowledged),
     corrections: mappedCorrections,

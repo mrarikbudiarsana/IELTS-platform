@@ -305,8 +305,26 @@ async function runWritingTestSuite() {
   }));
   assert(save2.wordCount === countWords(sampleTask2Text), 'Task 2 draft saved independently');
 
-  // Submit attempt -> locks responses
-  const submittedAttempt = (await submitWritingAttempt(attempt.id, student.id));
+  // A malformed second response rolls back the first edit and leaves the attempt open.
+  let rejected = false;
+  try {
+    await submitWritingAttempt(attempt.id, student.id, [
+      { taskNumber: 1, responseText: 'Must roll back' }, { taskNumber: 2, responseText: null as any },
+    ]);
+  } catch { rejected = true; }
+  assert(rejected, 'Reject invalid final draft');
+  assert((await getWritingAttemptById(attempt.id))?.task1Response?.responseText === sampleTask1Text, 'Roll back partial submission');
+
+  const finalText = sampleTask1Text + ' These figures show continued growth.';
+  await db.prepare('UPDATE writing_attempts SET deadline_at = ? WHERE id = ?').run(new Date(Date.now() - 100).toISOString(), attempt.id);
+  const submittedAttempt = await submitWritingAttempt(attempt.id, student.id, [
+    { taskNumber: 1, responseText: finalText }, { taskNumber: 2, responseText: sampleTask2Text + ' This matters.' },
+  ]);
+  assert(submittedAttempt.task1Response?.responseText === finalText, 'Preserve final Task 1 edits at expiry');
+  assert(submittedAttempt.task2Response?.wordCount === countWords(sampleTask2Text) + 2, 'Recount final Task 2 edits');
+  const replay = await submitWritingAttempt(attempt.id, student.id, [{ taskNumber: 1, responseText: '' }]);
+  assert(replay.submittedAt === submittedAttempt.submittedAt && replay.task1Response?.responseText === finalText, 'Repeated submission keeps the original result');
+
   assert(submittedAttempt.status === 'submitted', 'Attempt status transitions to submitted');
 
   const refetchedAttempt = (await getWritingAttemptById(attempt.id))!;
@@ -328,6 +346,12 @@ async function runWritingTestSuite() {
     }
   }
   assert(lockedEditFailed, 'Editing locked response throws authorization error');
+
+  const lateAttempt = await startOrResumeWritingAttempt({ userId: student.id, mode: 'mock', task2Id: task2!.id });
+  await saveWritingDraftResponse({ attemptId: lateAttempt.id, userId: student.id, taskNumber: 2, responseText: 'Saved before expiry' });
+  await db.prepare('UPDATE writing_attempts SET deadline_at = ? WHERE id = ?').run(new Date(Date.now() - 60_000).toISOString(), lateAttempt.id);
+  const lateResult = await submitWritingAttempt(lateAttempt.id, student.id, [{ taskNumber: 2, responseText: 'Too late' }]);
+  assert(lateResult.task2Response?.responseText === 'Saved before expiry', 'Late submission locks the last saved text');
 
   // Fork revision draft
   const revisionResponse = (await createResponseRevision({

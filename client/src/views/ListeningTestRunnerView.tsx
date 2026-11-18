@@ -101,7 +101,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
       setLoading(true);
       setError(null);
       try {
-        const res = await api.startListeningAttempt(testId, { modeOverride, assignmentId, packageAttemptId });
+        const res = await api.startListeningAttempt(testId, { modeOverride, assignmentId, packageAttemptId, questionTypeFilter });
         if (!isMounted) return;
 
         setAttempt(res.attempt);
@@ -143,7 +143,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
     return () => {
       isMounted = false;
     };
-  }, [testId, modeOverride]);
+  }, [testId, modeOverride, assignmentId, packageAttemptId, questionTypeFilter]);
 
   // Detect window reload / disconnect interruption
   useEffect(() => {
@@ -238,7 +238,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
   }, [attempt, testVersion, activePartIndex]);
 
   // When activePartIndex changes, update audio src if separate recordings exist
-  const currentPart: ListeningPart | undefined = testVersion?.parts[activePartIndex];
+  const currentPart: ListeningPart | undefined = testVersion?.parts.filter(part => !questionTypeFilter || testVersion.questionGroups.some(group => group.partNumber === part.partNumber))[activePartIndex];
   const audioSrc = currentPart?.audioUrl || testVersion?.audioConfig?.masterAudioUrl || '';
 
   useEffect(() => {
@@ -861,7 +861,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
             </p>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-500 mb-5">
-              Once submitted, your responses will be marked immediately according to official IELTS band score tables. Answer keys, explanations, and listening transcripts will be revealed.
+              {questionTypeFilter ? 'Your score will cover the questions in this drill.' : 'Your responses will be marked immediately.'} You can review the answers, explanations, and listening transcripts after submission.
             </div>
 
             <div className="flex items-center justify-end gap-3">

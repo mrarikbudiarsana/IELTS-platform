@@ -1,8 +1,11 @@
+import { completeAssessmentIfReady } from './assignedMaterial';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import {
   Assignment,
   AssignmentPurpose,
+  SelfStudySummary,
+  PracticeInterval,
   TestPackage,
   PackageAttempt,
   PackageType,
@@ -49,7 +52,7 @@ export async function createTestPackage(
 
   // Validate reading version if provided
   if (data.readingTestId && !data.readingVersionId) {
-    const readingVersion = (await db.prepare('SELECT id FROM reading_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1').get(data.readingTestId)) as any;
+    const readingVersion = (await db.prepare("SELECT id FROM reading_test_versions WHERE test_id = ? AND status = 'published' ORDER BY version_number DESC LIMIT 1").get(data.readingTestId)) as any;
     if (readingVersion) {
       data.readingVersionId = readingVersion.id;
     }
@@ -57,7 +60,7 @@ export async function createTestPackage(
 
   // Validate listening version if provided
   if (data.listeningTestId && !data.listeningVersionId) {
-    const listeningVersion = (await db.prepare('SELECT id FROM listening_test_versions WHERE test_id = ? ORDER BY version_number DESC LIMIT 1').get(data.listeningTestId)) as any;
+    const listeningVersion = (await db.prepare("SELECT id FROM listening_test_versions WHERE test_id = ? AND status = 'published' ORDER BY version_number DESC LIMIT 1").get(data.listeningTestId)) as any;
     if (listeningVersion) {
       data.listeningVersionId = listeningVersion.id;
     }
@@ -65,13 +68,13 @@ export async function createTestPackage(
 
   // Validate writing task versions if provided
   if (data.writingTask1Id && !data.writingTask1VersionId) {
-    const w1Version = (await db.prepare('SELECT id FROM writing_task_versions WHERE task_id = ? ORDER BY version_number DESC LIMIT 1').get(data.writingTask1Id)) as any;
+    const w1Version = (await db.prepare("SELECT id FROM writing_task_versions WHERE task_id = ? AND status = 'published' ORDER BY version_number DESC LIMIT 1").get(data.writingTask1Id)) as any;
     if (w1Version) {
       data.writingTask1VersionId = w1Version.id;
     }
   }
   if (data.writingTask2Id && !data.writingTask2VersionId) {
-    const w2Version = (await db.prepare('SELECT id FROM writing_task_versions WHERE task_id = ? ORDER BY version_number DESC LIMIT 1').get(data.writingTask2Id)) as any;
+    const w2Version = (await db.prepare("SELECT id FROM writing_task_versions WHERE task_id = ? AND status = 'published' ORDER BY version_number DESC LIMIT 1").get(data.writingTask2Id)) as any;
     if (w2Version) {
       data.writingTask2VersionId = w2Version.id;
     }
@@ -79,7 +82,7 @@ export async function createTestPackage(
 
   // Validate speaking set version if provided
   if (data.speakingSetId && !data.speakingSetVersionId) {
-    const speakingVersion = (await db.prepare('SELECT id FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1').get(data.speakingSetId)) as any;
+    const speakingVersion = (await db.prepare("SELECT id FROM speaking_set_versions WHERE set_id = ? AND status = 'published' ORDER BY version_number DESC LIMIT 1").get(data.speakingSetId)) as any;
     if (speakingVersion) {
       data.speakingSetVersionId = speakingVersion.id;
     }
@@ -233,6 +236,8 @@ export async function createAssignment(
     title: string;
     instructions?: string;
     purpose: AssignmentPurpose;
+    preAssignmentId?: string;
+    sections?: Pick<TestPackage, "readingTestId" | "listeningTestId" | "writingTask1Id" | "writingTask2Id" | "speakingSetId">;
     packageId?: string;
     skill?: 'reading' | 'listening' | 'writing' | 'speaking' | 'all';
     speakingRoute?: 'teacher_assessed' | 'ai_assessed' | 'student_choice';
@@ -260,22 +265,58 @@ export async function createAssignment(
     throw new Error('Assignment title is required.');
   }
 
+  if (data.sections) {
+    const { sections, ...assignment } = data;
+    if (!sections.readingTestId || !sections.listeningTestId || !sections.writingTask1Id || !sections.writingTask2Id || !sections.speakingSetId) {
+      throw new Error('Select material for each section.');
+    }
+    return db.transaction(async () => {
+      const compatible = await db.prepare(`
+        SELECT 1 FROM reading_tests r, listening_tests l, writing_tasks w1, writing_tasks w2, speaking_sets sp
+        WHERE r.id = ? AND l.id = ? AND w1.id = ? AND w2.id = ? AND sp.id = ?
+          AND r.test_type = ? AND w1.task_number = 1 AND w2.task_number = 2
+          AND w1.test_type IN (?, 'both') AND w2.test_type IN (?, 'both')
+          AND r.status = 'published' AND l.status = 'published' AND w1.status = 'published'
+          AND w2.status = 'published' AND sp.status = 'published'
+      `).get(sections.readingTestId, sections.listeningTestId, sections.writingTask1Id, sections.writingTask2Id,
+        sections.speakingSetId, classRow.test_type, classRow.test_type, classRow.test_type);
+      if (!compatible) throw new Error('Select published material for the class module and the correct Writing task numbers.');
+      const pkg = await createTestPackage(teacherId, {
+        readingTestId: sections.readingTestId, listeningTestId: sections.listeningTestId,
+        writingTask1Id: sections.writingTask1Id, writingTask2Id: sections.writingTask2Id,
+        speakingSetId: sections.speakingSetId, title: data.title,
+        packageType: data.purpose === 'practice' ? 'full_mock' : data.purpose,
+        testType: classRow.test_type,
+      });
+      if (!pkg.writingTask1VersionId || !pkg.writingTask2VersionId || !pkg.speakingSetVersionId || !pkg.readingVersionId || !pkg.listeningVersionId) {
+        throw new Error('Each selected section needs a published version.');
+      }
+      return createAssignment(teacherId, classId, { ...assignment, packageId: pkg.id, skill: 'all' }, isAdmin);
+    })();
+  }
+  if (data.preAssignmentId && (data.purpose !== 'post_test' || !await db.prepare(
+    "SELECT id FROM assignments WHERE class_id = ? AND id = ? AND purpose = 'pre_test'"
+  ).get(classId, data.preAssignmentId))) throw new Error('Choose a pre-test from this class.');
+
   // Material overlap check between pre-test and post-test
   let warning: string | undefined;
   if (data.purpose === 'post_test') {
     const existingPreTest = (await db.prepare(`
-      SELECT a.*, tp.reading_test_id, tp.listening_test_id, tp.speaking_set_id
+      SELECT a.*, tp.reading_test_id, tp.listening_test_id, tp.speaking_set_id, tp.writing_task1_id, tp.writing_task2_id
       FROM assignments a
       LEFT JOIN test_packages tp ON a.package_id = tp.id
-      WHERE a.class_id = ? AND a.purpose = 'pre_test'
-      LIMIT 1
-    `).get(classId)) as any;
+      WHERE a.class_id = ? AND a.purpose = 'pre_test' AND a.id = COALESCE(?, a.id)
+      ORDER BY a.created_at DESC, a.id DESC LIMIT 1
+    `).get(classId, data.preAssignmentId || null)) as any;
 
+    data.preAssignmentId = existingPreTest?.id;
     if (existingPreTest && data.packageId) {
       const postPkg = (await getTestPackageById(data.packageId));
       if (
         (postPkg.readingTestId && postPkg.readingTestId === existingPreTest.reading_test_id) ||
         (postPkg.listeningTestId && postPkg.listeningTestId === existingPreTest.listening_test_id) ||
+        (postPkg.writingTask1Id && postPkg.writingTask1Id === existingPreTest.writing_task1_id) ||
+        (postPkg.writingTask2Id && postPkg.writingTask2Id === existingPreTest.writing_task2_id) ||
         (postPkg.speakingSetId && postPkg.speakingSetId === existingPreTest.speaking_set_id)
       ) {
         warning =
@@ -297,9 +338,9 @@ export async function createAssignment(
       id, class_id, title, instructions, purpose,
       package_id, skill, test_id, version_id,
       mode, release_at, deadline_at, attempt_limit, is_released,
-      speaking_route, created_by_id, created_at, updated_at
+      speaking_route, pre_assignment_id, created_by_id, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
   `).run(
     id,
     classId,
@@ -316,6 +357,7 @@ export async function createAssignment(
     attemptLimit,
     isReleased ? 1 : 0,
     speakingRoute,
+    data.preAssignmentId || null,
     teacherId
   ));
 
@@ -383,6 +425,7 @@ export async function getAssignmentById(assignmentId: string, studentId?: string
     title: row.title,
     instructions: row.instructions || undefined,
     purpose: row.purpose as AssignmentPurpose,
+    preAssignmentId: row.pre_assignment_id || undefined,
     packageId: row.package_id || undefined,
     packageTitle: row.package_title || undefined,
     skill: row.skill || undefined,
@@ -478,6 +521,7 @@ export async function listClassAssignments(
       title: row.title,
       instructions: row.instructions || undefined,
       purpose: row.purpose as AssignmentPurpose,
+      preAssignmentId: row.pre_assignment_id || undefined,
       packageId: row.package_id || undefined,
       packageTitle: row.package_title || undefined,
       skill: row.skill || undefined,
@@ -832,36 +876,7 @@ export async function linkSkillToPackageAttempt(
     WHERE id = ?
   `).run(skillAttemptId, packageAttemptId));
 
-  // Check if all available skills are now completed
-  const current = (await db.prepare('SELECT * FROM package_attempts WHERE id = ?').get(packageAttemptId)) as any;
-  if (current) {
-    const pkg = (await getTestPackageById(current.package_id));
-    let allDone = true;
-    if (pkg.readingTestId) {
-      const r = current.reading_attempt_id ? (await db.prepare('SELECT status FROM reading_attempts WHERE id = ?').get(current.reading_attempt_id)) as any : null;
-      if (!r || (r.status !== 'submitted' && r.status !== 'expired')) allDone = false;
-    }
-    if (pkg.listeningTestId) {
-      const l = current.listening_attempt_id ? (await db.prepare('SELECT status FROM listening_attempts WHERE id = ?').get(current.listening_attempt_id)) as any : null;
-      if (!l || (l.status !== 'submitted' && l.status !== 'expired')) allDone = false;
-    }
-    if (pkg.writingTask1Id || pkg.writingTask2Id) {
-      const w = current.writing_attempt_id ? (await db.prepare('SELECT status FROM writing_attempts WHERE id = ?').get(current.writing_attempt_id)) as any : null;
-      if (!w || (w.status !== 'submitted' && w.status !== 'expired')) allDone = false;
-    }
-    if (pkg.speakingSetId) {
-      const s = current.speaking_assessment_id ? (await db.prepare('SELECT status FROM speaking_assessments WHERE id = ?').get(current.speaking_assessment_id)) as any : null;
-      if (!s || s.status !== 'released') allDone = false;
-    }
-
-    if (allDone) {
-      (await db.prepare(`
-        UPDATE package_attempts
-        SET status = 'completed', completed_at = datetime('now')
-        WHERE id = ?
-      `).run(packageAttemptId));
-    }
-  }
+  await completeAssessmentIfReady(skill, skillAttemptId);
 }
 
 // -------------------------------------------------------------
@@ -872,7 +887,8 @@ export async function getPrePostComparison(
   classId: string,
   studentId: string,
   requestingUserId: string,
-  requestingUserRole: string
+  requestingUserRole: string,
+  postId?: string
 ): Promise<PrePostComparisonReport> {
   const isTeacherOrAdmin = requestingUserRole === 'teacher' || requestingUserRole === 'admin';
   if (!isTeacherOrAdmin && requestingUserId !== studentId) {
@@ -884,14 +900,18 @@ export async function getPrePostComparison(
     throw new Error('Class not found.');
   }
 
+  if ((requestingUserRole === 'teacher' && classRow.teacher_id !== requestingUserId) || !await isStudentInClass(classId, studentId)) {
+    throw new Error('Access forbidden to comparison report.');
+  }
   const studentRow = (await db.prepare('SELECT * FROM users WHERE id = ?').get(studentId)) as any;
   if (!studentRow) {
     throw new Error('Student not found.');
   }
 
   // Find Pre-test assignment and Post-test assignment for this class
-  const preAssignment = (await db.prepare("SELECT * FROM assignments WHERE class_id = ? AND purpose = 'pre_test' LIMIT 1").get(classId)) as any;
-  const postAssignment = (await db.prepare("SELECT * FROM assignments WHERE class_id = ? AND purpose = 'post_test' LIMIT 1").get(classId)) as any;
+  const postAssignment = await db.prepare("SELECT * FROM assignments WHERE class_id = ? AND purpose = 'post_test' AND id = COALESCE(?, id) ORDER BY created_at DESC, id DESC LIMIT 1").get(classId, postId || null);
+  if (postId && !postAssignment) throw new Error('Post-test not found in this class.');
+  const preAssignment = await db.prepare("SELECT * FROM assignments WHERE class_id = ? AND purpose = 'pre_test' AND id = COALESCE(?, id) ORDER BY created_at DESC, id DESC LIMIT 1").get(classId, postAssignment?.pre_assignment_id || null);
 
   const prePkg = preAssignment?.package_id ? (await getTestPackageById(preAssignment.package_id)) : null;
   const postPkg = postAssignment?.package_id ? (await getTestPackageById(postAssignment.package_id)) : null;
@@ -910,14 +930,29 @@ export async function getPrePostComparison(
     speaking: { skill: 'speaking', status: postPkg?.speakingStatus === 'configured' ? 'not_started' : 'not_implemented' },
   };
 
-  // Populate pre-test skills
-  if (preAssignment) {
-    (await populateAssignmentSkillResults(preAssignment.id, studentId, preSkills));
-  }
-
-  // Populate post-test skills
-  if (postAssignment) {
-    (await populateAssignmentSkillResults(postAssignment.id, studentId, postSkills));
+  const preTimes = preAssignment && await populateAssignmentSkillResults(preAssignment.id, studentId, preSkills);
+  const postTimes = postAssignment && await populateAssignmentSkillResults(postAssignment.id, studentId, postSkills);
+  let practiceInterval: PracticeInterval | undefined;
+  if (isTeacherOrAdmin) {
+    if (!preTimes || !postTimes) {
+      practiceInterval = { status: 'missing_pair', rows: [] };
+    } else if (!preTimes.finished) {
+      practiceInterval = { status: 'awaiting_pre', rows: [] };
+    } else {
+      const sitting = await db.prepare(`
+        SELECT started_at FROM package_attempts WHERE assignment_id = ? AND user_id = ?
+        ORDER BY started_at LIMIT 1
+      `).get(postAssignment.id, studentId);
+      const starts = [utcTimestamp(sitting?.started_at), postTimes.started].filter(Boolean).sort();
+      const until = starts[0];
+      const from = preTimes.finished;
+      if (until && until <= from) {
+        practiceInterval = { status: 'overlap', from, until, rows: [] };
+      } else {
+        const totals = await getPracticeTotals(classId, { studentId, from, until: until || new Date().toISOString() });
+        practiceInterval = { status: until ? 'closed' : 'open', from, until, rows: totals.get(studentId) || [] };
+      }
+    }
   }
 
   // Calculate Deltas for completed skills
@@ -995,12 +1030,13 @@ export async function getPrePostComparison(
   const allFourComplete = overallBandPre !== undefined && overallBandPost !== undefined;
   const pedagogicalNote = allFourComplete
     ? 'Note: Overall Band score represents the official IELTS arithmetic mean across Listening, Reading, Writing, and Speaking, rounded according to official IELTS half-band rounding rules. Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions.'
-    : 'Note: Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions. No overall 4-skill band is calculated because Writing and Speaking remain to be implemented in full or completed.';
+    : 'Note: Score differences reflect performance on these specific test versions under their respective test conditions. Score differences should not be uncritically attributed solely to learning progress without accounting for test variation and test conditions. No overall 4-skill band is calculated until both assessments have four scored skills.';
 
   return {
     studentId,
     studentName: studentRow.full_name,
     studentEmail: studentRow.email,
+    practiceInterval,
     classId,
     classTitle: classRow.title,
     testType: classRow.test_type as ClassTestType,
@@ -1022,11 +1058,18 @@ export async function getPrePostComparison(
   };
 }
 
+function utcTimestamp(value?: string): string {
+  if (!value) return '';
+  const iso = value.replace(' ', 'T');
+  const time = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(iso) ? iso : iso + 'Z');
+  return Number.isFinite(time) ? new Date(time).toISOString() : '';
+}
+
 async function populateAssignmentSkillResults(
   assignmentId: string,
   studentId: string,
   skills: Record<'reading' | 'listening' | 'writing' | 'speaking', SkillComparisonItem>
-): Promise<void> {
+) {
   // Check reading attempts for this assignment
   const readingAtt = (await db.prepare(`
     SELECT ra.*, rtv.version_number
@@ -1044,7 +1087,7 @@ async function populateAssignmentSkillResults(
       versionNumber: readingAtt.version_number,
       rawScore: readingAtt.raw_score,
       totalQuestions: readingAtt.total_questions,
-      bandScore: readingAtt.band_score,
+      bandScore: readingAtt.band_score ?? undefined,
       completedAt: formatMakassarDateTime(readingAtt.submitted_at || readingAtt.started_at),
       mode: readingAtt.mode as TestMode,
       isFirstAttempt: Boolean(readingAtt.is_first_attempt),
@@ -1068,7 +1111,7 @@ async function populateAssignmentSkillResults(
       versionNumber: listeningAtt.version_number,
       rawScore: listeningAtt.raw_score,
       totalQuestions: listeningAtt.total_questions,
-      bandScore: listeningAtt.band_score,
+      bandScore: listeningAtt.band_score ?? undefined,
       completedAt: formatMakassarDateTime(listeningAtt.submitted_at || listeningAtt.started_at),
       mode: listeningAtt.mode as TestMode,
       wasInterrupted: Boolean(listeningAtt.was_interrupted),
@@ -1094,7 +1137,7 @@ async function populateAssignmentSkillResults(
     const titleParts = [writingAtt.task1_title, writingAtt.task2_title].filter(Boolean);
     skills.writing = {
       skill: 'writing',
-      status: isCompleted ? 'completed' : 'in_progress',
+      status: isCompleted ? (writingAtt.overall_writing_band == null ? 'awaiting_assessment' : 'completed') : 'in_progress',
       testTitle: titleParts.length > 0 ? titleParts.join(' & ') : 'Writing Assessment',
       bandScore: writingAtt.overall_writing_band !== null && writingAtt.overall_writing_band !== undefined ? writingAtt.overall_writing_band : undefined,
       writingTask1Band: writingAtt.task1_band !== null && writingAtt.task1_band !== undefined ? writingAtt.task1_band : undefined,
@@ -1157,13 +1200,64 @@ async function populateAssignmentSkillResults(
       };
     }
   }
+  const attempts = [
+    { result: skills.reading, attempt: readingAtt },
+    { result: skills.listening, attempt: listeningAtt },
+    { result: skills.writing, attempt: writingAtt },
+  ].filter(({ result }) => result.status !== 'not_implemented');
+  const submissions = attempts.map(({ attempt }) => utcTimestamp(attempt?.submitted_at)).sort();
+  const finished = attempts.length && submissions[0] && attempts.every(({ result }) =>
+    result.status === 'completed' || result.status === 'awaiting_assessment')
+    ? submissions[submissions.length - 1] : undefined;
+  return { finished, started: attempts.map(({ attempt }) => utcTimestamp(attempt?.started_at)).filter(Boolean).sort()[0] };
+
 }
 
 // -------------------------------------------------------------
 // TEACHER CLASS ANALYTICS & OVERVIEW
 // -------------------------------------------------------------
 
-export async function getClassOverview(classId: string, teacherId: string, isAdmin = false) {
+async function getPracticeTotals(classId: string, window?: { studentId: string; from: string; until: string }) {
+  // Stored UTC dates include both SQLite second precision and ISO millisecond precision.
+  const stamp = "replace(replace(activity.finished_at, ' ', 'T'), 'Z', '')";
+  const finishTime = `substr(${stamp} || CASE WHEN length(${stamp}) = 19 THEN '.000' ELSE '000' END, 1, 23)`;
+  const practiceRows = await db.prepare(`
+    SELECT activity.student_id, activity.skill, activity.category, activity.question_type,
+      COUNT(*) AS sessions, SUM(activity.raw_score) AS correct, SUM(activity.total_questions) AS questions,
+      SUM(activity.answered_count) AS answered
+    FROM (
+      SELECT user_id AS student_id, 'Reading' AS skill, question_type_filter AS question_type,
+        CASE WHEN question_type_filter IS NULL THEN 'earlier' WHEN question_type_filter <> '' THEN 'drill'
+          WHEN total_questions = 40 THEN 'full' ELSE 'short' END AS category,
+        raw_score, total_questions, answered_count, submitted_at AS finished_at
+      FROM reading_attempts WHERE assignment_id IS NULL AND status IN ('expired','submitted')
+      UNION ALL SELECT user_id, 'Listening', question_type_filter,
+        CASE WHEN question_type_filter IS NULL THEN 'earlier' WHEN question_type_filter <> '' THEN 'drill'
+          WHEN total_questions = 40 THEN 'full' ELSE 'short' END, raw_score, total_questions, answered_count, submitted_at
+      FROM listening_attempts WHERE assignment_id IS NULL AND status IN ('expired','submitted')
+      UNION ALL SELECT user_id, 'Writing', NULL, 'other', NULL, NULL, NULL, submitted_at FROM writing_attempts
+        WHERE assignment_id IS NULL AND package_attempt_id IS NULL AND status IN ('expired','submitted')
+      UNION ALL SELECT student_id, 'Speaking', NULL, 'other', NULL, NULL, NULL, released_at FROM speaking_assessments
+        WHERE assignment_id IS NULL AND package_attempt_id IS NULL AND status = 'released'
+    ) activity JOIN class_enrolments ce ON ce.student_id = activity.student_id
+    WHERE ce.class_id = ? AND ce.status = 'active'
+      ${window ? `AND activity.student_id = ? AND activity.skill <> 'Speaking'
+        AND ${finishTime} > ? AND ${finishTime} < ?` : ''}
+    GROUP BY activity.student_id, activity.skill, activity.category, activity.question_type
+    ORDER BY activity.skill, activity.question_type
+  `).all(classId, ...(window ? [window.studentId, window.from.slice(0, 23), window.until.slice(0, 23)] : []));
+  const personalPractice = new Map<string, SelfStudySummary[]>();
+  for (const row of practiceRows) {
+    const summaries = personalPractice.get(row.student_id) || [];
+    summaries.push({ skill: row.skill, category: row.category, questionType: row.question_type || undefined,
+      sessions: Number(row.sessions), correct: Number(row.correct), questions: Number(row.questions), answered: Number(row.answered) });
+    personalPractice.set(row.student_id, summaries);
+  }
+
+  return personalPractice;
+}
+
+export async function getClassOverview(classId: string, teacherId: string, isAdmin = false, postId?: string) {
   const classRow = (await db.prepare('SELECT * FROM classes WHERE id = ?').get(classId)) as any;
   if (!classRow) {
     throw new Error('Class not found.');
@@ -1186,8 +1280,9 @@ export async function getClassOverview(classId: string, teacherId: string, isAdm
   const assignments = (await listClassAssignments(classId, teacherId, 'teacher'));
   const statusRecords = await loadStudentAssignmentRecords(assignments,students.map(student=>student.id));
 
-  const preTestAssign = assignments.find((a) => a.purpose === 'pre_test');
-  const postTestAssign = assignments.find((a) => a.purpose === 'post_test');
+  const latest = [...assignments].sort((a,b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  const postTestAssign = latest.find(a => a.purpose === 'post_test' && (!postId || a.id === postId));
+  const preTestAssign = latest.find(a => a.purpose === 'pre_test' && (!postTestAssign?.preAssignmentId || a.id === postTestAssign.preAssignmentId));
 
   // Compute assignment breakdown stats
   const assignmentStats = (await Promise.all(assignments.map(async (a) => {
@@ -1239,6 +1334,8 @@ export async function getClassOverview(classId: string, teacherId: string, isAdm
     };
   })));
 
+  const personalPractice = await getPracticeTotals(classId);
+
   // Compute student progress rows
   let preTestCompletedCount = 0;
   let postTestCompletedCount = 0;
@@ -1289,6 +1386,8 @@ export async function getClassOverview(classId: string, teacherId: string, isAdm
       enrolledAt: formatMakassarDateTime(s.enrolled_at),
       preTestStatus: preStatus,
       postTestStatus: postStatus,
+      selfStudy: personalPractice.get(s.id) || [],
+      independentPracticeCount: (personalPractice.get(s.id) || []).reduce((sum, row) => sum + row.sessions, 0),
       completedAssignmentsCount: completedCount,
       overdueAssignmentsCount: overdueCount,
     };

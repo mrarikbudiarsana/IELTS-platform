@@ -10,7 +10,9 @@ export async function startPostgres() {
   process.env.DATABASE_PROVIDER = 'postgres';
   process.env.DATABASE_URL = 'postgresql://test:test@localhost/test';
   const pg = new PGlite();
-  await pg.exec(fs.readFileSync('supabase/migrations/001_platform.sql', 'utf8'));
+  for (const file of fs.readdirSync('supabase/migrations').filter(name => name.endsWith('.sql')).sort()) {
+    await pg.exec(fs.readFileSync('supabase/migrations/' + file, 'utf8'));
+  }
   const { useTestPool } = await import('../server/db');
   const query = async (sql: string, values?: any[]) => {
     const result = await pg.query(sql, values);

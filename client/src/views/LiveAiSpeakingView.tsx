@@ -1,3 +1,4 @@
+import { encodeSpeakingRecording } from '../speakingRecording';
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { SpeakingAssessment } from '../types';
@@ -100,22 +101,20 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
   const stopRecordingAndPrepare = async () => {
     if (!mediaRecorderRef.current || !isRecording) return;
 
-    return new Promise<void>((resolve) => {
-      mediaRecorderRef.current!.onstop = async () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const buffer = await blob.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
+    return new Promise<string | undefined>((resolve) => {
+      const recorder = mediaRecorderRef.current!;
+      recorder.onstop = async () => {
+        try {
+          const audio = await encodeSpeakingRecording(new Blob(audioChunksRef.current, { type: recorder.mimeType }));
+          setAudioBase64(audio);
+          resolve(audio);
+        } catch {
+          setErrorMsg('The recording could not be decoded. Please record this turn again.');
+          resolve(undefined);
+        } finally {
+          setIsRecording(false);
+          streamRef.current?.getTracks().forEach(track => track.stop());
         }
-        const b64 = btoa(binary);
-        setAudioBase64(b64);
-        setIsRecording(false);
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((t) => t.stop());
-        }
-        resolve();
       };
       mediaRecorderRef.current!.stop();
     });
@@ -123,11 +122,9 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
 
   // Turn Submission
   const handleSubmitTurn = async () => {
-    if (isRecording) {
-      await stopRecordingAndPrepare();
-    }
+    const recording = isRecording ? await stopRecordingAndPrepare() : audioBase64;
 
-    if (!candidateSpeechText.trim() && !audioBase64) {
+    if (!candidateSpeechText.trim() && !recording) {
       setErrorMsg('Please speak into the microphone or enter a spoken response.');
       return;
     }
@@ -138,8 +135,8 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
     try {
       const res = await api.submitSpeakingTurn(session.id, {
         candidateText: candidateSpeechText.trim(),
-        audioBase64,
-        durationSeconds: 15,
+        audioBase64: recording,
+        durationSeconds: recording ? (atob(recording).length - 44) / 32000 : 0,
       });
 
       setSession(res.session);
@@ -433,7 +430,7 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
           </span>
 
           <span className="text-[11px] text-slate-500">
-            Audio evaluated directly for Pronunciation & Rhythm
+            Record a response in each part to receive a Speaking band.
           </span>
         </div>
 

@@ -279,7 +279,7 @@ export const AdminCommercialManagementView: React.FC<AdminCommercialManagementVi
             Back
           </button>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <span>💼 Commercial & Financial Management</span>
+            <span>Plans &amp; payments</span>
             <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2.5 py-0.5 rounded-full border border-purple-200">
               Admin & Staff
             </span>

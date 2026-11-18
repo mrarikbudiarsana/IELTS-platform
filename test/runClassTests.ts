@@ -1,3 +1,4 @@
+import { getPracticeSuggestions } from '../server/practiceSuggestions';
 import assert from 'assert';
 import { v4 as uuidv4 } from 'uuid';
 import { db, initDatabase } from '../server/db';
@@ -358,6 +359,7 @@ const { assignment: postAssignment, warning: noWarning } = (await createAssignme
   isReleased: false, // Protected unreleased state
 }));
 assert.strictEqual(noWarning, undefined, 'No warning when post-test uses distinct materials');
+assert.strictEqual(postAssignment.preAssignmentId, preAssignment.id);
 assert.strictEqual(postAssignment.isReleased, false, 'Post-test must initially be unreleased');
 console.log('  ✔ Content overlap detection and non-equivalence warnings verified.');
 
@@ -421,6 +423,8 @@ const prePkgAttemptId = prePkgAttemptResult.packageAttempt.id;
 assert.ok(prePkgAttemptId, 'Pre-test package attempt started');
 assert.strictEqual(prePkgAttemptResult.packageAttempt.status, 'in_progress');
 
+await db.prepare('UPDATE reading_tests SET is_free_tier = 1 WHERE id = ?').run(preReadingRes.test.id);
+const independentReading = await startOrResumeAttempt({ userId: student1Id, testId: preReadingRes.test.id, modeOverride: 'practice' });
 // Student 1 takes pre-test Reading attempt under this assignment & package
 const preReadAttemptResult = (await startOrResumeAttempt({
   userId: student1Id,
@@ -429,6 +433,7 @@ const preReadAttemptResult = (await startOrResumeAttempt({
   assignmentId: preAssignment.id,
   packageAttemptId: prePkgAttemptId,
 }));
+assert.notEqual(preReadAttemptResult.attempt.id, independentReading.attempt.id);
 (await saveStudentAnswer({
   attemptId: preReadAttemptResult.attempt.id,
   userId: student1Id,
@@ -469,7 +474,7 @@ const submittedListAttempt = (await submitListeningAttempt({
 assert.strictEqual(submittedListAttempt.rawScore, 1);
 
 // Link to package
-(await linkSkillToPackageAttempt(prePkgAttemptId, 'listening', submittedListAttempt.id));
+// Submission automatically completes the sitting when its final section is submitted.
 
 // Verify package attempt reflects linked skills and completion
 const updatedPrePkgAttempt = (await getPackageAttemptById(prePkgAttemptId, student1Id));
@@ -585,9 +590,33 @@ assert.ok(
   'Note notes test variation between test versions'
 );
 assert.ok(
-  comparisonReport.pedagogicalNote.includes('Writing and Speaking remain to be implemented'),
+  comparisonReport.pedagogicalNote.includes('four scored skills'),
   'Note notes overall band cannot be computed without Writing & Speaking'
 );
+
+// Use distinct timestamps so boundary exclusions are deterministic on both databases.
+const teacherReport = (studentId = student1Id) =>
+  getPrePostComparison(class1.id, studentId, testTeacherId, 'teacher', postAssignment.id);
+assert.equal((await teacherReport(student2Id)).practiceInterval?.status, 'awaiting_pre');
+for (const table of ['reading_attempts', 'listening_attempts']) {
+  await db.prepare(`UPDATE ${table} SET submitted_at = ? WHERE assignment_id = ? AND user_id = ?`)
+    .run('2026-01-10 01:00:00', preAssignment.id, student1Id);
+}
+await db.prepare('UPDATE package_attempts SET started_at = ? WHERE id = ?')
+  .run('2026-01-20T01:00:00.000Z', postPkgAttemptId);
+for (const [submitted, count] of [
+  ['2026-01-10T01:00:00.000Z', 0],
+  ['2026-01-15 01:00:00', 1],
+  ['2026-01-20 01:00:00', 0],
+] as const) {
+  await db.prepare(`UPDATE reading_attempts SET status = 'submitted', submitted_at = ?, question_type_filter = 'matching_headings',
+    raw_score = 4, total_questions = 6, answered_count = 5 WHERE id = ?`).run(submitted, independentReading.attempt.id);
+  const interval = (await teacherReport()).practiceInterval!;
+  assert.equal(interval.status, 'closed');
+  assert.equal(interval.rows.length, count);
+  if (count) assert.deepEqual(interval.rows[0], { skill: 'Reading', category: 'drill', questionType: 'matching_headings',
+    correct: 4, questions: 6, answered: 5, sessions: 1 });
+}
 
 // Verify Overview Diagnostics for Teacher
 const overview = (await getClassOverview(class1.id, testTeacherId));
@@ -599,6 +628,35 @@ console.log('  ✔ Pre/Post comparison report and pedagogical guard rails verifi
 console.log('\n======================================================');
 console.log('  ALL 9 CLASS & JOURNEY CHECKS PASSED (100%)!       ');
 console.log('======================================================\n');
+
+// Recommendations use graded pre-tests and a student's independent catalogue access.
+assert.deepEqual(await getPracticeSuggestions(student2Id), []);
+assert.deepEqual(await getPracticeSuggestions(student1Id), []);
+await db.prepare('UPDATE reading_answers SET mark = 0, is_correct = 0 WHERE attempt_id = ?').run(submittedReadAttempt.id);
+await db.prepare('UPDATE reading_tests SET title = ? WHERE id = ?').run('Diagnostic reading practice', preReadingRes.test.id);
+const recommended = (await getPracticeSuggestions(student1Id)).find(row => row.skill === 'reading');
+assert.ok(recommended);
+assert.equal(recommended.questionType, 'true_false_not_given');
+assert.equal(recommended.correct, 0);
+assert.equal(recommended.total, 1);
+assert.equal(recommended.preTestTitle, preAssignment.title);
+const drill = await startOrResumeAttempt({ userId: student1Id, testId: recommended.testId,
+  modeOverride: 'practice', questionTypeFilter: recommended.questionType });
+const savedDrill = await db.prepare('SELECT assignment_id, question_type_filter FROM reading_attempts WHERE id = ?').get(drill.attempt.id);
+assert.equal(savedDrill.assignment_id, null);
+assert.equal(savedDrill.question_type_filter, recommended.questionType);
+
+await db.prepare('UPDATE listening_answers SET mark = 0, is_correct = 0 WHERE attempt_id = ?').run(submittedListAttempt.id);
+await db.prepare('UPDATE listening_tests SET title = ?, is_free_tier = 1 WHERE id = ?')
+  .run('Diagnostic listening practice', preListeningRes.test.id);
+const listeningDrill = (await getPracticeSuggestions(student1Id)).find(row => row.skill === 'listening');
+assert.ok(listeningDrill);
+assert.equal(listeningDrill.questionType, 'sentence_completion');
+assert.equal(listeningDrill.correct, 0);
+assert.equal(listeningDrill.total, 1);
+const listeningPractice = await startOrResumeListeningAttempt({ userId: student1Id, testId: listeningDrill.testId,
+  modeOverride: 'practice', questionTypeFilter: listeningDrill.questionType });
+assert.equal(listeningPractice.attempt.questionTypeFilter, listeningDrill.questionType);
 
 // Clean up ephemeral tests created for this test run
 const testIdsToClean = [preReadingRes.test.id, postReadingRes.test.id];

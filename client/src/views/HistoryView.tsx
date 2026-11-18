@@ -1,3 +1,4 @@
+import { formatQuestionTypeName } from '../questionTypeName';
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { Award, Headphones, ArrowLeft, RotateCcw, BookOpen, PenTool, ShieldAlert, ShieldCheck } from 'lucide-react';
@@ -7,8 +8,8 @@ interface HistoryViewProps {
   onViewResults: (attemptId: string) => void;
   onViewListeningResults: (attemptId: string) => void;
   onViewWritingFeedback?: (attemptId: string) => void;
-  onRetryTest: (testId: string) => void;
-  onRetryListeningTest: (testId: string) => void;
+  onRetryTest: (testId: string, filter?: string) => void;
+  onRetryListeningTest: (testId: string, filter?: string) => void;
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({
@@ -174,7 +175,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 <h3 className="font-bold text-base text-slate-900">
                   {selectedSkill === 'writing'
                     ? [att.task1Title, att.task2Title].filter(Boolean).join(' & ') || 'Writing Attempt'
-                    : att.testTitle}
+                    : att.questionTypeFilter ? formatQuestionTypeName(att.questionTypeFilter) + ' · ' + att.testTitle : att.testTitle}
                 </h3>
                 <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                   <span>{new Date(att.submittedAt || att.startedAt).toLocaleString()}</span>
@@ -249,7 +250,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       </button>
                       <button
                         onClick={() =>
-                          selectedSkill === 'reading' ? onRetryTest(att.testId) : onRetryListeningTest(att.testId)
+                          selectedSkill === 'reading' ? onRetryTest(att.testId, att.questionTypeFilter) : onRetryListeningTest(att.testId, att.questionTypeFilter)
                         }
                         className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl"
                         title="Retake Test"

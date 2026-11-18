@@ -1,3 +1,4 @@
+import { formatQuestionTypeName } from '../questionTypeName';
 import React, { useState, useEffect, useRef } from 'react';
 import { ListeningAttempt, ListeningTestVersion, AttemptItemResult } from '../types';
 import { api } from '../api';
@@ -19,7 +20,7 @@ import {
 interface ListeningResultsViewProps {
   attemptId: string;
   onBackToCatalogue: () => void;
-  onRetryTest: (testId: string) => void;
+  onRetryTest: (testId: string, filter?: string) => void;
 }
 
 export const ListeningResultsView: React.FC<ListeningResultsViewProps> = ({
@@ -129,7 +130,7 @@ export const ListeningResultsView: React.FC<ListeningResultsViewProps> = ({
         </button>
 
         <button
-          onClick={() => onRetryTest(attempt.testId)}
+          onClick={() => onRetryTest(attempt.testId, attempt.questionTypeFilter)}
           className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
@@ -146,7 +147,7 @@ export const ListeningResultsView: React.FC<ListeningResultsViewProps> = ({
               IELTS Listening Performance Report
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-1">
-              {attempt.testTitle || 'Listening Test'}
+              {attempt.questionTypeFilter && formatQuestionTypeName(attempt.questionTypeFilter) + ' · '}{attempt.testTitle || 'Listening Test'}
             </h1>
             <p className="text-xs text-slate-500">
               Completed on {new Date(attempt.submittedAt || attempt.startedAt).toLocaleString()} • Mode:{' '}

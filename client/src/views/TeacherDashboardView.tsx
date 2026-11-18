@@ -125,12 +125,8 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div>
-          <div className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-            <Layers className="w-4 h-4" />
-            Teacher Content Authoring & Submissions
-          </div>
           <h1 className="text-2xl font-extrabold text-slate-900">
-            {selectedSkill === 'reading' ? 'Reading Test Management' : 'Listening Test Management'}
+            Reading &amp; listening
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             Configure test questions, audio tracks, preview student experience, and publish immutable versions.

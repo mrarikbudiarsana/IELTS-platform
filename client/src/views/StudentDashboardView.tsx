@@ -1,3 +1,5 @@
+import type { SuggestedDrill } from '../types';
+import { formatQuestionTypeName } from '../questionTypeName';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
@@ -31,8 +33,8 @@ interface StudentDashboardViewProps {
     skill?: 'reading' | 'listening' | 'writing' | 'speaking',
     category?: 'all' | 'mock' | 'practice'
   ) => void;
-  onStartReading: (testId: string, mode?: 'practice' | 'mock') => void;
-  onStartListening: (testId: string, mode?: 'practice' | 'mock') => void;
+  onStartReading: (testId: string, mode?: 'practice' | 'mock', questionType?: string) => void;
+  onStartListening: (testId: string, mode?: 'practice' | 'mock', questionType?: string) => void;
   onStartWriting: (attemptId: string) => void;
   onStartSpeaking: (setId?: string, mode?: 'practice' | 'mock') => void;
   onViewResults: (attemptId: string) => void;
@@ -55,6 +57,18 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
   onOpenGoalModal,
 }) => {
   const { user } = useAuth();
+
+  const [suggestions, setSuggestions] = useState<SuggestedDrill[]>([]);
+  useEffect(() => {
+    let active = true;
+    setSuggestions([]);
+    if (user?.role === 'student') {
+      api.getPracticeSuggestions().then(({ suggestions }) => {
+        if (active) setSuggestions(suggestions);
+      }).catch(err => console.error('Unable to load suggested drills', err));
+    }
+    return () => { active = false; };
+  }, [user?.id, user?.role]);
 
   const [loading, setLoading] = useState(true);
   const [readingAttempts, setReadingAttempts] = useState<any[]>([]);
@@ -101,13 +115,12 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
   };
 
   // Find any active in-progress attempt to resume
-  const inProgressReading = readingAttempts.find((a) => a.status === 'in_progress');
-  const inProgressListening = listeningAttempts.find((a) => a.status === 'in_progress');
-  const activeAttempt = inProgressReading
-    ? { ...inProgressReading, skill: 'reading' }
-    : inProgressListening
-    ? { ...inProgressListening, skill: 'listening' }
-    : null;
+  const activeAttempt = [
+    { skill: 'reading', attempt: readingAttempts.find(a => a.status === 'in_progress') },
+    { skill: 'listening', attempt: listeningAttempts.find(a => a.status === 'in_progress') },
+    { skill: 'writing', attempt: writingAttempts.find(a => a.status === 'in_progress') },
+  ].filter(entry => entry.attempt)
+    .sort((a, b) => Date.parse(b.attempt.startedAt) - Date.parse(a.attempt.startedAt))[0];
 
   // Real Progress Calculations
   const completedReading = readingAttempts.filter((a) => a.status === 'submitted' || a.status === 'expired');
@@ -116,8 +129,8 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
   const completedSpeaking = speakingAssessments;
 
   // Best/Latest Band per skill
-  const latestReadingBand = completedReading[0]?.bandScore;
-  const latestListeningBand = completedListening[0]?.estimatedBandScore;
+  const latestReadingBand = completedReading.find(a => !a.questionTypeFilter && a.bandScore != null)?.bandScore;
+  const latestListeningBand = completedListening.find(a => !a.questionTypeFilter && a.bandScore != null)?.bandScore;
   const latestWritingBand = completedWriting[0]?.overallWritingBand;
   const latestSpeakingBand = completedSpeaking[0]?.overallBand;
 
@@ -156,7 +169,7 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
         id: a.id,
         skill: 'listening',
         title: a.testTitle || 'IELTS Listening Test',
-        scoreText: `Band ${a.estimatedBandScore?.toFixed(1) || '—'} (${a.rawScore || 0}/${a.totalQuestions || 40})`,
+        scoreText: a.questionTypeFilter ? `${formatQuestionTypeName(a.questionTypeFilter)} · ${a.rawScore}/${a.totalQuestions} correct` : `Band ${a.bandScore?.toFixed(1) || '—'} (${a.rawScore || 0}/${a.totalQuestions || 40})`,
         date: a.submittedAt || a.startedAt,
         action: () => onViewListeningResults(a.id),
       });
@@ -167,7 +180,7 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
         id: a.id,
         skill: 'reading',
         title: a.testTitle || 'IELTS Reading Test',
-        scoreText: `Band ${a.bandScore?.toFixed(1) || '—'} (${a.rawScore || 0}/${a.totalQuestions || 40})`,
+        scoreText: a.questionTypeFilter ? `${formatQuestionTypeName(a.questionTypeFilter)} · ${a.rawScore}/${a.totalQuestions} correct` : `Band ${a.bandScore?.toFixed(1) || '—'} (${a.rawScore || 0}/${a.totalQuestions || 40})`,
         date: a.submittedAt || a.startedAt,
         action: () => onViewResults(a.id),
       });
@@ -231,20 +244,23 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
                   </span>
                 </div>
                 <h3 className="text-sm sm:text-base font-semibold text-slate-900 mt-0.5">
-                  {activeAttempt.testTitle || 'Active IELTS Examination Session'}
+                  {activeAttempt.attempt.testTitle || activeAttempt.attempt.task1Title || activeAttempt.attempt.task2Title || 'Active IELTS Examination Session'}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Your answers and highlighters are safely auto-saved.
+                  Continue from your last saved response.
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => {
-                if (activeAttempt.skill === 'reading') {
-                  onStartReading(activeAttempt.testId);
+                const { attempt, skill } = activeAttempt;
+                if (skill === 'writing') {
+                  onStartWriting(attempt.id);
+                } else if (skill === 'reading') {
+                  onStartReading(attempt.testId, attempt.mode, attempt.questionTypeFilter);
                 } else {
-                  onStartListening(activeAttempt.testId);
+                  onStartListening(attempt.testId, attempt.mode, attempt.questionTypeFilter);
                 }
               }}
               className="px-4 py-2 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs shadow-2xs transition-colors flex items-center justify-center gap-1.5 shrink-0"
@@ -254,6 +270,25 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <section className="bg-white rounded-3xl border border-[#E5E1D7] p-6 sm:p-7 space-y-4">
+          <h2 className="text-xl font-bold text-slate-900">Suggested self-study</h2>
+          {suggestions.map(drill => {
+            const name = formatQuestionTypeName(drill.questionType);
+            const start = drill.skill === 'reading' ? onStartReading : onStartListening;
+            return <div key={drill.skill} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t pt-4">
+              <div>
+                <h3 className="font-semibold text-slate-900"><span className="capitalize">{drill.skill}</span> · {name}</h3>
+                <p className="text-sm text-slate-600">{drill.correct}/{drill.total} correct on your pre-test · {drill.preTestTitle}</p>
+                <p className="text-xs text-slate-500 mt-1">Practice material · {drill.testTitle}</p>
+              </div>
+              <button className="rounded-xl bg-[#084F7D] px-4 py-2 text-sm font-semibold text-white hover:bg-[#063D62]"
+                onClick={() => start(drill.testId, 'practice', drill.questionType)}>Practise {name}</button>
+            </div>;
+          })}
+        </section>
       )}
 
       {/* 2. REAL PROGRESS & BAND OVERVIEW (Replaced "Complete these five steps") */}

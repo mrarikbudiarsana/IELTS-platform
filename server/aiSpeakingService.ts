@@ -1,3 +1,6 @@
+import { assessSpeech, observeSpeech, type SpeakingSample } from './speakingEvaluator';
+import { speakingRubric } from '../shared/speakingRubric';
+import { assignedMaterial, completeAssessmentIfReady } from './assignedMaterial';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import {
@@ -10,10 +13,7 @@ import {
   SpeakingPart,
   TestMode,
 } from '../shared/types';
-import {
-  calculateIeltsSpeakingBand,
-  validateSpeakingCriterionScore,
-} from '../shared/scoring';
+import { calculateIeltsSpeakingBand } from '../shared/scoring';
 import {
   reserveSpeakingAllowance,
   consumeSpeakingAllowance,
@@ -315,6 +315,8 @@ export async function startOrRecoverSpeakingSession(params: {
 }): Promise<SpeakingAiSession> {
   const { userId, setId, setVersionId, assignmentId, packageAttemptId, mode = 'mock' } = params;
 
+  const assignment = await assignedMaterial(userId, assignmentId, packageAttemptId);
+  if (assignment?.package_id && assignment.speaking_set_id !== setId) throw new Error('This speaking set is outside the assignment.');
   // 1. Check for an active recoverable session for this user
   let query = `
     SELECT id FROM speaking_ai_sessions 
@@ -327,6 +329,9 @@ export async function startOrRecoverSpeakingSession(params: {
     queryParams.push(assignmentId);
   }
 
+  if (!assignmentId) query += ' AND assignment_id IS NULL';
+  query += " AND COALESCE(package_attempt_id, '') = ?";
+  queryParams.push(packageAttemptId || '');
   query += ' ORDER BY created_at DESC LIMIT 1';
 
   const existingRow = (await db.prepare(query).get(...queryParams)) as any;
@@ -346,7 +351,7 @@ export async function startOrRecoverSpeakingSession(params: {
 
   // 2. Fallback to default speaking set if none provided
   let effectiveSetId = setId;
-  let effectiveVersionId = setVersionId;
+  let effectiveVersionId = assignment?.speaking_set_version_id || setVersionId;
 
   if (!effectiveSetId) {
     const defaultSet = (await db
@@ -445,13 +450,19 @@ export async function advanceSessionStage(
     part_1: ['part_2_prep', 'abandoned'],
     part_2_prep: ['part_2_speaking', 'abandoned'],
     part_2_speaking: ['part_3', 'abandoned'],
-    part_3: ['completed', 'abandoned'],
+    part_3: ['abandoned'],
     completed: [],
     abandoned: [],
   };
 
   if (!validTransitions[session.stage].includes(targetStage)) {
     throw new Error(`Invalid stage transition from ${session.stage} to ${targetStage}.`);
+  }
+
+  if (targetStage === 'part_2_prep' || targetStage === 'part_3') {
+    const recorded = await db.prepare(`SELECT 1 FROM speaking_audio_turns
+      WHERE session_id = ? AND part = ? AND rubric_evidence_json IS NOT NULL LIMIT 1`).get(sessionId, session.currentPart);
+    if (!recorded) throw new Error('Record and submit a spoken response in this part before continuing.');
   }
 
   let nextPart: 1 | 2 | 3 = session.currentPart;
@@ -527,7 +538,9 @@ export async function submitCandidateTurn(params: {
   examinerTurn: SpeakingAudioTurn;
   acoustic: { rmsLevel: number; isClipping: boolean; isSilent: boolean };
 }> {
-  const { sessionId, userId, candidateText = '', audioBase64, durationSeconds = 5 } = params;
+  const { sessionId, userId, candidateText = '', audioBase64 } = params;
+  let durationSeconds = params.durationSeconds ?? 5;
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 0) throw new Error('Invalid turn duration.');
 
   const session = (await getSpeakingSessionById(sessionId));
   if (!session) throw new Error('Speaking session not found.');
@@ -549,32 +562,24 @@ export async function submitCandidateTurn(params: {
 
   const acoustic = analyzeAudioBuffer(buffer);
 
-  // 2. Clean candidate utterance and sanitize prompt injection attempts
-  const cleanedText = candidateText
-    .replace(/[<>]/g, '')
-    .trim()
-    .slice(0, 1500) || (acoustic.isSilent ? '[Unclear or silent audio]' : 'Yes, that is correct.');
+  const inSpeakingPart = ['part_1', 'part_2_speaking', 'part_3'].includes(session.stage);
+  let evidence;
+  if (audioBase64 && inSpeakingPart) {
+    if (buffer.length <= 44 || buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+        buffer.toString('ascii', 8, 16) !== 'WAVEfmt ' || buffer.toString('ascii', 36, 40) !== 'data' ||
+        buffer.readUInt16LE(20) !== 1 || buffer.readUInt16LE(22) !== 1 || buffer.readUInt32LE(24) !== 16000 ||
+        buffer.readUInt16LE(34) !== 16 || buffer.readUInt32LE(40) !== buffer.length - 44) {
+      throw new Error('Please submit a WAV recording for assessment.');
+    }
+    durationSeconds = (buffer.length - 44) / 32000;
+    evidence = await observeSpeech(buffer.toString('base64'));
+  }
+  const cleanedText = evidence?.transcript || candidateText.trim().slice(0, 1500) || '[No transcript]';
 
   const turnNumber = (session.turns?.length || 0) + 1;
   const candidateTurnId = uuidv4();
   const now = new Date().toISOString();
   const currentDuration = session.durationSeconds + durationSeconds;
-
-  // Insert Candidate Turn
-  (await db.prepare(`
-    INSERT INTO speaking_audio_turns (
-      id, session_id, part, turn_number, speaker, text, duration_seconds, timestamp_seconds, is_follow_up, created_at
-    ) VALUES (?, ?, ?, ?, 'candidate', ?, ?, ?, 0, ?)
-  `).run(
-    candidateTurnId,
-    sessionId,
-    session.currentPart,
-    turnNumber,
-    cleanedText,
-    durationSeconds,
-    session.durationSeconds,
-    now
-  ));
 
   // 3. Generate adaptive examiner response within set boundaries
   const setVer = session.setVersionId ? (await getSpeakingSetVersionById(session.setVersionId)) : null;
@@ -610,28 +615,51 @@ export async function submitCandidateTurn(params: {
   const examinerTurnId = uuidv4();
   const examinerTurnNumber = turnNumber + 1;
 
-  (await db.prepare(`
-    INSERT INTO speaking_audio_turns (
-      id, session_id, part, turn_number, speaker, text, duration_seconds, timestamp_seconds, is_follow_up, created_at
-    ) VALUES (?, ?, ?, ?, 'examiner', ?, 3.5, ?, ?, ?)
-  `).run(
-    examinerTurnId,
-    sessionId,
-    session.currentPart,
-    examinerTurnNumber,
-    examinerText,
-    currentDuration,
-    isFollowUp ? 1 : 0,
-    now
-  ));
+  await db.transaction(async () => {
+    const locked = await db.prepare(`UPDATE speaking_ai_sessions SET updated_at = ?
+      WHERE id = ? AND stage = ? AND current_question_index = ? AND duration_seconds = ?`)
+      .run(now, sessionId, session.stage, session.currentQuestionIndex, session.durationSeconds);
+    if (!locked.changes) throw new Error('Session changed while processing speech. Refresh the session.');
+    // Insert Candidate Turn
+    (await db.prepare(`
+      INSERT INTO speaking_audio_turns (
+        id, session_id, part, turn_number, speaker, text, duration_seconds, timestamp_seconds, is_follow_up, rubric_evidence_json, created_at
+      ) VALUES (?, ?, ?, ?, 'candidate', ?, ?, ?, 0, ?, ?)
+    `).run(
+      candidateTurnId,
+      sessionId,
+      session.currentPart,
+      turnNumber,
+      cleanedText,
+      durationSeconds,
+      session.durationSeconds,
+      evidence ? JSON.stringify(evidence.observations) : null,
+      now
+    ));
 
-  (await db.prepare(`
-    UPDATE speaking_ai_sessions
-    SET duration_seconds = ?,
-        current_question_index = ?,
-        updated_at = ?
-    WHERE id = ?
-  `).run(currentDuration + 4, nextQIndex, now, sessionId));
+    (await db.prepare(`
+      INSERT INTO speaking_audio_turns (
+        id, session_id, part, turn_number, speaker, text, duration_seconds, timestamp_seconds, is_follow_up, created_at
+      ) VALUES (?, ?, ?, ?, 'examiner', ?, 3.5, ?, ?, ?)
+    `).run(
+      examinerTurnId,
+      sessionId,
+      session.currentPart,
+      examinerTurnNumber,
+      examinerText,
+      currentDuration,
+      isFollowUp ? 1 : 0,
+      now
+    ));
+
+    (await db.prepare(`
+      UPDATE speaking_ai_sessions
+      SET duration_seconds = ?,
+          current_question_index = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(currentDuration + 4, nextQIndex, now, sessionId));
+  })();
 
   const updatedSession = (await getSpeakingSessionById(sessionId))!;
   const examinerTurn = updatedSession.turns!.find((t) => t.id === examinerTurnId)!;
@@ -651,60 +679,6 @@ export async function submitCandidateTurn(params: {
 // 3. AI AUDIO-GROUNDED ASSESSMENT ENGINE
 // -------------------------------------------------------------
 
-/**
- * Calculates acoustic observations (Speech rate, pause ratio, phonemic clarity)
- * directly from recorded session audio turns.
- */
-export function computeSessionAcoustics(turns: SpeakingAudioTurn[]): {
-  isClipping?: boolean;
-  speechRateWpm: number;
-  pauseRatio: number;
-  pronunciationNotes: string;
-} {
-  const candidateTurns = turns.filter((t) => t.speaker === 'candidate');
-  if (candidateTurns.length === 0) {
-    return {
-      speechRateWpm: 110,
-      pauseRatio: 0.18,
-      pronunciationNotes: 'Speech rhythm and syllable clarity maintained at standard speaking pace.',
-    };
-  }
-
-  let totalWords = 0;
-  let totalSpeakingSeconds = 0;
-
-  for (const turn of candidateTurns) {
-    const words = turn.text.trim().split(/\s+/).filter(Boolean).length;
-    totalWords += words;
-    totalSpeakingSeconds += Math.max(1, turn.durationSeconds);
-  }
-
-  const minutes = totalSpeakingSeconds / 60;
-  const rawWpm = minutes > 0 ? Math.round(totalWords / minutes) : 120;
-  // IELTS normal speech rate ranges from 100 to 160 WPM
-  const speechRateWpm = Math.max(75, Math.min(185, rawWpm));
-  const pauseRatio = Number((Math.max(0.08, Math.min(0.35, 1 - Math.min(1, (rawWpm / 150))))).toFixed(2));
-
-  let pronunciationNotes = 'Good rhythm and sentence stress. Key vowels and consonant clusters are generally intelligible.';
-  if (speechRateWpm < 100) {
-    pronunciationNotes = 'Occasional hesitation and slow syllable transition. Work on connected speech and linking final consonants.';
-  } else if (speechRateWpm > 155) {
-    pronunciationNotes = 'Natural speaking pace with rapid rhythm. Ensure unstressed syllables remain distinct and intonation falls naturally at end of thoughts.';
-  }
-
-  return {
-    speechRateWpm,
-    pauseRatio,
-    pronunciationNotes,
-  };
-}
-
-/**
- * Completes the Speaking simulation session and generates the official AI assessment.
- * Evaluates Fluency and Coherence, Lexical Resource, Grammatical Range and Accuracy,
- * and Pronunciation (evaluating audio characteristics directly!).
- * Permanently consumes 1 speaking allowance upon success.
- */
 export async function finishAndAssessSpeakingSession(
   sessionId: string,
   userId: string
@@ -718,147 +692,86 @@ export async function finishAndAssessSpeakingSession(
     return session.assessment;
   }
 
-  const candidateTurns = (session.turns || []).filter((t) => t.speaker === 'candidate');
-  const allCandidateText = candidateTurns.map((t) => t.text).join(' ');
-  const totalWords = allCandidateText.split(/\s+/).filter(Boolean).length;
-
-  // 1. Acoustic audio evaluation
-  const acoustic = computeSessionAcoustics(session.turns || []);
-
-  // 2. Evaluate IELTS 4 criteria
-  // FC: Fluency & Coherence
-  let fc = 6.0;
-  if (acoustic.speechRateWpm >= 115 && acoustic.pauseRatio <= 0.22 && totalWords > 120) fc = 6.5;
-  if (acoustic.speechRateWpm >= 130 && acoustic.pauseRatio <= 0.16 && totalWords > 220) fc = 7.0;
-  if (acoustic.speechRateWpm < 95 || totalWords < 50) fc = 5.0;
-
-  // LR: Lexical Resource
-  let lr = 6.0;
-  const complexWords = allCandidateText.match(/\b\w{7,}\b/g) || [];
-  if (complexWords.length > 15) lr = 6.5;
-  if (complexWords.length > 28) lr = 7.0;
-  if (complexWords.length < 5) lr = 5.0;
-
-  // GRA: Grammatical Range & Accuracy
-  let gra = 6.0;
-  if (/although|whereas|furthermore|in order to|as a result|despite/i.test(allCandidateText)) gra = 6.5;
-  if (/if I had|would have|not only.*but also|having considered/i.test(allCandidateText)) gra = 7.0;
-  if (totalWords < 60) gra = 5.0;
-
-  // P: Pronunciation (Acoustic audio grounded evaluation)
-  let p = 6.0;
-  if (acoustic.speechRateWpm >= 110 && acoustic.speechRateWpm <= 150 && acoustic.pauseRatio <= 0.22) p = 6.5;
-  if (acoustic.speechRateWpm >= 125 && acoustic.speechRateWpm <= 145 && acoustic.pauseRatio <= 0.18) p = 7.0;
-  if (acoustic.isClipping || acoustic.speechRateWpm < 90 || acoustic.pauseRatio > 0.3) p = 5.0;
-
-  // Validate criteria values
-  if (!validateSpeakingCriterionScore(fc).valid) fc = 6.0;
-  if (!validateSpeakingCriterionScore(lr).valid) lr = 6.0;
-  if (!validateSpeakingCriterionScore(gra).valid) gra = 6.0;
-  if (!validateSpeakingCriterionScore(p).valid) p = 6.0;
-
-  // Official IELTS Speaking Band calculation with verified rounding
-  const overallBand = calculateIeltsSpeakingBand(fc, lr, gra, p);
-
-  // Evidence quotes with timestamps
-  const evidenceQuotes: { criterion: string; quote: string; comment: string; timestamp?: string }[] = [];
-  if (candidateTurns.length > 0) {
-    const firstTurn = candidateTurns[0];
-    evidenceQuotes.push({
-      criterion: 'Fluency and Coherence',
-      quote: firstTurn.text.slice(0, 80),
-      comment: 'Direct opening response without undue initial hesitation.',
-      timestamp: `${Math.floor(firstTurn.timestampSeconds / 60)}:${String(Math.floor(firstTurn.timestampSeconds % 60)).padStart(2, '0')}`,
+  if (session.stage !== 'part_3') throw new Error('Finish all three parts before requesting a Speaking assessment.');
+  const turns = await db.prepare(`
+    SELECT turn_number, part, speaker, text, timestamp_seconds, rubric_evidence_json
+    FROM speaking_audio_turns WHERE session_id = ? ORDER BY turn_number, id
+  `).all(sessionId);
+  const samples: SpeakingSample[] = [];
+  let prompt = '';
+  for (const turn of turns) {
+    if (turn.speaker === 'examiner') prompt = turn.text;
+    else if (turn.rubric_evidence_json) samples.push({
+      turn: turn.turn_number, timestamp: turn.timestamp_seconds, part: turn.part, prompt,
+      transcript: turn.text, observations: JSON.parse(turn.rubric_evidence_json),
     });
-
-    if (candidateTurns.length > 1) {
-      const midTurn = candidateTurns[Math.floor(candidateTurns.length / 2)];
-      evidenceQuotes.push({
-        criterion: 'Lexical Resource & Grammar',
-        quote: midTurn.text.slice(0, 90),
-        comment: 'Clear explanation of personal perspective with appropriate collocation.',
-        timestamp: `${Math.floor(midTurn.timestampSeconds / 60)}:${String(Math.floor(midTurn.timestampSeconds % 60)).padStart(2, '0')}`,
-      });
-    }
   }
-
-  const strengths = [
-    `Maintained a steady speech rate of approximately ${acoustic.speechRateWpm} words per minute.`,
-    'Responded directly to the examiner prompts across all parts without severe pauses.',
-    'Demonstrated clear communicative intent with understandable pronunciation.',
-  ];
-
-  const improvementPriorities = [
-    'Expand complex sentence structures using conditionals and concessive clauses (e.g., "Although...", "Even if...").',
-    'Broaden topical vocabulary to replace general nouns and adjectives with more specific terminology.',
-    'Focus on word stress in multi-syllabic words and linking sounds across word boundaries.',
-  ];
-
-  const suggestedPractice = [
-    'Practice speaking on Part 2 cue cards for a full 2 minutes without stopping.',
-    'Shadow native speaker recordings to internalize natural cadence and intonation contours.',
-    'Record yourself answering abstract Part 3 discussion questions and transcribe them to analyze grammatical accuracy.',
-  ];
-
+  const result = await assessSpeech(samples);
+  const { fluencyCoherence: fc, lexicalResource: lr, grammaticalRange: gra, pronunciation: p } = result.scores;
+  const overallBand = calculateIeltsSpeakingBand(fc, lr, gra, p);
   const assessmentId = uuidv4();
   const now = new Date().toISOString();
 
   // Create Speaking Assessment Record
-    const runArgs = [
-      assessmentId,
-      userId,
-      userId, // System / self AI evaluator
-      session.assignmentId || null,
-      session.packageAttemptId || null,
-      session.setId || null,
-      session.setVersionId || null,
-      JSON.stringify([1, 2, 3]),
-      now,
-      fc,
-      lr,
-      gra,
-      p,
-      overallBand,
-      strengths.join('\n'),
-      improvementPriorities.join('\n'),
-      JSON.stringify({
-        part1: 'Clear familiar responses given.',
-        part2: session.part2Notes ? `Prep notes recorded: ${session.part2Notes.slice(0, 80)}` : 'Completed 1-2 min turn.',
-        part3: 'Addressed two-way discussion themes.',
-      }),
-      JSON.stringify(evidenceQuotes),
-      JSON.stringify(suggestedPractice),
-      JSON.stringify(acoustic),
-      session.turns?.length ? 0 : 1, // simulated flag
-      sessionId,
-      session.wasInterrupted ? 1 : 0,
-      session.interruptionCount,
-      now,
-      now,
-      now
-    ];
-    const stmt = db.prepare(`
-      INSERT INTO speaking_assessments (
-        id, student_id, teacher_id, class_id, assignment_id, package_attempt_id,
-        set_id, set_version_id, custom_topic, session_type, parts_covered_json,
-        session_date, status, assessor_type,
-        criterion_fluency_coherence, criterion_lexical_resource, criterion_grammatical_range, criterion_pronunciation,
-        overall_band, strengths, improvement_priorities, part_comments_json,
-        evidence_quotes_json, suggested_practice_json, acoustic_observations_json,
-        is_simulated, provider_model, session_id, was_interrupted, interruption_count,
-        released_at, created_at, updated_at
-      ) VALUES (
-        ?, ?, ?, NULL, ?, ?,
-        ?, ?, NULL, 'complete_mock', ?,
-        ?, 'released', 'ai',
-        ?, ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, 'gpt-4o-realtime-acoustic', ?, ?, ?,
-        ?, ?, ?
-      )
-    `);
+  const runArgs = [
+    assessmentId,
+    userId,
+    userId, // System / self AI evaluator
+    session.assignmentId || null,
+    session.packageAttemptId || null,
+    session.setId || null,
+    session.setVersionId || null,
+    JSON.stringify(['part1', 'part2', 'part3']),
+    now,
+    fc,
+    lr,
+    gra,
+    p,
+    overallBand,
+    result.strength,
+    result.priority,
+    JSON.stringify({}),
+    JSON.stringify(result.evidence),
+    JSON.stringify([result.practice]),
+    JSON.stringify({ pronunciationNotes: result.evidence.find(item => item.criterion === 'pronunciation')!.comment }),
+    0,
+    result.model + ' / ' + speakingRubric.version,
+    sessionId,
+    session.wasInterrupted ? 1 : 0,
+    session.interruptionCount,
+    now,
+    now,
+    now
+  ];
+  const stmt = db.prepare(`
+    INSERT INTO speaking_assessments (
+      id, student_id, teacher_id, class_id, assignment_id, package_attempt_id,
+      set_id, set_version_id, custom_topic, session_type, parts_covered_json,
+      session_date, status, assessor_type,
+      criterion_fluency_coherence, criterion_lexical_resource, criterion_grammatical_range, criterion_pronunciation,
+      overall_band, strengths, improvement_priorities, part_comments_json,
+      evidence_quotes_json, suggested_practice_json, acoustic_observations_json,
+      is_simulated, provider_model, session_id, was_interrupted, interruption_count,
+      released_at, created_at, updated_at
+    ) VALUES (
+      ?, ?, ?, NULL, ?, ?,
+      ?, ?, NULL, 'complete_mock', ?,
+      ?, 'released', 'ai',
+      ?, ?, ?, ?,
+      ?, ?, ?, ?,
+      ?, ?, ?,
+      ?, ?, ?, ?, ?,
+      ?, ?, ?
+    )
+  `);
   (await db.transaction(async () => {
+    const lock = await db.prepare(`UPDATE speaking_ai_sessions SET updated_at = ?
+      WHERE id = ? AND stage = 'part_3' AND assessment_id IS NULL AND duration_seconds = ?`).run(now, sessionId, session.durationSeconds);
+    if (!lock.changes) {
+      const latest = await getSpeakingSessionById(sessionId);
+      if (latest?.assessment) return;
+      throw new Error('Speaking session changed during assessment.');
+    }
     (await stmt.run(...runArgs));
 
     // Update speaking_ai_sessions record
@@ -877,20 +790,13 @@ export async function finishAndAssessSpeakingSession(
       (await db.prepare(`
         UPDATE package_attempts
         SET speaking_assessment_id = ?,
-            speaking_ai_session_id = ?,
-            updated_at = ?
+            speaking_ai_session_id = ?
         WHERE id = ?
-      `).run(assessmentId, sessionId, now, session.packageAttemptId));
+      `).run(assessmentId, sessionId, session.packageAttemptId));
+      await completeAssessmentIfReady('speaking', assessmentId);
     }
+    await consumeSpeakingAllowance({ userId, sessionId, assessmentId, notes: 'Completed rubric-based Speaking assessment' });
   })());
-
-  // Consume 1 speaking allowance permanently upon successful assessment
-  (await consumeSpeakingAllowance({
-    userId,
-    sessionId,
-    assessmentId,
-    notes: `Completed AI Speaking assessment (Band ${overallBand})`,
-  }));
 
   const refreshedSession = (await getSpeakingSessionById(sessionId))!;
   return refreshedSession.assessment!;

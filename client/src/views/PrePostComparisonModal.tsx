@@ -1,4 +1,6 @@
 import React from 'react';
+import { SelfStudyCell } from './SelfStudyCell';
+import { formatMakassarDateTime } from '../../../shared/dateUtils';
 import { PrePostComparisonReport, SkillComparisonItem } from '../types';
 
 interface PrePostComparisonModalProps {
@@ -9,6 +11,7 @@ interface PrePostComparisonModalProps {
 export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ report, onClose }) => {
   if (!report) return null;
 
+  const interval = report.practiceInterval;
   const renderSkillRow = (
     skillName: string,
     pre: SkillComparisonItem,
@@ -16,37 +19,10 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
     rawDelta?: number,
     bandDelta?: number
   ) => {
-    const isImplemented = pre.status !== 'not_implemented' && post.status !== 'not_implemented';
-
-    if (!isImplemented) {
-      return (
-        <tr className="border-b border-slate-200 bg-slate-50">
-          <td className="px-4 py-3 font-semibold text-slate-700 capitalize">{skillName}</td>
-          <td className="px-4 py-3 text-slate-500 italic" colSpan={2}>
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 mr-2">
-              Not Yet Implemented
-            </span>
-            Official IELTS 4-skill evaluation requires human-examiner or calibrated AI evaluation (Milestone 4+). No scores fabricated.
-          </td>
-          <td className="px-4 py-3 text-slate-400 italic text-center">—</td>
-        </tr>
-      );
-    }
-
     return (
       <tr className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
         <td className="px-4 py-3 font-semibold text-slate-800 capitalize flex items-center space-x-2">
           <span>{skillName}</span>
-          {skillName === 'Speaking' && (
-            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded">
-              Teacher Led
-            </span>
-          )}
-          {skillName === 'Writing' && (
-            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded">
-              AI Assisted
-            </span>
-          )}
         </td>
 
         {/* Pre-Test Column */}
@@ -54,12 +30,13 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
           {pre.status === 'completed' ? (
             <div>
               <div className="font-semibold text-slate-800 flex items-center space-x-1.5">
-                <span>Band {pre.bandScore !== undefined ? pre.bandScore.toFixed(1) : '—'}</span>
+                <span>Band {pre.bandScore != null ? pre.bandScore.toFixed(1) : '—'}</span>
                 {pre.rawScore !== undefined && pre.totalQuestions !== undefined && (
                   <span className="text-xs font-normal text-slate-500">
                     ({pre.rawScore}/{pre.totalQuestions} raw)
                   </span>
                 )}
+                {pre.isFirstAttempt === false && <span className="text-xs text-amber-800">Previously attempted</span>}
                 {pre.assessor && (
                   <span className="text-[11px] font-normal px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
                     {pre.assessor}
@@ -84,7 +61,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
             </div>
           ) : (
             <span className="text-xs px-2 py-0.5 rounded bg-slate-200 text-slate-600 capitalize">
-              {pre.status.replace('_', ' ')}
+              {pre.status === 'not_implemented' ? 'Not assigned' : pre.status.replaceAll('_', ' ')}
             </span>
           )}
         </td>
@@ -94,12 +71,13 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
           {post.status === 'completed' ? (
             <div>
               <div className="font-semibold text-slate-800 flex items-center space-x-1.5">
-                <span>Band {post.bandScore !== undefined ? post.bandScore.toFixed(1) : '—'}</span>
+                <span>Band {post.bandScore != null ? post.bandScore.toFixed(1) : '—'}</span>
                 {post.rawScore !== undefined && post.totalQuestions !== undefined && (
                   <span className="text-xs font-normal text-slate-500">
                     ({post.rawScore}/{post.totalQuestions} raw)
                   </span>
                 )}
+                {post.isFirstAttempt === false && <span className="text-xs text-amber-800">Previously attempted</span>}
                 {post.assessor && (
                   <span className="text-[11px] font-normal px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
                     {post.assessor}
@@ -124,7 +102,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
             </div>
           ) : (
             <span className="text-xs px-2 py-0.5 rounded bg-slate-200 text-slate-600 capitalize">
-              {post.status.replace('_', ' ')}
+              {post.status === 'not_implemented' ? 'Not assigned' : post.status.replaceAll('_', ' ')}
             </span>
           )}
         </td>
@@ -133,7 +111,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
         <td className="px-4 py-3 text-sm text-center">
           {pre.status === 'completed' && post.status === 'completed' ? (
             <div className="inline-flex flex-col items-center">
-              <span
+              {bandDelta !== undefined && <span
                 className={`text-sm font-bold px-2 py-0.5 rounded ${
                   (bandDelta || 0) > 0
                     ? 'bg-emerald-100 text-emerald-800'
@@ -143,7 +121,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                 }`}
               >
                 {(bandDelta || 0) > 0 ? `+${bandDelta}` : bandDelta ?? '0.0'} Band
-              </span>
+              </span>}
               {rawDelta !== undefined && (
                 <span className="text-xs text-slate-500 mt-0.5">
                   {(rawDelta || 0) > 0 ? `+${rawDelta}` : rawDelta ?? '0'} raw
@@ -151,7 +129,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
               )}
             </div>
           ) : (
-            <span className="text-xs text-slate-400 italic">Pending completion</span>
+            <span className="text-xs text-slate-400 italic">{pre.status === 'not_implemented' || post.status === 'not_implemented' ? '—' : pre.status === 'awaiting_assessment' || post.status === 'awaiting_assessment' ? 'Awaiting assessment' : 'Pending completion'}</span>
           )}
         </td>
       </tr>
@@ -185,7 +163,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
         {/* Content */}
         <div className="p-6 overflow-y-auto space-y-6">
           {/* Important Pedagogical Disclaimer Notice */}
-          <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed space-y-1">
+          {!interval && <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed space-y-1">
             <div className="font-semibold flex items-center space-x-1.5 text-amber-800">
               <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -197,16 +175,16 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
               <span>Pedagogical & Diagnostic Advisory</span>
             </div>
             <p>{report.pedagogicalNote}</p>
-          </div>
+          </div>}
 
           {/* Side by side skills comparison table */}
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="border border-slate-200 rounded-lg overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-slate-700 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
                   <th className="px-4 py-3">Skill Area</th>
-                  <th className="px-4 py-3">Diagnostic Pre-Test</th>
-                  <th className="px-4 py-3">Exit Post-Test</th>
+                  <th className="px-4 py-3">Pre-test<div className="normal-case font-normal">{report.preTest.packageTitle}</div></th>
+                  <th className="px-4 py-3">Post-test<div className="normal-case font-normal">{report.postTest.packageTitle}</div></th>
                   <th className="px-4 py-3 text-center">Score Delta (Change)</th>
                 </tr>
               </thead>
@@ -232,7 +210,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                   undefined,
                   report.deltas.writingBandDelta
                 )}
-                {renderSkillRow(
+                {!interval && renderSkillRow(
                   'Speaking',
                   report.preTest.skills.speaking,
                   report.postTest.skills.speaking,
@@ -240,7 +218,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                   report.deltas.speakingBandDelta
                 )}
               </tbody>
-              {(report.overallBandPre !== undefined || report.overallBandPost !== undefined) && (
+              {!interval && (report.overallBandPre !== undefined || report.overallBandPost !== undefined) && (
                 <tfoot className="bg-indigo-50 border-t-2 border-indigo-200">
                   <tr className="font-bold text-indigo-950">
                     <td className="px-4 py-3.5 flex items-center space-x-2">
@@ -293,8 +271,21 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
             </table>
           </div>
 
+          {interval && <section className="space-y-2 text-sm text-slate-700">
+            <h3 className="font-semibold text-slate-900">Self-study between assessments</h3>
+            {interval.status === 'missing_pair' ? <p>A pre-test and a post-test are needed for this report.</p>
+              : interval.status === 'awaiting_pre' ? <p>Tracking begins when the student submits all assigned Reading, Listening, and Writing pre-test sections.</p>
+              : interval.status === 'overlap' ? <p>The student started the post-test before or at pre-test completion.</p>
+              : <>
+                  <p>From pre-test completion on {formatMakassarDateTime(interval.from)} {interval.until
+                    ? `until the post-test started on ${formatMakassarDateTime(interval.until)}.`
+                    : 'to today. The student has yet to start the post-test.'}</p>
+                  {interval.rows.length ? <SelfStudyCell rows={interval.rows} /> : <p>No completed self-study in this period.</p>}
+                </>}
+          </section>}
+
           {/* Test Conditions Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {!interval && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
               <div className="font-semibold text-slate-700">Pre-Test Diagnostic Conditions</div>
               <div className="text-slate-600">Package: {report.preTest.packageTitle}</div>
@@ -309,7 +300,7 @@ export const PrePostComparisonModal: React.FC<PrePostComparisonModalProps> = ({ 
                 Status: {report.postTest.isReleased ? 'Released by Teacher' : 'Pending Teacher Release'}
               </div>
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Footer */}

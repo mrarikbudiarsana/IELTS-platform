@@ -776,6 +776,16 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_webhook_events_order ON payment_webhook_events(order_id);
   `);
 
+  const audioColumns = db.prepare('PRAGMA table_info(speaking_audio_turns)').all() as { name: string }[];
+  if (!audioColumns.some(col => col.name === 'rubric_evidence_json')) {
+    db.exec('ALTER TABLE speaking_audio_turns ADD COLUMN rubric_evidence_json TEXT');
+  }
+  for (const table of ['reading_attempts', 'listening_attempts']) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!columns.some(col => col.name === 'question_type_filter')) db.exec(`ALTER TABLE ${table} ADD COLUMN question_type_filter TEXT`);
+    if (!columns.some(col => col.name === 'answered_count')) db.exec(`ALTER TABLE ${table} ADD COLUMN answered_count INTEGER`);
+  }
+
   // Safe column migrations for assignment_id
   try {
     const readingColumns = db.prepare("PRAGMA table_info(reading_attempts)").all() as any[];
@@ -919,6 +929,9 @@ export function initDatabase() {
 
   try {
     const assignCols = db.prepare("PRAGMA table_info(assignments)").all() as any[];
+    if (!assignCols.some(column => column.name === 'pre_assignment_id')) {
+      db.exec('ALTER TABLE assignments ADD COLUMN pre_assignment_id TEXT REFERENCES assignments(id)');
+    }
     if (!assignCols.some((c) => c.name === 'speaking_route')) {
       db.exec("ALTER TABLE assignments ADD COLUMN speaking_route TEXT DEFAULT 'student_choice';");
     }

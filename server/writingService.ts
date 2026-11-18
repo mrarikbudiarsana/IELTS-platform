@@ -1,3 +1,4 @@
+import { assignedMaterial, completeAssessmentIfReady } from './assignedMaterial';
 import { db } from './db';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -9,6 +10,7 @@ import {
   WritingTaskType,
   WritingTestType,
   WritingTaskNumber,
+  WritingDraft,
   WritingTaskSubtype,
   TestMode,
   AttemptStatus,
@@ -422,6 +424,10 @@ export async function startOrResumeWritingAttempt(params: {
     throw new Error('At least one writing task (Task 1 or Task 2) must be specified.');
   }
 
+  const assignment = await assignedMaterial(userId, assignmentId, packageAttemptId);
+  if (assignment?.package_id && ((task1Id || null) !== assignment.writing_task1_id || (task2Id || null) !== assignment.writing_task2_id)) {
+    throw new Error('These writing tasks are outside the assignment.');
+  }
   // Check for existing in-progress attempt for this context
   let existingQuery = `
     SELECT * FROM writing_attempts 
@@ -432,10 +438,14 @@ export async function startOrResumeWritingAttempt(params: {
   if (assignmentId) {
     existingQuery += ' AND assignment_id = ?';
     existingParams.push(assignmentId);
-  } else if (packageAttemptId) {
+  } else {
+    existingQuery += ' AND assignment_id IS NULL';
+  }
+  if (packageAttemptId) {
     existingQuery += ' AND package_attempt_id = ?';
     existingParams.push(packageAttemptId);
   } else {
+    existingQuery += ' AND package_attempt_id IS NULL';
     // Standalone practice
     if (task1Id && task2Id) {
       existingQuery += ' AND task1_id = ? AND task2_id = ?';
@@ -473,10 +483,10 @@ export async function startOrResumeWritingAttempt(params: {
     const t1v = (await db
       .prepare(
         `SELECT id FROM writing_task_versions 
-         WHERE task_id = ? AND status = 'published' 
+         WHERE task_id = ? AND (id = ? OR (? = '' AND status = 'published')) 
          ORDER BY version_number DESC LIMIT 1`
       )
-      .get(task1Id)) as any;
+      .get(task1Id, assignment?.writing_task1_version_id || '', assignment?.writing_task1_version_id || '')) as any;
     if (!t1v) throw new Error(`Task 1 (${task1Id}) does not have a published version.`);
     task1VersionId = t1v.id;
   }
@@ -485,10 +495,10 @@ export async function startOrResumeWritingAttempt(params: {
     const t2v = (await db
       .prepare(
         `SELECT id FROM writing_task_versions 
-         WHERE task_id = ? AND status = 'published' 
+         WHERE task_id = ? AND (id = ? OR (? = '' AND status = 'published')) 
          ORDER BY version_number DESC LIMIT 1`
       )
-      .get(task2Id)) as any;
+      .get(task2Id, assignment?.writing_task2_version_id || '', assignment?.writing_task2_version_id || '')) as any;
     if (!t2v) throw new Error(`Task 2 (${task2Id}) does not have a published version.`);
     task2VersionId = t2v.id;
   }
@@ -558,6 +568,9 @@ export async function startOrResumeWritingAttempt(params: {
   return (await txn());
 }
 
+// Allow the final request to travel after the editor freezes at the server deadline.
+const finalDeliveryMs = 5_000;
+
 /**
  * Autosaves student response draft for Task 1 or Task 2.
  */
@@ -581,9 +594,17 @@ export async function saveWritingDraftResponse(params: {
   if (attempt.deadline_at) {
     const deadline = new Date(attempt.deadline_at).getTime();
     if (Date.now() > deadline) {
-      (await submitWritingAttempt(attemptId, userId));
-      throw new Error('Time has expired for this test. Your work has been submitted.');
+      if (Date.now() > deadline + finalDeliveryMs) await submitWritingAttempt(attemptId, userId);
+      throw new Error('Time has expired for this test.');
     }
+  }
+
+  return writeDraft(attemptId, { taskNumber, responseText });
+}
+
+async function writeDraft(attemptId: string, { taskNumber, responseText }: WritingDraft) {
+  if ((taskNumber !== 1 && taskNumber !== 2) || typeof responseText !== 'string') {
+    throw new Error('A draft requires a task number and response text.');
   }
 
   // Find the active (unlocked, latest version) response for this taskNumber
@@ -606,11 +627,12 @@ export async function saveWritingDraftResponse(params: {
   const wordCount = countWords(responseText);
   const now = new Date().toISOString();
 
-  (await db.prepare(
-    `UPDATE writing_responses 
+  const updated = await db.prepare(
+    `UPDATE writing_responses
      SET response_text = ?, word_count = ?, last_saved_at = ?, updated_at = ?
-     WHERE id = ?`
-  ).run(responseText, wordCount, now, now, response.id));
+     WHERE id = ? AND is_locked = 0`
+  ).run(responseText, wordCount, now, now, response.id);
+  if (!updated.changes) throw new Error('This response has already been locked.');
 
   return {
     responseId: response.id,
@@ -622,14 +644,21 @@ export async function saveWritingDraftResponse(params: {
 /**
  * Submits a Writing attempt, locking the responses.
  */
-export async function submitWritingAttempt(attemptId: string, userId: string): Promise<WritingAttempt> {
-  const attempt = (await db.prepare('SELECT * FROM writing_attempts WHERE id = ?').get(attemptId)) as any;
-  if (!attempt) throw new Error('Writing attempt not found.');
-  if (attempt.user_id !== userId) throw new Error('Unauthorized attempt access.');
-
-  const now = new Date().toISOString();
+export async function submitWritingAttempt(attemptId: string, userId: string, drafts: WritingDraft[] = []): Promise<WritingAttempt> {
+  const receivedAt = Date.now();
+  const now = new Date(receivedAt).toISOString();
 
   const txn = db.transaction(async () => {
+    const attempt = await db.prepare('SELECT * FROM writing_attempts WHERE id = ? AND user_id = ?').get(attemptId, userId);
+    if (!attempt) throw new Error('Writing attempt unavailable.');
+    if (attempt.status !== 'in_progress') return (await getWritingAttemptById(attemptId))!;
+    if (!Array.isArray(drafts) || drafts.length > 2 || new Set(drafts.map(d => d?.taskNumber)).size !== drafts.length) {
+      throw new Error('Submit one final draft per writing task.');
+    }
+    if (!attempt.deadline_at || receivedAt <= Date.parse(attempt.deadline_at) + finalDeliveryMs) {
+      for (const draft of drafts) await writeDraft(attemptId, draft);
+    }
+
     // Lock all responses for this attempt
     (await db.prepare(`UPDATE writing_responses SET is_locked = 1, updated_at = ? WHERE attempt_id = ?`).run(
       now,
@@ -643,6 +672,7 @@ export async function submitWritingAttempt(attemptId: string, userId: string): P
        WHERE id = ?`
     ).run(now, now, attemptId));
 
+    if (attempt.package_attempt_id) await completeAssessmentIfReady('writing', attemptId);
     return (await getWritingAttemptById(attemptId))!;
   });
 

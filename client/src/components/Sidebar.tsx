@@ -30,6 +30,19 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
+const staffGroups: { title: string; admin?: boolean; items: { view: string; label: string; icon: typeof Users; color: string; related?: string[] }[] }[] = [
+  { title: 'Teaching', items: [
+    { view: 'teacher_classes', label: 'Classes & progress', icon: GraduationCap, color: 'text-emerald-300' },
+    { view: 'teacher_editor', label: 'Reading & listening', icon: FileEdit, color: 'text-cyan-300', related: ['teacher_edit_form', 'teacher_listening_edit_form', 'teacher_attempts'] },
+    { view: 'teacher_writing', label: 'Writing tasks', icon: PenTool, color: 'text-orange-300' },
+    { view: 'teacher_speaking', label: 'Speaking assessments', icon: Mic, color: 'text-purple-300' },
+  ] },
+  { title: 'Administration', admin: true, items: [
+    { view: 'admin_commercial', label: 'Plans & payments', icon: Shield, color: 'text-amber-300' },
+    { view: 'admin_users', label: 'User accounts', icon: Users, color: 'text-blue-300' },
+  ] },
+];
+
 interface SidebarProps {
   currentView: string;
   activeSkill?: 'reading' | 'listening' | 'writing' | 'speaking';
@@ -130,11 +143,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const displayName = user ? user.fullName.split(' ')[0] : 'Guest';
   const initial = displayName.charAt(0).toUpperCase();
 
-  const sidebarContent = (
-    <div className="flex flex-col h-full bg-[#073250] text-slate-100 border-r border-[#0B446B] select-none font-sans overflow-hidden">
+  const renderSidebar = (collapsed: boolean) => (
+    <div className="[&_.lucide]:size-[20px] [&_.lucide]:shrink-0 flex flex-col h-full bg-[#073250] text-slate-100 border-r border-[#0B446B] select-none font-sans overflow-hidden">
       {/* Top Header: Brand & Collapse Toggle */}
       <div className="h-16 px-3.5 flex items-center justify-between border-b border-[#0B446B] gap-2 overflow-hidden">
-        {!isCollapsed ? (
+        {!collapsed ? (
           <>
             <div
               onClick={() => onNavigate('dashboard')}
@@ -168,7 +181,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
               title="Expand sidebar"
             >
-              <PanelLeftOpen className="w-5 h-5" />
+              <PanelLeftOpen className="size-[20px]" />
             </button>
           </div>
         )}
@@ -189,132 +202,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 item.isActive
                   ? 'bg-[#0B4A75] text-white shadow-2xs font-semibold border-l-3 border-[#FC9F23]'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-              title={isCollapsed ? item.label : undefined}
+              } ${collapsed ? 'justify-center px-0' : ''}`}
+              title={collapsed ? item.label : undefined}
             >
               <Icon
                 className={`w-4.5 h-4.5 shrink-0 ${
                   item.isActive ? 'text-[#FC9F23]' : 'text-slate-300'
                 }`}
               />
-              {!isCollapsed && <span>{item.label}</span>}
+              {!collapsed && <span>{item.label}</span>}
             </button>
           );
         })}
 
-        {/* Teacher / Admin Workspace Section */}
-        {isTeacherOrAdmin && (
-          <div className="pt-3 mt-3 border-t border-[#0B446B] space-y-1">
-            {!isCollapsed && (
-              <div className="px-3 text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1">
-                {user?.role === 'admin' ? 'Admin / Teacher' : 'Teacher Suite'}
-              </div>
-            )}
-            <button
-              onClick={() => {
-                onNavigate('teacher_editor');
-                setMobileMenuOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                currentView === 'teacher_editor' ||
-                currentView === 'teacher_edit_form' ||
-                currentView === 'teacher_listening_edit_form' ||
-                currentView === 'teacher_attempts'
-                  ? 'bg-[#0B4A75] text-white shadow-2xs border-l-3 border-[#FC9F23]'
-                  : 'text-slate-200 hover:text-white hover:bg-white/10'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-              title={isCollapsed ? 'Test Editor' : undefined}
-            >
-              <FileEdit className="w-4 h-4 text-cyan-300 shrink-0" />
-              {!isCollapsed && <span>Test Editor</span>}
-            </button>
-            <button
-              onClick={() => {
-                onNavigate('teacher_writing');
-                setMobileMenuOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                currentView === 'teacher_writing'
-                  ? 'bg-[#0B4A75] text-white shadow-2xs border-l-3 border-[#FC9F23]'
-                  : 'text-slate-200 hover:text-white hover:bg-white/10'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-              title={isCollapsed ? 'Writing Tasks' : undefined}
-            >
-              <PenTool className="w-4 h-4 text-orange-300 shrink-0" />
-              {!isCollapsed && <span>Writing Tasks</span>}
-            </button>
-            <button
-              onClick={() => {
-                onNavigate('teacher_classes');
-                setMobileMenuOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                currentView === 'teacher_classes'
-                  ? 'bg-[#0B4A75] text-white shadow-2xs border-l-3 border-[#FC9F23]'
-                  : 'text-slate-200 hover:text-white hover:bg-white/10'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-              title={isCollapsed ? 'Classes' : undefined}
-            >
-              <GraduationCap className="w-4 h-4 text-emerald-300 shrink-0" />
-              {!isCollapsed && <span>Classes</span>}
-            </button>
-            <button
-              onClick={() => {
-                onNavigate('teacher_speaking');
-                setMobileMenuOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                currentView === 'teacher_speaking'
-                  ? 'bg-[#0B4A75] text-white shadow-2xs border-l-3 border-[#FC9F23]'
-                  : 'text-slate-200 hover:text-white hover:bg-white/10'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
-              title={isCollapsed ? 'Assess Speaking' : undefined}
-            >
-              <Mic className="w-4 h-4 text-purple-300 shrink-0" />
-              {!isCollapsed && <span>Assess Speaking</span>}
-            </button>
-            {user?.role === 'admin' && (
-              <>
-                <button
-                  onClick={() => {
-                    onNavigate('admin_commercial');
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                    currentView === 'admin_commercial'
-                      ? 'bg-[#0B4A75] text-white shadow-2xs border-l-3 border-[#FC9F23]'
-                      : 'text-slate-200 hover:text-white hover:bg-white/10'
-                  } ${isCollapsed ? 'justify-center px-0' : ''}`}
-                  title={isCollapsed ? 'Commercial' : undefined}
-                >
-                  <Shield className="w-4 h-4 text-amber-300 shrink-0" />
-                  {!isCollapsed && <span>Commercial</span>}
+        {isTeacherOrAdmin && staffGroups.filter(group => !group.admin || user?.role === 'admin').map(group => (
+          <section key={group.title} aria-label={group.title} className="pt-3 mt-3 border-t border-white/15 space-y-1">
+            {!collapsed && <h2 className="px-3 pb-1 text-[10px] uppercase tracking-wider font-bold text-slate-300">{group.title}</h2>}
+            {group.items.map(({ view, label, icon: Icon, color, related }) => {
+              const active = currentView === view || related?.includes(currentView);
+              return (
+                <button key={view} aria-label={label} aria-current={active ? 'page' : undefined} title={label}
+                  onClick={() => { onNavigate(view); setMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${collapsed ? 'justify-center' : ''} ${active ? 'bg-[#0B4A75] text-white shadow-[inset_3px_0_#FC9F23]' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
+                  <Icon className={color} />
+                  {!collapsed && <span>{label}</span>}
                 </button>
-                <button
-                  onClick={() => {
-                    onNavigate('admin_users');
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                    currentView === 'admin_users'
-                      ? 'bg-[#0B4A75] text-white shadow-2xs border-l-3 border-[#FC9F23]'
-                      : 'text-slate-200 hover:text-white hover:bg-white/10'
-                  } ${isCollapsed ? 'justify-center px-0' : ''}`}
-                  title={isCollapsed ? 'User Management' : undefined}
-                >
-                  <Users className="w-4 h-4 text-blue-300 shrink-0" />
-                  {!isCollapsed && <span>Users</span>}
-                </button>
-              </>
-            )}
-          </div>
-        )}
+              );
+            })}
+          </section>
+        ))}
       </nav>
 
       {/* Bottom Area: Upgrade to Pro, What's New, User Profile */}
       <div className="p-3 border-t border-[#0B446B] space-y-2 bg-[#05253C]">
         {/* Upgrade to Pro Pill Button */}
-        {!isCollapsed ? (
+        {!collapsed ? (
           <button
             onClick={() => onNavigate('account')}
             className="w-full py-2 px-3 rounded-full bg-[#0B4A75] hover:bg-[#0D588B] text-white text-xs font-semibold border border-[#14669E] shadow-2xs transition-all flex items-center justify-center gap-1.5 group"
@@ -336,12 +258,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           onClick={onOpenWhatsNew}
           className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 transition-colors ${
-            isCollapsed ? 'justify-center px-0' : ''
+            collapsed ? 'justify-center px-0' : ''
           }`}
           title="What's new"
         >
           <Sparkles className="w-4 h-4 text-[#FC9F23] shrink-0" />
-          {!isCollapsed && <span>What's new</span>}
+          {!collapsed && <span>What's new</span>}
         </button>
 
         {/* User Profile Row */}
@@ -350,14 +272,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => setProfileMenuOpen(!profileMenuOpen)}
               className={`w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-colors ${
-                isCollapsed ? 'justify-center p-1' : ''
+                collapsed ? 'justify-center p-1' : ''
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-7 h-7 rounded-full bg-[#8B5CF6] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
                   {initial}
                 </div>
-                {!isCollapsed && (
+                {!collapsed && (
                   <div className="text-left truncate">
                     <span className="text-xs font-semibold text-white block truncate leading-tight">
                       {displayName}
@@ -369,7 +291,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </div>
 
-              {!isCollapsed && (
+              {!collapsed && (
                 <div className="flex items-center gap-1 text-slate-300">
                   {profileMenuOpen ? (
                     <ChevronUp className="w-3.5 h-3.5" />
@@ -385,7 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="w-full py-2 px-3 rounded-xl bg-[#084F7D] hover:bg-[#063D62] text-white text-xs font-semibold transition-colors shadow-2xs flex items-center justify-center gap-1.5"
             >
               <User className="w-3.5 h-3.5" />
-              {!isCollapsed && <span>Sign In</span>}
+              {!collapsed && <span>Sign In</span>}
             </button>
           )}
 
@@ -460,10 +382,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <button
+          aria-label="Open navigation"
           onClick={() => setMobileMenuOpen(true)}
           className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="size-[20px]" />
         </button>
       </div>
 
@@ -472,12 +395,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="fixed inset-0 z-50 md:hidden bg-black/60 backdrop-blur-xs flex">
           <div className="w-72 h-full bg-[#0C1824] shadow-2xl relative">
             <button
+              aria-label="Close navigation"
               onClick={() => setMobileMenuOpen(false)}
               className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg"
             >
-              <X className="w-5 h-5" />
+              <X className="size-[20px]" />
             </button>
-            {sidebarContent}
+            {renderSidebar(false)}
           </div>
           <div className="flex-1" onClick={() => setMobileMenuOpen(false)} />
         </div>
@@ -489,7 +413,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           isCollapsed ? 'w-20' : 'w-[268px]'
         }`}
       >
-        {sidebarContent}
+        {renderSidebar(isCollapsed)}
       </aside>
     </>
   );

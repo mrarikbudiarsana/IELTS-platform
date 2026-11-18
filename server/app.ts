@@ -1,3 +1,6 @@
+import { speakingRubric } from '../shared/speakingRubric';
+import { getPracticeSuggestions } from './practiceSuggestions';
+import { practiceVersion } from './questionTypePractice';
 import './environment';
 import { isRetiredDemoAccount } from './retiredDemoAccounts';
 import { extractReadingPdf, extractReadingText, PdfImportError } from './readingPdfImportService';
@@ -412,6 +415,10 @@ app.post('/api/auth/elevate', authMiddleware, async (req: AuthenticatedRequest, 
 // READING TESTS & CONTENT MANAGEMENT
 // -------------------------------------------------------------
 
+app.get('/api/self-study/suggestions', authMiddleware, requireRole('student'), async (req: AuthenticatedRequest, res) => {
+  res.json({ suggestions: await getPracticeSuggestions(req.user!.id) });
+});
+
 // List reading tests
 app.get('/api/reading/tests', authMiddleware, async (req: AuthenticatedRequest, res) => {
   const isTeacherOrAdmin = req.user!.role === 'teacher' || req.user!.role === 'admin';
@@ -565,6 +572,9 @@ app.post('/api/reading/tests/:id/start', authMiddleware, async (req: Authenticat
       userId: req.user!.id,
       testId: String(req.params.id),
       modeOverride,
+      questionTypeFilter: req.body.questionTypeFilter,
+      assignmentId: req.body.assignmentId,
+      packageAttemptId: req.body.packageAttemptId,
     }));
     res.json(result);
   } catch (err: any) {
@@ -629,7 +639,8 @@ app.get('/api/attempts/:id', authMiddleware, async (req: AuthenticatedRequest, r
   }
 
   // Also fetch the test version to render questions
-  const version = (await getVersionById(attempt.versionId));
+  const original = await getVersionById(attempt.versionId);
+  const version = original && practiceVersion(original, attempt.questionTypeFilter);
 
   // If in progress, scrub questions!
   let renderedVersion = version;
@@ -801,6 +812,9 @@ app.post('/api/listening/tests/:id/start', authMiddleware, async (req: Authentic
       userId: req.user!.id,
       testId: String(req.params.id),
       modeOverride,
+      questionTypeFilter: req.body.questionTypeFilter,
+      assignmentId: req.body.assignmentId,
+      packageAttemptId: req.body.packageAttemptId,
     }));
     res.json(result);
   } catch (err: any) {
@@ -866,7 +880,8 @@ app.get('/api/listening/attempts/:id', authMiddleware, async (req: Authenticated
     res.status(404).json({ error: 'Attempt not found or access forbidden' });
     return;
   }
-  const version = (await getListeningVersionById(attempt.versionId));
+  const original = await getListeningVersionById(attempt.versionId);
+  const version = original && practiceVersion(original, attempt.questionTypeFilter);
   let renderedVersion = version;
   if (attempt.status === 'in_progress' && version) {
     const sanitized = sanitizeListeningForStudent(version.questionGroups, version.parts);
@@ -1011,7 +1026,7 @@ app.get('/api/classes/:id/enrolments', authMiddleware, requireRole('teacher', 'a
 // GET /api/classes/:id/overview - class analytics & overview
 app.get('/api/classes/:id/overview', authMiddleware, requireRole('teacher', 'admin'), async (req: AuthenticatedRequest, res) => {
   try {
-    const overview = (await getClassOverview(String(req.params.id), req.user!.id, req.user!.role === 'admin'));
+    const overview = (await getClassOverview(String(req.params.id), req.user!.id, req.user!.role === 'admin', typeof req.query.postId === 'string' ? req.query.postId : undefined));
     res.json(overview);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -1114,7 +1129,7 @@ app.get('/api/package-attempts/:id', authMiddleware, async (req: AuthenticatedRe
 // GET /api/classes/:classId/students/:studentId/comparison - pre/post diagnostic comparison report
 app.get('/api/classes/:classId/students/:studentId/comparison', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const report = (await getPrePostComparison(String(req.params.classId), String(req.params.studentId), req.user!.id, req.user!.role));
+    const report = (await getPrePostComparison(String(req.params.classId), String(req.params.studentId), req.user!.id, req.user!.role, typeof req.query.postId === 'string' ? req.query.postId : undefined));
     res.json({ report });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -1293,6 +1308,10 @@ app.get('/api/speaking/my-assessments', authMiddleware, async (req: Authenticate
 // -------------------------------------------------------------
 // LIVE AI SPEAKING SIMULATION & ASSESSMENT (MILESTONE 6)
 // -------------------------------------------------------------
+
+app.get('/api/speaking/rubric', authMiddleware, (_req, res) => {
+  res.json({ rubric: speakingRubric });
+});
 
 // POST /api/speaking/voice-trial - Pre-flight mic/speaker test (0 allowance cost)
 app.post('/api/speaking/voice-trial', async (req, res) => {
@@ -1606,7 +1625,7 @@ app.post('/api/writing/attempts/:id/save', authMiddleware, async (req: Authentic
 // POST /api/writing/attempts/:id/submit - submit attempt and lock responses
 app.post('/api/writing/attempts/:id/submit', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const attempt = (await submitWritingAttempt(String(req.params.id), req.user!.id));
+    const attempt = (await submitWritingAttempt(String(req.params.id), req.user!.id, req.body?.drafts));
     res.json({ attempt });
   } catch (err: any) {
     res.status(400).json({ error: err.message });

@@ -83,7 +83,7 @@ export const TestRunnerView: React.FC<TestRunnerViewProps> = ({
       setLoading(true);
       setError(null);
       try {
-        const res = await api.startAttempt(testId, { modeOverride, assignmentId, packageAttemptId });
+        const res = await api.startAttempt(testId, { modeOverride, assignmentId, packageAttemptId, questionTypeFilter });
         if (!isMounted) return;
 
         setAttempt(res.attempt);
@@ -116,7 +116,7 @@ export const TestRunnerView: React.FC<TestRunnerViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [testId, modeOverride]);
+  }, [testId, modeOverride, assignmentId, packageAttemptId, questionTypeFilter]);
 
   // Timer tick effect
   useEffect(() => {

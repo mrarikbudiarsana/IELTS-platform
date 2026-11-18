@@ -7,6 +7,8 @@ interface AdminUsersViewProps {
 }
 
 export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onBack }) => {
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -38,6 +40,10 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onBack }) => {
     }
   };
 
+  const needle = search.trim().toLowerCase();
+  const visibleUsers = users.filter(u => (!roleFilter || u.role === roleFilter) &&
+    [u.full_name, u.email].some(value => value?.toLowerCase().includes(needle)));
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -49,7 +55,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onBack }) => {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-900">User Management & Permissions</h1>
+            <h1 className="text-2xl font-extrabold text-slate-900">User accounts</h1>
             <p className="text-xs text-slate-500">
               Admin console for granting teacher and admin privileges to accounts.
             </p>
@@ -64,10 +70,17 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onBack }) => {
         </div>
       )}
 
+      <div className="mb-4 flex flex-wrap gap-3">
+        <input type="search" aria-label="Search user accounts" placeholder="Search by name or email" value={search}
+          onChange={e => setSearch(e.target.value)} className="flex-1 min-w-48 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+        <select aria-label="Filter by role" value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="rounded-lg border bg-white px-3 py-2 text-sm">
+          <option value="">All roles</option><option value="student">Students</option><option value="teacher">Teachers</option><option value="admin">Administrators</option>
+        </select>
+      </div>
       {loading ? (
         <div className="py-20 text-center text-slate-400 text-sm">Loading users...</div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200 text-xs">
             <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider">
               <tr>
@@ -79,7 +92,8 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ onBack }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {users.map((u) => (
+              {visibleUsers.length === 0 && <tr><td colSpan={5} className="p-5 text-center text-slate-500">No matching accounts.</td></tr>}
+              {visibleUsers.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50/60">
                   <td className="px-5 py-4 font-bold text-slate-900">{u.full_name}</td>
                   <td className="px-5 py-4 text-slate-600">{u.email}</td>

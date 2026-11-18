@@ -1,3 +1,4 @@
+import { formatQuestionTypeName } from '../questionTypeName';
 import React, { useState, useEffect } from 'react';
 import { ReadingTest, ListeningTest, WritingTask, WritingAttempt, WritingAllowanceBalance, QuestionGroupSummary } from '../types';
 import { api } from '../api';
@@ -89,34 +90,10 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
     attemptId?: string;
   } | null>(null);
 
-  // Helper to format question type keys into human-friendly names
-  const formatQuestionTypeName = (type: string): string => {
-    const map: Record<string, string> = {
-      matching_headings: 'Matching Headings',
-      true_false_not_given: 'True / False / Not Given',
-      yes_no_not_given: 'Yes / No / Not Given',
-      multiple_choice_single: 'Multiple Choice',
-      multiple_choice_multi: 'Multiple Choice (Multi-select)',
-      matching_information: 'Matching Information',
-      matching_features: 'Matching Features',
-      matching_sentence_endings: 'Matching Sentence Endings',
-      sentence_completion: 'Sentence Completion',
-      summary_completion_words: 'Summary Completion',
-      summary_completion_options: 'Summary Completion (with Options)',
-      note_completion: 'Note Completion',
-      table_completion: 'Table Completion',
-      flow_chart_completion: 'Flow-chart Completion',
-      diagram_completion: 'Diagram Labelling',
-      short_answer: 'Short Answer',
-      listening_multiple_choice_single: 'Multiple Choice',
-      listening_multiple_choice_multi: 'Multiple Choice (Multi-select)',
-      matching: 'Matching',
-      plan_map_diagram_labelling: 'Map / Diagram Labelling',
-      form_completion: 'Form Completion',
-      summary_completion: 'Summary Completion',
-    };
-    return map[type] || type.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-  };
+  const drillTypes = new Map<string, number>();
+  for (const group of drillGroups) {
+    drillTypes.set(group.questionType, (drillTypes.get(group.questionType) || 0) + group.questionCount);
+  }
 
   // Fallback effect: Ensure question breakdown loads reliably even if test was cached without summaries
   useEffect(() => {
@@ -453,10 +430,10 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredReadingTests.map((test) => {
               const activeAttempt = readingAttempts.find(
-                (a) => a.testId === test.id && a.status === 'in_progress'
+                (a) => !a.questionTypeFilter && a.testId === test.id && a.status === 'in_progress'
               );
               const completedAttempt = readingAttempts.find(
-                (a) => a.testId === test.id && (a.status === 'submitted' || a.status === 'expired')
+                (a) => !a.questionTypeFilter && a.testId === test.id && (a.status === 'submitted' || a.status === 'expired')
               );
               const partsCount = test.passageCount || 3;
               const hasGroupSummary = test.questionGroupsSummary && test.questionGroupsSummary.length > 0;
@@ -482,7 +459,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                           onOpenLogin();
                           return;
                         }
-                        if (activeAttempt) {
+                        if (activeAttempt && selectedQuestionTypeFilter === 'all') {
                           setResumePromptModal({
                             test,
                             skill: 'reading',
@@ -552,10 +529,10 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredListeningTests.map((test) => {
               const activeAttempt = listeningAttempts.find(
-                (a) => a.testId === test.id && a.status === 'in_progress'
+                (a) => !a.questionTypeFilter && a.testId === test.id && a.status === 'in_progress'
               );
               const completedAttempt = listeningAttempts.find(
-                (a) => a.testId === test.id && (a.status === 'submitted' || a.status === 'expired')
+                (a) => !a.questionTypeFilter && a.testId === test.id && (a.status === 'submitted' || a.status === 'expired')
               );
               const partsCount = test.partCount || 4;
 
@@ -580,7 +557,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                           onOpenLogin();
                           return;
                         }
-                        if (activeAttempt) {
+                        if (activeAttempt && selectedQuestionTypeFilter === 'all') {
                           setResumePromptModal({
                             test,
                             skill: 'listening',
@@ -909,7 +886,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                   <span>
                     {drillModalLoading
                       ? 'Loading...'
-                      : `${drillGroups.length} available`}
+                      : `${drillTypes.size} available`}
                   </span>
                 </div>
 
@@ -920,13 +897,14 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                   </div>
                 ) : drillGroups.length > 0 ? (
                   <div className="space-y-2">
-                    {drillGroups.map((group, idx) => {
-                      const typeName = formatQuestionTypeName(group.questionType);
-                      const qSpan = `Questions ${group.startQuestionNumber}–${group.endQuestionNumber}`;
+                    {Array.from(drillTypes, ([questionType, questionCount], idx) => {
+                      const typeName = formatQuestionTypeName(questionType);
 
                       return (
-                        <div
-                          key={group.id || idx}
+                        <button
+                          type="button"
+                          aria-label={`Practise ${typeName}`}
+                          key={questionType}
                           onClick={() => {
                             const t = drillModalTest.test;
                             const s = drillModalTest.skill;
@@ -936,12 +914,12 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                               return;
                             }
                             if (s === 'reading') {
-                              onStartTest(t.id, 'practice', undefined, undefined, group.questionType);
+                              onStartTest(t.id, 'practice', undefined, undefined, questionType);
                             } else {
-                              onStartListeningTest(t.id, 'practice', undefined, undefined, group.questionType);
+                              onStartListeningTest(t.id, 'practice', undefined, undefined, questionType);
                             }
                           }}
-                          className="p-3 rounded-xl border border-slate-200 hover:border-[#084F7D] hover:bg-[#FAF9F5] cursor-pointer transition-all flex items-center justify-between group"
+                          className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-[#084F7D] hover:bg-[#FAF9F5] cursor-pointer transition-all flex items-center justify-between group"
                         >
                           <div className="flex items-center gap-3">
                             <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-bold flex items-center justify-center shrink-0">
@@ -952,14 +930,14 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                                 {typeName}
                               </div>
                               <div className="text-[11px] text-slate-500">
-                                {qSpan} · {group.questionCount} {group.questionCount === 1 ? 'question' : 'questions'}
+                                {questionCount} {questionCount === 1 ? 'question' : 'questions'}
                               </div>
                             </div>
                           </div>
                           <span className="text-[11px] font-bold text-[#084F7D] bg-[#EBF4F9] px-2.5 py-1 rounded-lg group-hover:bg-[#084F7D] group-hover:text-white transition-colors">
                             Practice
                           </span>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>

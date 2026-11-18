@@ -24,6 +24,7 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
   onViewListeningResults,
   onViewWritingFeedback,
 }) => {
+  const [selectedPostId, setSelectedPostId] = useState('');
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -104,7 +105,7 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
     try {
       // Need student ID - from current user session (stored in comparison endpoint directly)
       const userRes = await api.me();
-      const res = await api.getComparisonReport(classId, userRes.user.id);
+      const res = await api.getComparisonReport(classId, userRes.user.id, postTestAssignment?.id);
       setComparisonReport(res.report);
     } catch (err: any) {
       alert(`Could not generate comparison report: ${err.message}`);
@@ -114,8 +115,10 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
   };
 
   const selectedClass = classes.find((c) => c.id === selectedClassId);
-  const preTestAssignment = assignments.find((a) => a.purpose === 'pre_test');
-  const postTestAssignment = assignments.find((a) => a.purpose === 'post_test');
+  const orderedAssessments = [...assignments].sort((a,b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  const postTests = orderedAssessments.filter(a => a.purpose === 'post_test');
+  const postTestAssignment = postTests.find(a => a.id === selectedPostId) || postTests[0];
+  const preTestAssignment = orderedAssessments.find(a => a.purpose === 'pre_test' && (!postTestAssignment?.preAssignmentId || a.id === postTestAssignment.preAssignmentId));
   const practiceAssignments = assignments.filter((a) => a.purpose === 'practice');
 
   const getStatusBadge = (status?: string) => {
@@ -242,6 +245,9 @@ export const StudentClassDashboardView: React.FC<StudentClassDashboardViewProps>
                       <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">1</span>
                       <h3 className="font-bold text-slate-800">Diagnostic Pre-Test</h3>
                     </div>
+                    {postTests.length > 1 && <select aria-label="Assessment pair" className="max-w-48 rounded border p-1 text-xs" value={postTestAssignment?.id} onChange={e => setSelectedPostId(e.target.value)}>
+                      {postTests.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
+                    </select>}
                     {preTestAssignment && getStatusBadge(preTestAssignment.studentStatus)}
                   </div>
 

@@ -1,3 +1,4 @@
+import type { SuggestedDrill, WritingDraft } from '../../shared/types';
 import type { ReadingPdfImportResult } from '../../shared/readingPdfImport';
 import type { TextImportResults, TextImportSkill } from '../../shared/textImport';
 
@@ -122,6 +123,8 @@ export const api = {
   resetPassword: (body: any) => request<{ message: string }>('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
   elevate: (body: { secretKey?: string; targetRole: string }) => request<{ message: string; user: any; token: string }>('/auth/elevate', { method: 'POST', body: JSON.stringify(body) }),
 
+  getPracticeSuggestions: () => request<{ suggestions: SuggestedDrill[] }>('/self-study/suggestions'),
+
   // Reading Tests
   importReadingText: (body: { text: string; focus: string }) => importSource<ReadingPdfImportResult>('reading', 'text', body),
   importReadingPdf: (body: { pdfBase64: string; focus: string }) => importSource<ReadingPdfImportResult>('reading', 'pdf', body),
@@ -137,7 +140,7 @@ export const api = {
   archiveTest: (testId: string) => request<{ message: string }>(`/reading/tests/${testId}/archive`, { method: 'POST' }),
 
   // Reading Attempts
-  startAttempt: (testId: string, options?: { modeOverride?: string; assignmentId?: string; packageAttemptId?: string } | string) => {
+  startAttempt: (testId: string, options?: { questionTypeFilter?: string; modeOverride?: string; assignmentId?: string; packageAttemptId?: string } | string) => {
     const body = typeof options === 'string' ? { modeOverride: options } : options || {};
     return request<{ attempt: any; testVersion: any }>(`/reading/tests/${testId}/start`, { method: 'POST', body: JSON.stringify(body) });
   },
@@ -159,7 +162,7 @@ export const api = {
   archiveListeningTest: (testId: string) => request<{ message: string }>(`/listening/tests/${testId}/archive`, { method: 'POST' }),
 
   // Listening Attempts
-  startListeningAttempt: (testId: string, options?: { modeOverride?: string; assignmentId?: string; packageAttemptId?: string } | string) => {
+  startListeningAttempt: (testId: string, options?: { questionTypeFilter?: string; modeOverride?: string; assignmentId?: string; packageAttemptId?: string } | string) => {
     const body = typeof options === 'string' ? { modeOverride: options } : options || {};
     return request<{ attempt: any; testVersion: any }>(`/listening/tests/${testId}/start`, { method: 'POST', body: JSON.stringify(body) });
   },
@@ -178,7 +181,7 @@ export const api = {
   enrolStudent: (classId: string, email: string) => request<{ enrolment: any; message: string }>(`/classes/${classId}/enrol`, { method: 'POST', body: JSON.stringify({ email }) }),
   removeStudent: (classId: string, studentId: string) => request<{ message: string }>(`/classes/${classId}/enrolments/${studentId}`, { method: 'DELETE' }),
   getClassEnrolments: (classId: string) => request<{ enrolments: any[] }>(`/classes/${classId}/enrolments`),
-  getClassOverview: (classId: string) => request<any>(`/classes/${classId}/overview`),
+  getClassOverview: (classId: string, postId?: string) => request<any>(`/classes/${classId}/overview${postId ? `?postId=${encodeURIComponent(postId)}` : ''}`),
 
   // Test Packages
   getTestPackages: (testType?: string) => {
@@ -195,7 +198,7 @@ export const api = {
   releaseAssignment: (assignmentId: string) => request<{ assignment: any; message: string }>(`/assignments/${assignmentId}/release`, { method: 'POST' }),
   startPackageAttempt: (assignmentId: string, mode?: string) => request<{ packageAttempt: any; testPackage: any }>(`/assignments/${assignmentId}/start-package`, { method: 'POST', body: JSON.stringify({ mode }) }),
   getPackageAttempt: (attemptId: string) => request<{ packageAttempt: any }>(`/package-attempts/${attemptId}`),
-  getComparisonReport: (classId: string, studentId: string) => request<{ report: any }>(`/classes/${classId}/students/${studentId}/comparison`),
+  getComparisonReport: (classId: string, studentId: string, postId?: string) => request<{ report: any }>(`/classes/${classId}/students/${studentId}/comparison${postId ? `?postId=${encodeURIComponent(postId)}` : ''}`),
 
   // Admin & Teacher
   getAdminUsers: () => request<{ users: any[] }>('/admin/users'),
@@ -259,8 +262,8 @@ export const api = {
   getWritingAttempt: (id: string) => request<{ attempt: any }>(`/writing/attempts/${id}`),
   saveWritingDraft: (attemptId: string, body: { taskNumber: number; responseText: string }) =>
     request<{ responseId: string; wordCount: number; lastSavedAt: string }>(`/writing/attempts/${attemptId}/save`, { method: 'POST', body: JSON.stringify(body) }),
-  submitWritingAttempt: (attemptId: string) =>
-    request<{ attempt: any }>(`/writing/attempts/${attemptId}/submit`, { method: 'POST' }),
+  submitWritingAttempt: (attemptId: string, drafts?: WritingDraft[]) =>
+    request<{ attempt: any }>(`/writing/attempts/${attemptId}/submit`, { method: 'POST', body: JSON.stringify({ drafts }) }),
   createWritingRevision: (attemptId: string, taskNumber: number) =>
     request<{ response: any }>(`/writing/attempts/${attemptId}/revisions`, { method: 'POST', body: JSON.stringify({ attemptId, taskNumber }) }),
 

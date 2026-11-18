@@ -302,10 +302,7 @@ export const TeacherSpeakingAssessmentView: React.FC = () => {
       {/* Page Title & Action Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-purple-700">
-            Official IELTS Evaluation Platform
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 mt-0.5">Teacher-Led Speaking Assessments</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mt-0.5">Speaking assessments</h1>
           <p className="text-sm text-slate-600 mt-1">
             Conduct 3-part mocks or targeted partial practice sessions with official IELTS 4-criterion band calibration.
           </p>

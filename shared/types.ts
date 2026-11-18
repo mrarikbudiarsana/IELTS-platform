@@ -334,6 +334,7 @@ export interface AttemptItemResult {
 }
 
 export interface ReadingAttempt {
+  questionTypeFilter?: string;
   id: string;
   userId: string;
   testId: string;
@@ -361,6 +362,7 @@ export interface InterruptionEvent {
 }
 
 export interface ListeningAttempt {
+  questionTypeFilter?: string;
   id: string;
   userId: string;
   testId: string;
@@ -449,6 +451,7 @@ export interface TestPackage {
 }
 
 export interface Assignment {
+  preAssignmentId?: string;
   id: string;
   classId: string;
   classTitle?: string;
@@ -508,7 +511,7 @@ export interface PackageAttempt {
 
 export interface SkillComparisonItem {
   skill: 'reading' | 'listening' | 'writing' | 'speaking';
-  status: 'completed' | 'in_progress' | 'not_started' | 'not_implemented';
+  status: 'completed' | 'awaiting_assessment' | 'in_progress' | 'not_started' | 'not_implemented';
   testTitle?: string;
   versionNumber?: number;
   rawScore?: number;
@@ -527,7 +530,25 @@ export interface SkillComparisonItem {
   writingOverallBand?: number;
 }
 
+export interface SuggestedDrill {
+  skill: 'reading' | 'listening';
+  preTestTitle: string;
+  questionType: string;
+  correct: number;
+  total: number;
+  testId: string;
+  testTitle: string;
+}
+
+export interface PracticeInterval {
+  status: 'missing_pair' | 'awaiting_pre' | 'overlap' | 'open' | 'closed';
+  from?: string;
+  until?: string;
+  rows: SelfStudySummary[];
+}
+
 export interface PrePostComparisonReport {
+  practiceInterval?: PracticeInterval;
   studentId: string;
   studentName: string;
   studentEmail: string;
@@ -797,6 +818,10 @@ export interface SpeakingVoiceTrialResponse {
 export type WritingTaskType = 'academic_task_1' | 'gt_task_1' | 'task_2';
 export type WritingTestType = 'academic' | 'general' | 'both';
 export type WritingTaskNumber = 1 | 2;
+export interface WritingDraft {
+  taskNumber: WritingTaskNumber;
+  responseText: string;
+}
 export type WritingTaskSubtype =
   | 'chart'
   | 'table'
@@ -1143,3 +1168,13 @@ export interface AdminCommercialSummary {
   recentGrants: CommercialEntitlementGrant[];
 }
 
+
+export interface SelfStudySummary {
+  skill: 'Reading' | 'Listening' | 'Writing' | 'Speaking';
+  category: 'full' | 'drill' | 'short' | 'earlier' | 'other';
+  questionType?: string;
+  sessions: number;
+  correct: number;
+  questions: number;
+  answered: number;
+}

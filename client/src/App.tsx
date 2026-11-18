@@ -202,13 +202,8 @@ const AppContent: React.FC = () => {
   };
 
   const handlePreviewTest = (testId: string, skill: 'reading' | 'listening') => {
-    setActiveTestId(testId);
-    setActiveModeOverride('practice');
-    if (skill === 'reading') {
-      setCurrentView('test_runner');
-    } else {
-      setCurrentView('listening_test_runner');
-    }
+    if (skill === 'reading') handleStartTest(testId, 'practice');
+    else handleStartListeningTest(testId, 'practice');
   };
 
   const isExamView =
@@ -250,6 +245,7 @@ const AppContent: React.FC = () => {
         {/* Writing Workspace */}
         {currentView === 'writing_workspace' && activeWritingAttemptId && (
           <WritingWorkspaceView
+            key={activeWritingAttemptId}
             attemptId={activeWritingAttemptId}
             onFinish={handleFinishWriting}
             onExit={() => setCurrentView('catalogue')}
@@ -299,8 +295,8 @@ const AppContent: React.FC = () => {
                 if (cat) setActiveCategoryFilter(cat);
                 setCurrentView(view);
               }}
-              onStartReading={(tId, mode) => handleStartTest(tId, mode)}
-              onStartListening={(tId, mode) => handleStartListeningTest(tId, mode)}
+              onStartReading={(tId, mode, filter) => handleStartTest(tId, mode, undefined, undefined, filter)}
+              onStartListening={(tId, mode, filter) => handleStartListeningTest(tId, mode, undefined, undefined, filter)}
               onStartWriting={handleStartWriting}
               onStartSpeaking={handleOpenSpeakingSetup}
               onViewResults={handleViewResults}
@@ -370,7 +366,7 @@ const AppContent: React.FC = () => {
             <ResultsView
               attemptId={activeAttemptId}
               onBackToCatalogue={() => setCurrentView('catalogue')}
-              onRetryTest={(tId) => handleStartTest(tId, 'practice')}
+              onRetryTest={(tId, filter) => handleStartTest(tId, 'practice', undefined, undefined, filter)}
             />
           )}
 
@@ -379,7 +375,7 @@ const AppContent: React.FC = () => {
             <ListeningResultsView
               attemptId={activeAttemptId}
               onBackToCatalogue={() => setCurrentView('catalogue')}
-              onRetryTest={(tId) => handleStartListeningTest(tId, 'practice')}
+              onRetryTest={(tId, filter) => handleStartListeningTest(tId, 'practice', undefined, undefined, filter)}
             />
           )}
 
@@ -399,8 +395,8 @@ const AppContent: React.FC = () => {
               onViewResults={handleViewResults}
               onViewListeningResults={handleViewListeningResults}
               onViewWritingFeedback={handleViewWritingFeedback}
-              onRetryTest={(tId) => handleStartTest(tId, 'practice')}
-              onRetryListeningTest={(tId) => handleStartListeningTest(tId, 'practice')}
+              onRetryTest={(tId, filter) => handleStartTest(tId, 'practice', undefined, undefined, filter)}
+              onRetryListeningTest={(tId, filter) => handleStartListeningTest(tId, 'practice', undefined, undefined, filter)}
             />
           )}
 

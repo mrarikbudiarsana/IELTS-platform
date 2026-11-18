@@ -298,11 +298,8 @@ export const TeacherWritingEditorView: React.FC = () => {
       {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mb-6">
         <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
-            Teacher Content Editor
-          </span>
           <h1 className="text-2xl font-black text-slate-900 mt-1">
-            IELTS Writing Task Management & Grounding
+            Writing tasks
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Create Academic Task 1, GT Letters, and Task 2 Essays with verified factual grounding.

@@ -5,6 +5,7 @@ async function main() {
   const pg = await startPostgres();
   try {
     const { seedLocalDatabase } = await import('../server/seedLocalDatabase');
+    await (await import('./seedUsers')).seedTestUsers();
     await seedLocalDatabase();
     const { db } = await import('../server/db');
     await db.prepare("INSERT INTO users (id, email, password_hash, full_name, role) VALUES (?, ?, 'test-only', 'Test Teacher', 'teacher')").run('pg-fixture-teacher','pg-fixture-teacher@test.invalid');

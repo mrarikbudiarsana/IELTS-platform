@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { api } from '../api';
 import { WritingAttempt, WritingTask, WritingTaskNumber } from '../types';
 import { countWords } from '../scoring';
@@ -31,7 +31,8 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mobileTab, setMobileTab] = useState<'prompt' | 'editor'>('editor');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Accessibility / Comfort state
   const [textSize, setTextSize] = useState<TextSizeOption>('standard');
@@ -44,6 +45,21 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
   const [isDraggingSplitter, setIsDraggingSplitter] = useState(false);
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dirty = useRef(new Map<WritingTaskNumber, string>());
+  const saveQueue = useRef(Promise.resolve());
+  const closing = useRef(false);
+
+  useEffect(() => {
+    const warnIfUnsaved = (event: BeforeUnloadEvent) => {
+      if (dirty.current.size) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warnIfUnsaved);
+    return () => {
+      window.removeEventListener('beforeunload', warnIfUnsaved);
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -63,133 +79,136 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
     };
   }, [isDraggingSplitter]);
 
-  // Load attempt and tasks
   useEffect(() => {
-    loadAttempt();
+    let active = true;
+    async function loadAttempt() {
+      try {
+        const { attempt: att } = await api.getWritingAttempt(attemptId);
+        const [first, second] = await Promise.all([
+          att.task1Id ? api.getWritingTask(att.task1Id) : undefined,
+          att.task2Id ? api.getWritingTask(att.task2Id) : undefined,
+        ]);
+        if (!active) return;
+        setAttempt(att);
+        setTask1Details(first?.task || null);
+        setTask2Details(second?.task || null);
+        setTask1Text(att.task1Response?.responseText || '');
+        setTask2Text(att.task2Response?.responseText || '');
+        setActiveTaskNum(att.task1Id ? 1 : 2);
+      } catch (err: any) {
+        if (active) setError(err.message || 'Failed to load writing workspace');
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void loadAttempt();
+    return () => { active = false; };
   }, [attemptId]);
 
-  async function loadAttempt() {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await api.getWritingAttempt(attemptId);
-      const att = res.attempt;
-      setAttempt(att);
-
-      // Initialize text from responses
-      if (att.task1Response) {
-        setTask1Text(att.task1Response.responseText || '');
-      }
-      if (att.task2Response) {
-        setTask2Text(att.task2Response.responseText || '');
-      }
-
-      // Default active task: if only task 2 exists, switch to 2
-      if (!att.task1Id && att.task2Id) {
-        setActiveTaskNum(2);
-      }
-
-      // Load task details
-      if (att.task1Id) {
-        const t1 = await api.getWritingTask(att.task1Id);
-        setTask1Details(t1.task);
-      }
-      if (att.task2Id) {
-        const t2 = await api.getWritingTask(att.task2Id);
-        setTask2Details(t2.task);
-      }
-
-      // Setup countdown if timed
-      if (att.deadlineAt && att.status === 'in_progress') {
-        const deadline = new Date(att.deadlineAt).getTime();
-        const diff = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
-        setRemainingSeconds(diff);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load writing workspace');
-    } finally {
-      setLoading(false);
-    }
+  function cancelScheduledSave() {
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
   }
 
-  // Timer countdown / elapsed tracking
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-
-      if (remainingSeconds !== null) {
-        setRemainingSeconds((prev) => {
-          if (prev === null) return null;
-          if (prev <= 1) {
-            clearInterval(timer);
-            handleAutoSubmit();
-            return 0;
-          }
-          return prev - 1;
-        });
+  function flushDrafts() {
+    cancelScheduledSave();
+    // Serialize requests so that a slow save cannot replace a newer edit.
+    const job = saveQueue.current.then(async () => {
+      for (const [taskNumber, responseText] of Array.from(dirty.current)) {
+        const res = await api.saveWritingDraft(attemptId, { taskNumber, responseText });
+        if (dirty.current.get(taskNumber) === responseText) dirty.current.delete(taskNumber);
+        setLastSavedTime(new Date(res.lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [remainingSeconds]);
-
-  // Debounced autosave
-  function handleTextChange(text: string) {
-    if (activeTaskNum === 1) {
-      setTask1Text(text);
-    } else {
-      setTask2Text(text);
-    }
-
-    setSaveStatus('saving');
-
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-    }
-
-    autosaveTimerRef.current = setTimeout(async () => {
-      try {
-        const res = await api.saveWritingDraft(attemptId, {
-          taskNumber: activeTaskNum,
-          responseText: text,
-        });
-        setSaveStatus('saved');
-        const d = new Date(res.lastSavedAt);
-        setLastSavedTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-      } catch (err) {
-        setSaveStatus('error');
-      }
-    }, 1200);
+      setSaveStatus(dirty.current.size ? 'saving' : 'saved');
+      setSaveError(null);
+    });
+    saveQueue.current = job.catch(() => {});
+    return job;
   }
 
-  async function handleAutoSubmit() {
+  function retrySave() {
+    void flushDrafts().catch(() => {
+      if (closing.current) return;
+      setSaveStatus('error');
+      setSaveError('Your edits are still in this editor. Retry saving before leaving.');
+    });
+  }
+
+  async function finish() {
+    if (closing.current || !attempt || attempt.status !== 'in_progress') return;
+    closing.current = true;
+    setSubmitting(true);
+    setShowSubmitModal(false);
+    setSubmitError(null);
+    setSaveError(null);
+    cancelScheduledSave();
+    const drafts = Array.from(dirty.current, ([taskNumber, responseText]) => ({ taskNumber, responseText }));
     try {
-      setSubmitting(true);
-      await api.submitWritingAttempt(attemptId);
-      if (onFinish) onFinish(attemptId);
+      const { attempt: submitted } = await api.submitWritingAttempt(attemptId, drafts);
+      const differs = drafts.some(({ taskNumber, responseText }) =>
+        (taskNumber === 1 ? submitted.task1Response : submitted.task2Response)?.responseText !== responseText);
+      setAttempt(submitted);
+      if (differs) {
+        setSubmitError('The submission was already locked before these edits arrived. You can copy your text here or open the submitted version.');
+      } else {
+        dirty.current.clear();
+        onFinish?.(attemptId);
+      }
     } catch (err: any) {
-      setError('Auto-submission encountered an issue: ' + err.message);
+      setSubmitError(err.message || 'Submission failed. Your text is still here. Retry submission.');
     } finally {
       setSubmitting(false);
+      closing.current = false;
     }
   }
 
-  async function handleManualSubmit() {
-    try {
-      setSubmitting(true);
-      // Final flush of active draft
-      const activeText = activeTaskNum === 1 ? task1Text : task2Text;
-      await api.saveWritingDraft(attemptId, {
-        taskNumber: activeTaskNum,
-        responseText: activeText,
-      });
+  const expire = useEffectEvent(() => { void finish(); });
+  useEffect(() => {
+    if (!attempt || attempt.status !== 'in_progress') return;
+    const deadline = attempt.deadlineAt ? Date.parse(attempt.deadlineAt) : null;
+    const startedAt = Date.parse(attempt.startedAt);
+    function tick() {
+      const now = Date.now();
+      setElapsedSeconds(Math.max(0, Math.floor((now - startedAt) / 1000)));
+      if (deadline !== null) {
+        setRemainingSeconds(Math.max(0, Math.ceil((deadline - now) / 1000)));
+        if (now >= deadline) return true;
+      }
+      return false;
+    }
+    if (tick()) { expire(); return; }
+    const timer = setInterval(() => {
+      if (tick()) {
+        clearInterval(timer);
+        expire();
+      }
+    }, 250);
+    return () => clearInterval(timer);
+  }, [attempt]);
 
-      await api.submitWritingAttempt(attemptId);
-      setShowSubmitModal(false);
-      if (onFinish) onFinish(attemptId);
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit test');
+  function handleTextChange(text: string) {
+    if (closing.current || attempt?.status !== 'in_progress' ||
+      (attempt.deadlineAt && Date.now() >= Date.parse(attempt.deadlineAt))) return;
+    if (activeTaskNum === 1) setTask1Text(text);
+    else setTask2Text(text);
+    dirty.current.set(activeTaskNum, text);
+    setSaveStatus('saving');
+    if (!autosaveTimerRef.current) autosaveTimerRef.current = setTimeout(retrySave, 1200);
+  }
+
+  async function exitWorkspace() {
+    if (closing.current) return;
+    if (!dirty.current.size || attempt?.status !== 'in_progress') { onExit?.(); return; }
+    closing.current = true;
+    setSubmitting(true);
+    try {
+      await flushDrafts();
+      onExit?.();
+    } catch {
+      setSaveStatus('error');
+      setSaveError('Your edits could not be saved. Retry the save or submit from this editor.');
     } finally {
+      closing.current = false;
       setSubmitting(false);
     }
   }
@@ -219,7 +238,7 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
 
   const isFullMock = Boolean(attempt.task1Id && attempt.task2Id);
   const currentTaskDetails = activeTaskNum === 1 ? task1Details : task2Details;
-  const currentVersion = currentTaskDetails?.versions?.[currentTaskDetails.versions.length - 1];
+  const currentVersion = currentTaskDetails?.versions?.find(version => version.id === (activeTaskNum === 1 ? attempt.task1VersionId : attempt.task2VersionId));
   const currentText = activeTaskNum === 1 ? task1Text : task2Text;
   const currentWordCount = countWords(currentText);
   const minRequiredWords = currentVersion?.minWords || (activeTaskNum === 1 ? 150 : 250);
@@ -259,12 +278,20 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
         elapsedSeconds={elapsedSeconds}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
-        onExitClick={onExit || (() => {})}
-        onSubmitClick={() => setShowSubmitModal(true)}
+        onExitClick={exitWorkspace}
+        onSubmitClick={() => attempt.status === 'in_progress' ? setShowSubmitModal(true) : onFinish?.(attemptId)}
         onOpenHelp={() => setShowHelpModal(true)}
         onOpenSettings={() => setShowSettingsModal(true)}
       />
 
+      {(saveError || submitError) && <div role="alert" className="flex items-center justify-between gap-3 bg-amber-50 px-6 py-2 text-sm text-amber-900">
+        <span>{submitError || saveError}</span>
+        {attempt.status !== 'in_progress' ? (
+          <button className="font-semibold underline" onClick={() => onFinish?.(attemptId)}>View submission</button>
+        ) : remainingSeconds === 0 || submitError ? (
+          <button className="font-semibold underline" onClick={finish}>Retry submission</button>
+        ) : <button className="font-semibold underline" onClick={retrySave}>Retry save</button>}
+      </div>}
       {/* 2. OFFICIAL SUB-HEADER: WARM CREAM BAR MATCHING REFERENCE */}
       <div className="bg-[#F4F3EE] border-b border-[#E5E2D9] px-6 sm:px-10 py-2.5 flex items-center justify-between text-xs sm:text-sm select-none shrink-0">
         <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
@@ -380,6 +407,8 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
         >
           <div className="flex-1 p-6 sm:p-8 flex flex-col overflow-hidden">
             <textarea
+              aria-label={`Task ${activeTaskNum} response`}
+              readOnly={submitting || remainingSeconds === 0 || attempt.status !== 'in_progress'}
               value={currentText}
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder=""
@@ -449,7 +478,7 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-150">
             <h3 className="text-lg font-bold text-slate-900 mb-2">Submit Writing Assessment?</h3>
             <p className="text-sm text-slate-600 mb-4 leading-relaxed">
-              Once submitted, your responses will be locked and queued for official criterion-based AI evaluation.
+              Submitting saves both your final text and word count for each task. You can review your responses on the feedback page.
             </p>
 
             {/* Word count summary review */}
@@ -489,7 +518,7 @@ export const WritingWorkspaceView: React.FC<WritingWorkspaceViewProps> = ({
                 Keep Writing
               </button>
               <button
-                onClick={handleManualSubmit}
+                onClick={finish}
                 disabled={submitting}
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-50"
               >

@@ -190,7 +190,7 @@ export const FullMockView: React.FC<FullMockViewProps> = ({
   const getPackageSkillStatus = (pkg: FullMockExamPackage) => {
     // 1. Listening
     const lAttempt = pkg.listeningTest
-      ? listeningAttempts.find((a) => a.testId === pkg.listeningTest?.id)
+      ? listeningAttempts.find((a) => !a.questionTypeFilter && a.testId === pkg.listeningTest?.id)
       : undefined;
     const lCompleted = Boolean(lAttempt && (lAttempt.status === 'submitted' || lAttempt.status === 'expired'));
     const lInProgress = Boolean(lAttempt && lAttempt.status === 'in_progress');
@@ -198,7 +198,7 @@ export const FullMockView: React.FC<FullMockViewProps> = ({
 
     // 2. Reading
     const rAttempt = pkg.readingTest
-      ? readingAttempts.find((a) => a.testId === pkg.readingTest?.id)
+      ? readingAttempts.find((a) => !a.questionTypeFilter && a.testId === pkg.readingTest?.id)
       : undefined;
     const rCompleted = Boolean(rAttempt && (rAttempt.status === 'submitted' || rAttempt.status === 'expired'));
     const rInProgress = Boolean(rAttempt && rAttempt.status === 'in_progress');

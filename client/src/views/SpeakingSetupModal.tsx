@@ -302,7 +302,7 @@ export const SpeakingSetupModal: React.FC<SpeakingSetupModalProps> = ({
                 className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
               />
               <span className="text-xs text-slate-600 leading-relaxed">
-                I understand that candidate audio turns are recorded and analyzed to evaluate Fluency, Lexical Resource, Grammatical Range, and Pronunciation. Audio files are stored under a strict <strong>90-day retention and deletion policy</strong> and will not be shared publicly.
+                I agree to send my recorded responses to OpenAI for Speaking assessment. The platform saves the transcript, assessment observations and feedback.
               </span>
             </label>
           </div>

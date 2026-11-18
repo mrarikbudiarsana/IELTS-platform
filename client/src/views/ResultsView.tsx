@@ -1,3 +1,4 @@
+import { formatQuestionTypeName } from '../questionTypeName';
 import React, { useState, useEffect, useRef } from 'react';
 import { ReadingAttempt, ReadingTestVersion, AttemptItemResult, ReadingPassage } from '../types';
 import { api } from '../api';
@@ -25,7 +26,7 @@ import {
 interface ResultsViewProps {
   attemptId: string;
   onBackToCatalogue: () => void;
-  onRetryTest: (testId: string) => void;
+  onRetryTest: (testId: string, filter?: string) => void;
 }
 
 export const ResultsView: React.FC<ResultsViewProps> = ({
@@ -228,7 +229,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
           )}
 
           <button
-            onClick={() => onRetryTest(attempt.testId)}
+            onClick={() => onRetryTest(attempt.testId, attempt.questionTypeFilter)}
             className="flex items-center gap-1.5 text-xs font-bold text-white bg-[#084F7D] hover:bg-[#073f64] px-4 py-2 rounded-xl shadow-2xs transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
@@ -253,7 +254,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
               </span>
             </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              {attempt.testTitle}
+              {attempt.questionTypeFilter && formatQuestionTypeName(attempt.questionTypeFilter) + ' · '}{attempt.testTitle}
             </h1>
             <div className="text-xs text-slate-500 mt-1.5 flex items-center gap-3">
               <span>Submitted: {new Date(attempt.submittedAt || attempt.startedAt).toLocaleString()}</span>

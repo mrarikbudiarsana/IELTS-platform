@@ -1,3 +1,5 @@
+import { practiceVersion, validatePracticeFilter } from './questionTypePractice';
+import { assignedMaterial, completeAssessmentIfReady } from './assignedMaterial';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import { AnswerMark, saveAnswerMarks } from './answerMarks';
@@ -25,7 +27,9 @@ export async function startOrResumeAttempt(params: {
   modeOverride?: 'practice' | 'mock';
   assignmentId?: string;
   packageAttemptId?: string;
+  questionTypeFilter?: string;
 }): Promise<{ attempt: ReadingAttempt; testVersion: any }> {
+  validatePracticeFilter(params);
   // If attempting independently without assignment, ensure test is not reserved in an unreleased post-test
   if (!params.assignmentId) {
     const isReserved = (await db.prepare(`
@@ -65,17 +69,26 @@ export async function startOrResumeAttempt(params: {
     }
   }
 
-  const latestVersion = (await getVersionById(test.latestVersionId));
-  if (!latestVersion) throw new Error('Published test version not found');
+  const assignment = await assignedMaterial(params.userId, params.assignmentId, params.packageAttemptId);
+  if (assignment) {
+    const expected = assignment.package_id ? assignment.reading_test_id : assignment.skill === 'reading' && assignment.test_id;
+    if (expected !== params.testId) throw new Error('This test is outside the assignment.');
+    params.modeOverride = assignment.mode;
+  }
+  const versionId = assignment?.reading_version_id || assignment?.version_id || test.latestVersionId;
+  const latestVersion = await getVersionById(versionId);
+  if (!latestVersion) throw new Error('Assigned test version unavailable.');
 
   // Check if user already has an active in_progress attempt
   const existingAttemptRow = (await db
     .prepare(`
       SELECT * FROM reading_attempts
       WHERE user_id = ? AND test_id = ? AND status = 'in_progress'
+        AND COALESCE(assignment_id, '') = ? AND COALESCE(question_type_filter, '') = ?
+        AND (? = '' OR id = (SELECT reading_attempt_id FROM package_attempts WHERE id = ?))
       ORDER BY started_at DESC LIMIT 1
     `)
-    .get(params.userId, params.testId)) as any;
+    .get(params.userId, params.testId, params.assignmentId || '', params.questionTypeFilter || '', params.packageAttemptId || '', params.packageAttemptId || '')) as any;
 
   if (existingAttemptRow) {
     const now = new Date();
@@ -93,12 +106,15 @@ export async function startOrResumeAttempt(params: {
 
     // Resume existing attempt
     const attempt = (await getAttemptById(existingAttemptRow.id, params.userId));
-    const sanitizedGroups = sanitizeQuestionsForStudent(latestVersion.questionGroups);
+    const original = await getVersionById(existingAttemptRow.version_id);
+    const savedVersion = original && practiceVersion(original, existingAttemptRow.question_type_filter);
+    if (!savedVersion) throw new Error('Saved test version unavailable.');
+    const sanitizedGroups = sanitizeQuestionsForStudent(savedVersion.questionGroups);
 
     return {
       attempt: attempt!,
       testVersion: {
-        ...latestVersion,
+        ...savedVersion,
         questionGroups: sanitizedGroups,
       },
     };
@@ -114,13 +130,15 @@ async function startNewAttempt(
     modeOverride?: 'practice' | 'mock';
     assignmentId?: string;
     packageAttemptId?: string;
+    questionTypeFilter?: string;
   },
   test: any,
   version: any
 ) {
+  version = practiceVersion(version, params.questionTypeFilter);
   const attemptId = uuidv4();
   const now = new Date();
-  const mode = params.modeOverride || test.category;
+  const mode = params.questionTypeFilter ? 'practice' : params.modeOverride || test.category;
 
   let deadlineAt: string | null = null;
   if (mode === 'mock') {
@@ -143,8 +161,8 @@ async function startNewAttempt(
     INSERT INTO reading_attempts (
       id, user_id, test_id, version_id, test_title, test_type,
       mode, status, started_at, deadline_at, duration_seconds,
-      total_questions, is_first_attempt, assignment_id, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, 0, ?, ?, ?, ?)
+      total_questions, is_first_attempt, assignment_id, question_type_filter, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, 0, ?, ?, ?, ?, ?)
   `).run(
     attemptId,
     params.userId,
@@ -158,6 +176,7 @@ async function startNewAttempt(
     version.totalQuestions,
     isFirstAttempt,
     params.assignmentId || null,
+    params.questionTypeFilter || '',
     now.toISOString()
   ));
 
@@ -206,6 +225,13 @@ export async function saveStudentAnswer(params: {
     return { saved: false, isExpired: true };
   }
 
+  if (attemptRow.question_type_filter) {
+    const original = await getVersionById(attemptRow.version_id);
+    const included = original?.questionGroups.some(group => group.questionType === attemptRow.question_type_filter &&
+      group.questions.some(q => q.id === params.questionId && q.questionNumber === params.questionNumber));
+    if (!included) throw new Error('Question is outside this practice session.');
+  }
+
   const now = new Date().toISOString();
   const answerId = uuidv4();
   const answerJson = JSON.stringify(params.userAnswer);
@@ -248,7 +274,8 @@ export async function submitAttempt(params: {
     return (await getAttemptById(params.attemptId, params.userId))!;
   }
 
-  const version = (await getVersionById(attemptRow.version_id));
+  const original = await getVersionById(attemptRow.version_id);
+  const version = original && practiceVersion(original, attemptRow.question_type_filter);
   if (!version) throw new Error('Test version not found');
 
   const now = new Date();
@@ -273,6 +300,7 @@ export async function submitAttempt(params: {
     studentAnswersMap.set(row.question_number, row);
   }
 
+  let answeredCount = 0;
   let totalRawScore = 0;
   const itemResults: AttemptItemResult[] = [];
 
@@ -283,6 +311,7 @@ export async function submitAttempt(params: {
       const studentAnsRow = studentAnswersMap.get(qNum);
       const studentAns = studentAnsRow ? JSON.parse(studentAnsRow.user_answer_json) : '';
 
+      if ([studentAns].flat().some(value => String(value).trim().length > 0)) answeredCount++;
       const markResult = markStudentAnswer({
         questionType: group.questionType,
         userAnswer: studentAns,
@@ -328,7 +357,7 @@ export async function submitAttempt(params: {
 
     await saveAnswerMarks('reading_answers', answerMarks);
     const finalStatus = params.forceExpired ? 'expired' : 'submitted';
-    const estimatedBand = calculateEstimatedBandScore(
+    const estimatedBand = attemptRow.question_type_filter ? null : calculateEstimatedBandScore(
       totalRawScore,
       version.totalQuestions,
       attemptRow.test_type
@@ -339,6 +368,7 @@ export async function submitAttempt(params: {
       SET status = ?,
           submitted_at = ?,
           duration_seconds = ?,
+          answered_count = ?,
           raw_score = ?,
           band_score = ?
       WHERE id = ?
@@ -346,10 +376,12 @@ export async function submitAttempt(params: {
       finalStatus,
       now.toISOString(),
       durationSeconds,
+      answeredCount,
       totalRawScore,
       estimatedBand,
       params.attemptId
     ));
+    if (attemptRow.assignment_id) await completeAssessmentIfReady('reading', params.attemptId);
   });
 
   (await tx());
@@ -383,7 +415,8 @@ export async function getAttemptById(attemptId: string, userId: string): Promise
 
   // Answers and explanations are ONLY delivered if attempt has been submitted or expired!
   if (attemptRow.status === 'submitted' || attemptRow.status === 'expired') {
-    const version = (await getVersionById(attemptRow.version_id));
+    const original = await getVersionById(attemptRow.version_id);
+    const version = original && practiceVersion(original, attemptRow.question_type_filter);
     if (version) {
       const questionMap = new Map<number, { question: QuestionItem; group: QuestionGroup }>();
       for (const g of version.questionGroups) {
@@ -429,6 +462,7 @@ export async function getAttemptById(attemptId: string, userId: string): Promise
     userId: attemptRow.user_id,
     testId: attemptRow.test_id,
     versionId: attemptRow.version_id,
+    questionTypeFilter: attemptRow.question_type_filter || undefined,
     testTitle: attemptRow.test_title,
     testType: attemptRow.test_type,
     mode: attemptRow.mode,
@@ -456,6 +490,7 @@ export async function listUserAttempts(userId: string): Promise<ReadingAttempt[]
     userId: r.user_id,
     testId: r.test_id,
     versionId: r.version_id,
+    questionTypeFilter: r.question_type_filter || undefined,
     testTitle: r.test_title,
     testType: r.test_type,
     mode: r.mode,

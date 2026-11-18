@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { SelfStudyCell } from './SelfStudyCell';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import { ClassItem, ClassEnrolment, Assignment, TestPackage, PrePostComparisonReport, ClassTestType } from '../types';
 import { formatMakassarDateTime } from '../../../shared/dateUtils';
@@ -32,7 +33,7 @@ export const TeacherClassManagementView: React.FC = () => {
 
   const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
   const [assignPurpose, setAssignPurpose] = useState<'pre_test' | 'practice' | 'post_test'>('practice');
-  const [assignType, setAssignType] = useState<'package' | 'reading' | 'listening'>('practice' === 'practice' ? 'reading' : 'package');
+  const [assignType, setAssignType] = useState<'custom' | 'package' | 'reading' | 'listening'>('custom');
   const [assignTitle, setAssignTitle] = useState<string>('');
   const [assignInstructions, setAssignInstructions] = useState<string>('');
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
@@ -41,6 +42,28 @@ export const TeacherClassManagementView: React.FC = () => {
   const [assignDeadline, setAssignDeadline] = useState<string>('');
   const [assignAttemptLimit, setAssignAttemptLimit] = useState<number>(3);
   const [assignWarning, setAssignWarning] = useState<string | null>(null);
+
+  const [preAssignmentId, setPreAssignmentId] = useState('');
+  const [reportPostId, setReportPostId] = useState('');
+  const [sections, setSections] = useState<Record<string,string>>({});
+  const [writingTasks, setWritingTasks] = useState<any[]>([]);
+  const [speakingSets, setSpeakingSets] = useState<any[]>([]);
+  const [savingAssignment, setSavingAssignment] = useState(false);
+
+  function openAssignment(pre?: Assignment) {
+    setAssignPurpose(pre ? 'post_test' : 'pre_test');
+    setPreAssignmentId(pre?.id || '');
+    setAssignTitle(pre ? pre.title + ' — post-test' : '');
+    setAssignInstructions('');
+    setAssignDeadline('');
+    setSelectedPackageId('');
+    setSelectedTestId('');
+    setAssignMode('mock');
+    setAssignAttemptLimit(1);
+    setSections({});
+    setAssignType('custom');
+    setShowAssignModal(true);
+  }
 
   const [enrolEmail, setEnrolEmail] = useState<string>('');
   const [enrolLoading, setEnrolLoading] = useState<boolean>(false);
@@ -58,7 +81,7 @@ export const TeacherClassManagementView: React.FC = () => {
     if (selectedClassId) {
       loadClassDetails(selectedClassId);
     }
-  }, [selectedClassId]);
+  }, [selectedClassId, reportPostId]);
 
   const loadClasses = async () => {
     setLoading(true);
@@ -77,34 +100,41 @@ export const TeacherClassManagementView: React.FC = () => {
 
   const loadCatalogues = async () => {
     try {
-      const [pkgs, reads, lists] = await Promise.all([
+      const [pkgs, reads, lists, writing, speaking] = await Promise.all([
         api.getTestPackages(),
         api.getTests(),
         api.getListeningTests(),
+        api.getWritingTasks({ status: 'published' }),
+        api.getSpeakingSets({ status: 'published' }),
       ]);
+      setWritingTasks(writing.tasks);
+      setSpeakingSets(speaking.sets);
       setTestPackages(pkgs.testPackages);
       setReadingTests(reads.tests);
       setListeningTests(lists.tests);
     } catch (e) {
-      // ignore
+      setError('Could not load the assignment library. Please reload to try again.');
     }
   };
 
+  const detailsRequest = useRef(0);
   const loadClassDetails = async (classId: string) => {
+    const request = ++detailsRequest.current;
     setOverviewLoading(true);
     try {
       const [ovRes, assignRes, rosterRes] = await Promise.all([
-        api.getClassOverview(classId),
+        api.getClassOverview(classId, reportPostId || undefined),
         api.getClassAssignments(classId),
         api.getClassEnrolments(classId),
       ]);
+      if (request !== detailsRequest.current) return;
       setOverview(ovRes);
       setAssignments(assignRes.assignments);
       setRoster(rosterRes.enrolments);
     } catch (err: any) {
       setError(err.message || 'Failed to load class data.');
     } finally {
-      setOverviewLoading(false);
+      if (request === detailsRequest.current) setOverviewLoading(false);
     }
   };
 
@@ -186,7 +216,10 @@ export const TeacherClassManagementView: React.FC = () => {
       deadlineAt: assignDeadline ? new Date(assignDeadline).toISOString() : undefined,
     };
 
-    if (assignType === 'package') {
+    if (assignPurpose === 'post_test') payload.preAssignmentId = preAssignmentId;
+    if (assignType === 'custom') {
+      payload.sections = sections;
+    } else if (assignType === 'package') {
       payload.packageId = selectedPackageId;
       payload.skill = 'all';
     } else if (assignType === 'reading') {
@@ -198,6 +231,7 @@ export const TeacherClassManagementView: React.FC = () => {
     }
 
     try {
+      setSavingAssignment(true);
       const res = await api.createAssignment(selectedClassId, payload);
       if (res.warning) {
         alert(`Notice: ${res.warning}`);
@@ -210,6 +244,8 @@ export const TeacherClassManagementView: React.FC = () => {
       await loadClassDetails(selectedClassId);
     } catch (err: any) {
       alert(`Error creating assignment: ${err.message}`);
+    } finally {
+      setSavingAssignment(false);
     }
   };
 
@@ -217,7 +253,7 @@ export const TeacherClassManagementView: React.FC = () => {
     if (!selectedClassId) return;
     setReportLoading(true);
     try {
-      const res = await api.getComparisonReport(selectedClassId, studentId);
+      const res = await api.getComparisonReport(selectedClassId, studentId, reportPostId || undefined);
       setSelectedStudentReport(res.report);
     } catch (err: any) {
       alert(`Error loading comparison report: ${err.message}`);
@@ -233,9 +269,9 @@ export const TeacherClassManagementView: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Class & Journey Management</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Classes &amp; progress</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Manage your cohorts, assign multi-skill packages, protect exit post-tests, and track diagnostic progression.
+            Assign assessments, compare pre-test and post-test scores, and follow independent practice.
           </p>
         </div>
         <div>
@@ -278,7 +314,7 @@ export const TeacherClassManagementView: React.FC = () => {
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Class:</label>
               <select
                 value={selectedClassId || ''}
-                onChange={(e) => setSelectedClassId(e.target.value)}
+                onChange={(e) => { setReportPostId(''); setSelectedClassId(e.target.value); }}
                 className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 {classes.map((cls) => (
@@ -314,31 +350,31 @@ export const TeacherClassManagementView: React.FC = () => {
               onClick={() => setActiveTab('overview')}
               className={`py-3 font-semibold text-sm border-b-2 transition-colors ${
                 activeTab === 'overview'
-                  ? 'border-indigo-600 text-indigo-700'
+                  ? 'border-amber-500 text-[#084F7D]'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              Diagnostic Overview & Analytics
+              Progress
             </button>
             <button
               onClick={() => setActiveTab('assignments')}
               className={`py-3 font-semibold text-sm border-b-2 transition-colors ${
                 activeTab === 'assignments'
-                  ? 'border-indigo-600 text-indigo-700'
+                  ? 'border-amber-500 text-[#084F7D]'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              Assignments & Test Packages
+              Assignments
             </button>
             <button
               onClick={() => setActiveTab('roster')}
               className={`py-3 font-semibold text-sm border-b-2 transition-colors ${
                 activeTab === 'roster'
-                  ? 'border-indigo-600 text-indigo-700'
+                  ? 'border-amber-500 text-[#084F7D]'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              Student Roster ({roster.length})
+              Roster ({roster.length})
             </button>
           </div>
 
@@ -379,29 +415,22 @@ export const TeacherClassManagementView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Missing Skills Pedagogical Alert */}
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start space-x-2">
-                    <svg className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                    <div>
-                      <span className="font-semibold">Skill Slot Assessment Integrity: </span>
-                      Writing and Speaking slots are explicitly flagged as <em>not yet implemented</em>. Overall 4-skill bands cannot be computed or simulated without authentic examiner/AI marking.
-                    </div>
-                  </div>
-
                   {/* Student Progression Roster Table */}
-                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
                     <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-                      <h3 className="font-bold text-slate-900 text-sm">Learner Progress & Diagnostic Reports</h3>
+                      <h3 className="font-bold text-slate-900 text-sm">Learner progress</h3>
+                      <label className="text-xs text-slate-600">Comparison report <select aria-label="Comparison report" value={reportPostId} onChange={e => setReportPostId(e.target.value)} className="rounded border p-1.5">
+                        <option value="">Latest assessment pair</option>
+                        {assignments.filter(a => a.purpose === 'post_test').map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
+                      </select></label>
                     </div>
                     <table className="w-full text-left border-collapse text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
                           <th className="px-4 py-3">Student</th>
-                          <th className="px-4 py-3">Enrolled At (WITA)</th>
+                          <th className="px-4 py-3">Self-study (all time)</th>
                           <th className="px-4 py-3">Pre-Test</th>
-                          <th className="px-4 py-3">Practice Done</th>
+                          <th className="px-4 py-3">Assignments</th>
                           <th className="px-4 py-3">Post-Test</th>
                           <th className="px-4 py-3 text-right">Actions</th>
                         </tr>
@@ -420,7 +449,7 @@ export const TeacherClassManagementView: React.FC = () => {
                                 <div className="font-semibold text-slate-900">{sp.studentName}</div>
                                 <div className="text-xs text-slate-500">{sp.studentEmail}</div>
                               </td>
-                              <td className="px-4 py-3 text-xs text-slate-500">{sp.enrolledAt}</td>
+                              <td className="px-4 py-3 text-xs text-slate-500"><SelfStudyCell rows={sp.selfStudy || []} /></td>
                               <td className="px-4 py-3">
                                 <span
                                   className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -462,7 +491,7 @@ export const TeacherClassManagementView: React.FC = () => {
                                   onClick={() => handleViewStudentComparison(sp.studentId)}
                                   className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-semibold transition-colors"
                                 >
-                                  View Progression Report
+                                  View report
                                 </button>
                               </td>
                             </tr>
@@ -525,7 +554,7 @@ export const TeacherClassManagementView: React.FC = () => {
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowAssignModal(true)}
+                  onClick={() => openAssignment()}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors"
                 >
                   Create Assignment
@@ -572,6 +601,7 @@ export const TeacherClassManagementView: React.FC = () => {
                       </div>
 
                       <div className="flex items-center space-x-2">
+                        {a.purpose === 'pre_test' && <button className="rounded-lg border px-3 py-2 text-xs font-semibold" onClick={() => openAssignment(a)}>Create linked post-test</button>}
                         {a.purpose === 'post_test' && !a.isReleased && (
                           <button
                             onClick={() => handleReleasePostTest(a.id)}
@@ -619,7 +649,7 @@ export const TeacherClassManagementView: React.FC = () => {
                     <tr className="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
                       <th className="px-4 py-3">Student Name</th>
                       <th className="px-4 py-3">Email Address</th>
-                      <th className="px-4 py-3">Enrolled At (WITA)</th>
+                      <th className="px-4 py-3">Enrolled at (WITA)</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -718,7 +748,7 @@ export const TeacherClassManagementView: React.FC = () => {
       {/* Create Assignment Modal */}
       {showAssignModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-2xl max-w-xl max-h-[90dvh] overflow-y-auto w-full border border-slate-200">
             <div className="p-6 space-y-4">
               <h3 className="text-lg font-bold text-slate-900">Create Class Assignment</h3>
               <form onSubmit={handleCreateAssignment} className="space-y-4">
@@ -730,9 +760,11 @@ export const TeacherClassManagementView: React.FC = () => {
                       const p = e.target.value as any;
                       setAssignPurpose(p);
                       if (p === 'pre_test' || p === 'post_test') {
-                        setAssignType('package');
+                        setAssignType('custom');
                         setAssignMode('mock');
                         setAssignAttemptLimit(1);
+                      } else {
+                        setAssignType('reading'); setAssignMode('practice'); setAssignAttemptLimit(3);
                       }
                     }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none"
@@ -773,13 +805,39 @@ export const TeacherClassManagementView: React.FC = () => {
                     onChange={(e) => setAssignType(e.target.value as any)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none"
                   >
-                    <option value="package">Multi-Skill Test Package</option>
-                    <option value="reading">Single Reading Test</option>
-                    <option value="listening">Single Listening Test</option>
+                    {assignPurpose !== 'practice' && <option value="custom">Choose sections from the library</option>}
+                    <option value="package">Existing test package</option>
+                    {assignPurpose === 'practice' && <option value="reading">Single Reading Test</option>}
+                    {assignPurpose === 'practice' && <option value="listening">Single Listening Test</option>}
                   </select>
                 </div>
 
-                {assignType === 'package' ? (
+                {assignPurpose === 'post_test' && <label className="block text-sm">Compare with pre-test
+                  <select value={preAssignmentId} onChange={e => setPreAssignmentId(e.target.value)} required className="mt-1 w-full rounded-lg border p-2">
+                    <option value="">Choose a class pre-test</option>
+                    {assignments.filter(a => a.purpose === 'pre_test').map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
+                  </select>
+                </label>}
+                {assignType === 'custom' ? (
+                  <fieldset className="grid gap-3 sm:grid-cols-2 rounded-xl bg-slate-50 p-4">
+                    <legend className="text-sm font-semibold">Assessment sections</legend>
+                    {([
+                      ['readingTestId', 'Reading', readingTests],
+                      ['listeningTestId', 'Listening', listeningTests],
+                      ['writingTask1Id', 'Writing · Task 1', writingTasks.filter(t => t.taskNumber === 1)],
+                      ['writingTask2Id', 'Writing · Task 2', writingTasks.filter(t => t.taskNumber === 2)],
+                      ['speakingSetId', 'Speaking', speakingSets],
+                    ] as const).map(([key, label, options]) => (
+                      <label key={key} className="min-w-0 text-xs font-semibold">{label}
+                        <select required value={sections[key] || ''} onChange={e => setSections({ ...sections, [key]: e.target.value })}
+                          className="mt-1 block w-full rounded-lg border border-slate-300 bg-white p-2 font-normal">
+                          <option value="">Choose material</option>
+                          {options.filter(t => t.status === 'published' && (!t.testType || t.testType === 'both' || key === 'listeningTestId' || t.testType === selectedClass?.testType)).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                        </select>
+                      </label>
+                    ))}
+                  </fieldset>
+                ) : assignType === 'package' ? (
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">Select Test Package</label>
                     <select
@@ -864,7 +922,7 @@ export const TeacherClassManagementView: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    type="submit"
+                    type="submit" disabled={savingAssignment}
                     className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700"
                   >
                     Create Assignment

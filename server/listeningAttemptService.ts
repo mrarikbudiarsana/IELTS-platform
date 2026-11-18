@@ -1,3 +1,5 @@
+import { practiceVersion, validatePracticeFilter } from './questionTypePractice';
+import { assignedMaterial, completeAssessmentIfReady } from './assignedMaterial';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from './db';
 import { AnswerMark, saveAnswerMarks } from './answerMarks';
@@ -27,7 +29,9 @@ export async function startOrResumeListeningAttempt(params: {
   isReconnection?: boolean;
   assignmentId?: string;
   packageAttemptId?: string;
+  questionTypeFilter?: string;
 }): Promise<{ attempt: ListeningAttempt; testVersion: any }> {
+  validatePracticeFilter(params);
   // If attempting independently without assignment, ensure test is not reserved in an unreleased post-test
   if (!params.assignmentId) {
     const isReserved = (await db.prepare(`
@@ -67,17 +71,26 @@ export async function startOrResumeListeningAttempt(params: {
     }
   }
 
-  const latestVersion = (await getListeningVersionById(test.latestVersionId));
-  if (!latestVersion) throw new Error('Published test version not found');
+  const assignment = await assignedMaterial(params.userId, params.assignmentId, params.packageAttemptId);
+  if (assignment) {
+    const expected = assignment.package_id ? assignment.listening_test_id : assignment.skill === 'listening' && assignment.test_id;
+    if (expected !== params.testId) throw new Error('This test is outside the assignment.');
+    params.modeOverride = assignment.mode;
+  }
+  const versionId = assignment?.listening_version_id || assignment?.version_id || test.latestVersionId;
+  const latestVersion = await getListeningVersionById(versionId);
+  if (!latestVersion) throw new Error('Assigned test version unavailable.');
 
   // Check if active in_progress attempt exists
   const existingRow = (await db
     .prepare(`
       SELECT * FROM listening_attempts
       WHERE user_id = ? AND test_id = ? AND status = 'in_progress'
+        AND COALESCE(assignment_id, '') = ? AND COALESCE(question_type_filter, '') = ?
+        AND (? = '' OR id = (SELECT listening_attempt_id FROM package_attempts WHERE id = ?))
       ORDER BY started_at DESC LIMIT 1
     `)
-    .get(params.userId, params.testId)) as any;
+    .get(params.userId, params.testId, params.assignmentId || '', params.questionTypeFilter || '', params.packageAttemptId || '', params.packageAttemptId || '')) as any;
 
   if (existingRow) {
     const now = new Date();
@@ -108,15 +121,18 @@ export async function startOrResumeListeningAttempt(params: {
     `).run(JSON.stringify(currentEvents), existingRow.id));
 
     const attempt = (await getListeningAttemptById(existingRow.id, params.userId))!;
+    const original = await getListeningVersionById(existingRow.version_id);
+    const savedVersion = original && practiceVersion(original, existingRow.question_type_filter);
+    if (!savedVersion) throw new Error('Saved test version unavailable.');
     const sanitized = sanitizeListeningForStudent(
-      latestVersion.questionGroups,
-      latestVersion.parts
+      savedVersion.questionGroups,
+      savedVersion.parts
     );
 
     return {
       attempt,
       testVersion: {
-        ...latestVersion,
+        ...savedVersion,
         questionGroups: sanitized.questionGroups,
         parts: sanitized.parts,
       },
@@ -133,13 +149,15 @@ async function startNewListeningAttempt(
     modeOverride?: 'practice' | 'mock';
     assignmentId?: string;
     packageAttemptId?: string;
+    questionTypeFilter?: string;
   },
   test: any,
   version: any
 ) {
+  version = practiceVersion(version, params.questionTypeFilter);
   const attemptId = uuidv4();
   const now = new Date();
-  const mode = params.modeOverride || test.category;
+  const mode = params.questionTypeFilter ? 'practice' : params.modeOverride || test.category;
 
   let deadlineAt: string | null = null;
   if (mode === 'mock') {
@@ -165,8 +183,8 @@ async function startNewListeningAttempt(
       id, user_id, test_id, version_id, test_title,
       mode, status, started_at, deadline_at, duration_seconds,
       total_questions, is_first_attempt, was_interrupted,
-      interruption_count, replay_count, interruption_events_json, assignment_id, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, 0, ?, ?, 0, 0, 0, '[]', ?, ?)
+      interruption_count, replay_count, interruption_events_json, assignment_id, question_type_filter, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'in_progress', ?, ?, 0, ?, ?, 0, 0, 0, '[]', ?, ?, ?)
   `).run(
     attemptId,
     params.userId,
@@ -179,6 +197,7 @@ async function startNewListeningAttempt(
     version.totalQuestions,
     isFirstAttempt,
     params.assignmentId || null,
+    params.questionTypeFilter || '',
     now.toISOString()
   ));
 
@@ -265,6 +284,13 @@ export async function saveListeningAnswer(params: {
     return { saved: false, isExpired: true };
   }
 
+  if (attemptRow.question_type_filter) {
+    const original = await getListeningVersionById(attemptRow.version_id);
+    const included = original?.questionGroups.some(group => group.questionType === attemptRow.question_type_filter &&
+      group.questions.some(q => q.id === params.questionId && q.questionNumber === params.questionNumber));
+    if (!included) throw new Error('Question is outside this practice session.');
+  }
+
   const now = new Date().toISOString();
   const answerId = uuidv4();
   const answerJson = JSON.stringify(params.userAnswer);
@@ -306,7 +332,8 @@ export async function submitListeningAttempt(params: {
     return (await getListeningAttemptById(params.attemptId, params.userId))!;
   }
 
-  const version = (await getListeningVersionById(attemptRow.version_id));
+  const original = await getListeningVersionById(attemptRow.version_id);
+  const version = original && practiceVersion(original, attemptRow.question_type_filter);
   if (!version) throw new Error('Listening test version not found');
 
   const now = new Date();
@@ -330,6 +357,7 @@ export async function submitListeningAttempt(params: {
     studentAnswersMap.set(row.question_number, row);
   }
 
+  let answeredCount = 0;
   let totalRawScore = 0;
   const itemResults: AttemptItemResult[] = [];
   const performanceByType: Record<string, { correct: number; total: number }> = {};
@@ -341,6 +369,7 @@ export async function submitListeningAttempt(params: {
       const studentAnsRow = studentAnswersMap.get(qNum);
       const studentAns = studentAnsRow ? JSON.parse(studentAnsRow.user_answer_json) : '';
 
+      if ([studentAns].flat().some(value => String(value).trim().length > 0)) answeredCount++;
       const markResult = markStudentAnswer({
         questionType: group.questionType,
         userAnswer: studentAns,
@@ -389,7 +418,7 @@ export async function submitListeningAttempt(params: {
 
     await saveAnswerMarks('listening_answers', answerMarks);
     const finalStatus = params.forceExpired ? 'expired' : 'submitted';
-    const estimatedBand = calculateEstimatedListeningBandScore(
+    const estimatedBand = attemptRow.question_type_filter ? null : calculateEstimatedListeningBandScore(
       totalRawScore,
       version.totalQuestions
     );
@@ -399,6 +428,7 @@ export async function submitListeningAttempt(params: {
       SET status = ?,
           submitted_at = ?,
           duration_seconds = ?,
+          answered_count = ?,
           raw_score = ?,
           band_score = ?
       WHERE id = ?
@@ -406,10 +436,12 @@ export async function submitListeningAttempt(params: {
       finalStatus,
       now.toISOString(),
       durationSeconds,
+      answeredCount,
       totalRawScore,
       estimatedBand,
       params.attemptId
     ));
+    if (attemptRow.assignment_id) await completeAssessmentIfReady('listening', params.attemptId);
   });
 
   (await tx());
@@ -444,7 +476,8 @@ export async function getListeningAttemptById(attemptId: string, userId: string)
 
   // Answers, transcripts, and explanations ONLY delivered after submission or expiry!
   if (attemptRow.status === 'submitted' || attemptRow.status === 'expired') {
-    const version = (await getListeningVersionById(attemptRow.version_id));
+    const original = await getListeningVersionById(attemptRow.version_id);
+    const version = original && practiceVersion(original, attemptRow.question_type_filter);
     if (version) {
       const questionMap = new Map<number, { question: QuestionItem; group: QuestionGroup }>();
       for (const g of version.questionGroups) {
@@ -494,6 +527,7 @@ export async function getListeningAttemptById(attemptId: string, userId: string)
     userId: attemptRow.user_id,
     testId: attemptRow.test_id,
     versionId: attemptRow.version_id,
+    questionTypeFilter: attemptRow.question_type_filter || undefined,
     testTitle: attemptRow.test_title,
     mode: attemptRow.mode,
     status: attemptRow.status,
@@ -525,6 +559,7 @@ export async function listUserListeningAttempts(userId: string): Promise<Listeni
     userId: r.user_id,
     testId: r.test_id,
     versionId: r.version_id,
+    questionTypeFilter: r.question_type_filter || undefined,
     testTitle: r.test_title,
     mode: r.mode,
     status: r.status,
