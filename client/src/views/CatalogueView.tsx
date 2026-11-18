@@ -40,6 +40,15 @@ interface CatalogueViewProps {
   isLoggedIn: boolean;
 }
 
+interface GroupedWritingTest {
+  key: string;
+  title: string;
+  testType: 'academic' | 'general' | 'both';
+  task1?: WritingTask;
+  task2?: WritingTask;
+  createdAt?: string;
+}
+
 export const CatalogueView: React.FC<CatalogueViewProps> = ({
   initialSkill = 'reading',
   initialCategoryFilter = 'all',
@@ -80,6 +89,9 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
     test: ReadingTest | ListeningTest;
     skill: 'reading' | 'listening';
   } | null>(null);
+
+  // Writing mode selection modal state
+  const [writingModeModalGroup, setWritingModeModalGroup] = useState<GroupedWritingTest | null>(null);
 
   // Skill drill selection modal state
   const [drillModalTest, setDrillModalTest] = useState<{
@@ -275,15 +287,6 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
     return true;
   });
 
-  interface GroupedWritingTest {
-    key: string;
-    title: string;
-    testType: 'academic' | 'general' | 'both';
-    task1?: WritingTask;
-    task2?: WritingTask;
-    createdAt?: string;
-  }
-
   const groupedWritingTests: GroupedWritingTest[] = (() => {
     const groups = new Map<string, GroupedWritingTest>();
 
@@ -440,7 +443,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                 key={test.id}
                 type="button"
                 onClick={() => setModeModalTest({ test, skill: 'reading' })}
-                className="w-full text-left bg-[#F4F4F3] hover:bg-[#ECECE9] rounded-2xl border border-[#E5E3DD] hover:border-[#084F7D]/40 p-5 sm:p-6 transition-all flex flex-col justify-between min-h-[144px] group cursor-pointer"
+                className="w-full text-left bg-white rounded-2xl border border-[#E7E2D8] hover:border-[#084F7D]/40 shadow-2xs hover:shadow-sm p-5 sm:p-6 transition-all flex flex-col justify-between min-h-[144px] group cursor-pointer"
               >
                 <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors">
                   {test.title}
@@ -450,7 +453,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                   <span className="text-xs sm:text-sm text-slate-500 font-normal">
                     Select a test mode
                   </span>
-                  <span className="w-9 h-9 rounded-full bg-white border border-slate-200/70 shadow-2xs flex items-center justify-center text-slate-700 group-hover:bg-[#084F7D] group-hover:text-white group-hover:border-[#084F7D] transition-all shrink-0">
+                  <span className="w-9 h-9 rounded-full bg-[#F3F0E8] flex items-center justify-center text-[#084F7D] group-hover:bg-[#084F7D] group-hover:text-white transition-all shrink-0">
                     <ArrowUpRight className="w-4 h-4" />
                   </span>
                 </div>
@@ -473,7 +476,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                 key={test.id}
                 type="button"
                 onClick={() => setModeModalTest({ test, skill: 'listening' })}
-                className="w-full text-left bg-[#F4F4F3] hover:bg-[#ECECE9] rounded-2xl border border-[#E5E3DD] hover:border-[#084F7D]/40 p-5 sm:p-6 transition-all flex flex-col justify-between min-h-[144px] group cursor-pointer"
+                className="w-full text-left bg-white rounded-2xl border border-[#E7E2D8] hover:border-[#084F7D]/40 shadow-2xs hover:shadow-sm p-5 sm:p-6 transition-all flex flex-col justify-between min-h-[144px] group cursor-pointer"
               >
                 <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors">
                   {test.title}
@@ -483,7 +486,7 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                   <span className="text-xs sm:text-sm text-slate-500 font-normal">
                     Select a test mode
                   </span>
-                  <span className="w-9 h-9 rounded-full bg-white border border-slate-200/70 shadow-2xs flex items-center justify-center text-slate-700 group-hover:bg-[#084F7D] group-hover:text-white group-hover:border-[#084F7D] transition-all shrink-0">
+                  <span className="w-9 h-9 rounded-full bg-[#F3F0E8] flex items-center justify-center text-[#084F7D] group-hover:bg-[#084F7D] group-hover:text-white transition-all shrink-0">
                     <ArrowUpRight className="w-4 h-4" />
                   </span>
                 </div>
@@ -513,126 +516,27 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {groupedWritingTests.map((group) => {
-              const hasBoth = Boolean(group.task1 && group.task2);
-              const extractTopic = (fullTitle: string) => {
-                const colonIdx = fullTitle.indexOf(':');
-                return colonIdx !== -1 ? fullTitle.slice(colonIdx + 1).trim() : fullTitle;
-              };
-              const launchWriting = async (opts: {
-                task1Id?: string;
-                task2Id?: string;
-                mode: 'practice' | 'mock';
-              }) => {
-                if (!isLoggedIn) {
-                  onOpenLogin();
-                  return;
-                }
-                try {
-                  const res = await api.startWritingAttempt(opts);
-                  if (onStartWriting) onStartWriting(res.attempt.id);
-                } catch (err: any) {
-                  alert(err.message || 'Could not start writing test');
-                }
-              };
+            {groupedWritingTests.map((group) => (
+              <button
+                key={group.key}
+                type="button"
+                onClick={() => setWritingModeModalGroup(group)}
+                className="w-full text-left bg-white rounded-2xl border border-[#E7E2D8] hover:border-[#084F7D]/40 shadow-2xs hover:shadow-sm p-5 sm:p-6 transition-all flex flex-col justify-between min-h-[144px] group cursor-pointer"
+              >
+                <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors">
+                  {group.title}
+                </h3>
 
-              return (
-                <div
-                  key={group.key}
-                  className="bg-white rounded-2xl border border-[#E5E1D7] p-5 shadow-2xs hover:shadow-sm hover:border-[#084F7D]/35 transition-all flex flex-col justify-between group"
-                >
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2.5 text-xs">
-                      <span className="font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-[#EBF4F9] text-[#084F7D]">
-                        {group.testType === 'general' ? 'General Training' : 'Academic Writing'}
-                      </span>
-                      <span className="text-slate-400 font-normal text-xs">
-                        {hasBoth
-                          ? '60m • 2 Tasks'
-                          : group.task1
-                          ? '20m • 150w'
-                          : '40m • 250w'}
-                      </span>
-                    </div>
-
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors mb-3">
-                      {group.title}
-                    </h3>
-
-                    <div className="space-y-1.5 text-xs text-slate-600 bg-[#FAF9F6] border border-[#EFECE4] rounded-xl p-3">
-                      {group.task1 && (
-                        <div className="flex items-start gap-2">
-                          <span className="font-semibold text-[#084F7D] shrink-0">Task 1:</span>
-                          <span className="line-clamp-1">{extractTopic(group.task1.title)}</span>
-                        </div>
-                      )}
-                      {group.task2 && (
-                        <div className="flex items-start gap-2">
-                          <span className="font-semibold text-[#084F7D] shrink-0">Task 2:</span>
-                          <span className="line-clamp-1">{extractTopic(group.task2.title)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {hasBoth ? (
-                      <>
-                        <button
-                          onClick={() =>
-                            launchWriting({
-                              task1Id: group.task1!.id,
-                              task2Id: group.task2!.id,
-                              mode: 'mock',
-                            })
-                          }
-                          className="w-full py-2.5 px-3.5 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center shadow-2xs"
-                        >
-                          Mock Test (Task 1 &amp; 2)
-                        </button>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() =>
-                              launchWriting({
-                                task1Id: group.task1!.id,
-                                mode: 'practice',
-                              })
-                            }
-                            className="w-full py-2 px-3 bg-[#F6F4EE] hover:bg-[#EFECE3] text-slate-800 font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center border border-[#E5E1D7]"
-                          >
-                            Task 1 Only
-                          </button>
-                          <button
-                            onClick={() =>
-                              launchWriting({
-                                task2Id: group.task2!.id,
-                                mode: 'practice',
-                              })
-                            }
-                            className="w-full py-2 px-3 bg-[#F6F4EE] hover:bg-[#EFECE3] text-slate-800 font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center border border-[#E5E1D7]"
-                          >
-                            Task 2 Only
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() =>
-                          launchWriting({
-                            task1Id: group.task1?.id,
-                            task2Id: group.task2?.id,
-                            mode: 'practice',
-                          })
-                        }
-                        className="w-full py-2.5 px-3.5 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs tracking-wider uppercase transition-colors text-center shadow-2xs"
-                      >
-                        Start Writing Test
-                      </button>
-                    )}
-                  </div>
+                <div className="mt-6 flex items-center justify-between gap-3">
+                  <span className="text-xs sm:text-sm text-slate-500 font-normal">
+                    Select a test mode
+                  </span>
+                  <span className="w-9 h-9 rounded-full bg-[#F3F0E8] flex items-center justify-center text-[#084F7D] group-hover:bg-[#084F7D] group-hover:text-white transition-all shrink-0">
+                    <ArrowUpRight className="w-4 h-4" />
+                  </span>
                 </div>
-              );
-            })}
+              </button>
+            ))}
           </div>
         </div>
       ) : (
@@ -828,6 +732,198 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
                   </div>
                   <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#084F7D] group-hover:translate-x-0.5 transition-all shrink-0" />
                 </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* WRITING MODE SELECTION MODAL */}
+      {writingModeModalGroup && (() => {
+        const group = writingModeModalGroup;
+        const hasBoth = Boolean(group.task1 && group.task2);
+        const extractTopic = (fullTitle: string) => {
+          const colonIdx = fullTitle.indexOf(':');
+          return colonIdx !== -1 ? fullTitle.slice(colonIdx + 1).trim() : fullTitle;
+        };
+        const launchWriting = async (opts: {
+          task1Id?: string;
+          task2Id?: string;
+          mode: 'practice' | 'mock';
+        }) => {
+          setWritingModeModalGroup(null);
+          if (!isLoggedIn) {
+            onOpenLogin();
+            return;
+          }
+          try {
+            const res = await api.startWritingAttempt(opts);
+            if (onStartWriting) onStartWriting(res.attempt.id);
+          } catch (err: any) {
+            alert(err.message || 'Could not start writing test');
+          }
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+            onClick={() => setWritingModeModalGroup(null)}
+          >
+            <div
+              className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-[#E7E2D8] space-y-5 animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-[#EBF4F9] text-[#084F7D]">
+                      {group.testType === 'general' ? 'General Training' : 'Academic Writing'}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {hasBoth
+                        ? '60m • 2 Tasks'
+                        : group.task1
+                        ? '20m • 150w'
+                        : '40m • 250w'}
+                    </span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
+                    {group.title}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Select how you would like to practice this writing test.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWritingModeModalGroup(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+                  aria-label="Close modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Task Topics Summary */}
+              <div className="space-y-1.5 text-xs text-slate-600 bg-[#FAF9F5] border border-[#E7E2D8] rounded-2xl p-3.5">
+                {group.task1 && (
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-[#084F7D] shrink-0">Task 1:</span>
+                    <span className="line-clamp-2">{extractTopic(group.task1.title)}</span>
+                  </div>
+                )}
+                {group.task2 && (
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-[#084F7D] shrink-0">Task 2:</span>
+                    <span className="line-clamp-2">{extractTopic(group.task2.title)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Writing Exercise Modes */}
+              <div className="space-y-2.5">
+                {hasBoth ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        launchWriting({
+                          task1Id: group.task1!.id,
+                          task2Id: group.task2!.id,
+                          mode: 'mock',
+                        })
+                      }
+                      className="w-full text-left p-4 rounded-2xl bg-[#084F7D] hover:bg-[#063D62] text-white transition-all flex items-center justify-between gap-3 shadow-2xs group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-white/15 text-white flex items-center justify-center shrink-0">
+                          <Clock className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold">Mock Test (Task 1 &amp; 2)</div>
+                          <div className="text-xs text-white/80">
+                            60 mins · Complete both writing tasks
+                          </div>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-white/80 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        launchWriting({
+                          task1Id: group.task1!.id,
+                          mode: 'practice',
+                        })
+                      }
+                      className="w-full text-left p-4 rounded-2xl border border-[#E7E2D8] bg-[#F6F4EE] hover:bg-[#EFECE3] hover:border-[#084F7D]/40 transition-all flex items-center justify-between gap-3 group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-[#E7E2D8] text-[#084F7D] flex items-center justify-center shrink-0">
+                          <PenTool className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">Task 1 Only</div>
+                          <div className="text-xs text-slate-500">
+                            20 mins · 150+ words
+                          </div>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#084F7D] group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        launchWriting({
+                          task2Id: group.task2!.id,
+                          mode: 'practice',
+                        })
+                      }
+                      className="w-full text-left p-4 rounded-2xl border border-[#E7E2D8] bg-[#F6F4EE] hover:bg-[#EFECE3] hover:border-[#084F7D]/40 transition-all flex items-center justify-between gap-3 group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-[#E7E2D8] text-[#084F7D] flex items-center justify-center shrink-0">
+                          <PenTool className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">Task 2 Only</div>
+                          <div className="text-xs text-slate-500">
+                            40 mins · 250+ words
+                          </div>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#084F7D] group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      launchWriting({
+                        task1Id: group.task1?.id,
+                        task2Id: group.task2?.id,
+                        mode: 'practice',
+                      })
+                    }
+                    className="w-full text-left p-4 rounded-2xl bg-[#084F7D] hover:bg-[#063D62] text-white transition-all flex items-center justify-between gap-3 shadow-2xs group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-white/15 text-white flex items-center justify-center shrink-0">
+                        <PenTool className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold">Start Writing Test</div>
+                        <div className="text-xs text-white/80">
+                          {group.task1 ? '20 mins · 150+ words' : '40 mins · 250+ words'}
+                        </div>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-white/80 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
