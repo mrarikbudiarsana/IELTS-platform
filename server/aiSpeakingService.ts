@@ -827,3 +827,99 @@ export async function abandonSpeakingSession(sessionId: string, userId: string, 
     }
   })());
 }
+
+const LEGACY_TTS_VOICES = new Set(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
+
+/**
+ * Synthesizes natural, human-like IELTS examiner speech using OpenAI neural TTS.
+ * Falls back cleanly so the client can use browser SpeechSynthesis when unconfigured.
+ */
+export async function synthesizeExaminerSpeech(params: {
+  text: string;
+  voice?: string;
+}): Promise<{
+  audioBase64?: string;
+  mimeType?: string;
+  model?: string;
+  voice?: string;
+  fallback: boolean;
+  reason?: string;
+}> {
+  const cleanText = (params.text || '').trim().slice(0, 2000);
+  if (!cleanText) {
+    throw new Error('Text is required for speech synthesis.');
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey.length <= 10) {
+    return { fallback: true, reason: 'OPENAI_API_KEY not configured' };
+  }
+
+  const primaryModel = process.env.SPEAKING_TTS_MODEL || 'gpt-4o-mini-tts';
+  const requestedVoice = params.voice || process.env.SPEAKING_TTS_VOICE || 'coral';
+
+  const callOpenAiTts = async (model: string, voice: string) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const payload: Record<string, unknown> = {
+        model,
+        voice,
+        input: cleanText,
+        response_format: 'mp3',
+      };
+      if (model === 'gpt-4o-mini-tts') {
+        payload.instructions =
+          'Speak as a warm, calm, professional IELTS Speaking examiner. Use natural conversational phrasing, clear articulation, gentle pauses at punctuation, and a steady, encouraging pace.';
+      }
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`OpenAI TTS ${res.status}: ${errText.slice(0, 200)}`);
+      }
+      const arrayBuf = await res.arrayBuffer();
+      return Buffer.from(arrayBuf).toString('base64');
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  try {
+    const audioBase64 = await callOpenAiTts(primaryModel, requestedVoice);
+    return {
+      audioBase64,
+      mimeType: 'audio/mpeg',
+      model: primaryModel,
+      voice: requestedVoice,
+      fallback: false,
+    };
+  } catch (primaryErr: any) {
+    // Fallback to tts-1-hd if gpt-4o-mini-tts is unavailable for the account
+    if (primaryModel !== 'tts-1-hd') {
+      try {
+        const hdVoice = LEGACY_TTS_VOICES.has(requestedVoice) ? requestedVoice : 'nova';
+        const audioBase64 = await callOpenAiTts('tts-1-hd', hdVoice);
+        return {
+          audioBase64,
+          mimeType: 'audio/mpeg',
+          model: 'tts-1-hd',
+          voice: hdVoice,
+          fallback: false,
+        };
+      } catch (hdErr: any) {
+        console.warn('OpenAI TTS fallback failed:', hdErr?.message);
+      }
+    } else {
+      console.warn('OpenAI TTS failed:', primaryErr?.message);
+    }
+    return { fallback: true, reason: primaryErr?.message || 'TTS request failed' };
+  }
+}

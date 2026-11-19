@@ -27,6 +27,15 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
   const [prepSecondsLeft, setPrepSecondsLeft] = useState(60);
   const [isPrepTimerRunning, setIsPrepTimerRunning] = useState(false);
 
+  // Examiner TTS state
+  const [isExaminerSpeaking, setIsExaminerSpeaking] = useState(false);
+  const [isLoadingVoice, setIsLoadingVoice] = useState(false);
+  const [autoPlayVoice, setAutoPlayVoice] = useState(true);
+  const [showQuestionText, setShowQuestionText] = useState(true);
+  const examinerAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsCacheRef = useRef<Map<string, string>>(new Map());
+  const lastSpokenKeyRef = useRef<string | null>(null);
+
   // MediaRecorder references
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -62,14 +71,102 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
     return () => clearInterval(interval);
   }, [session.stage, isPrepTimerRunning, prepSecondsLeft]);
 
-  // Clean up media streams on unmount
+  // Clean up media streams and examiner audio on unmount
   useEffect(() => {
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
+      if (examinerAudioRef.current) {
+        examinerAudioRef.current.pause();
+        examinerAudioRef.current = null;
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
+
+  const stopExaminerSpeech = () => {
+    if (examinerAudioRef.current) {
+      examinerAudioRef.current.pause();
+      examinerAudioRef.current.currentTime = 0;
+      examinerAudioRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsExaminerSpeaking(false);
+    setIsLoadingVoice(false);
+  };
+
+  const speakWithBrowserFallback = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setIsExaminerSpeaking(false);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const preferred =
+      voices.find((v) => /en/i.test(v.lang) && /(natural|neural)/i.test(v.name)) ||
+      voices.find((v) => /en-(GB|AU|US)/i.test(v.lang) && /(google|daniel|samantha|aria|jenny|ryan|libby)/i.test(v.name)) ||
+      voices.find((v) => /^en/i.test(v.lang));
+    if (preferred) utterance.voice = preferred;
+    utterance.rate = 0.96;
+    utterance.pitch = 1.0;
+    utterance.onstart = () => setIsExaminerSpeaking(true);
+    utterance.onend = () => setIsExaminerSpeaking(false);
+    utterance.onerror = () => setIsExaminerSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const playAudioUrl = async (url: string, fallbackText: string) => {
+    const audio = new Audio(url);
+    examinerAudioRef.current = audio;
+    audio.onplay = () => setIsExaminerSpeaking(true);
+    audio.onended = () => setIsExaminerSpeaking(false);
+    audio.onerror = () => {
+      setIsExaminerSpeaking(false);
+      speakWithBrowserFallback(fallbackText);
+    };
+    try {
+      await audio.play();
+    } catch (err: any) {
+      setIsExaminerSpeaking(false);
+      // Browsers block autoplay before the first user interaction; user can click Replay
+      if (err?.name !== 'NotAllowedError') {
+        speakWithBrowserFallback(fallbackText);
+      }
+    }
+  };
+
+  const playExaminerSpeech = async (text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+    stopExaminerSpeech();
+
+    const cachedUrl = ttsCacheRef.current.get(cleanText);
+    if (cachedUrl) {
+      await playAudioUrl(cachedUrl, cleanText);
+      return;
+    }
+
+    setIsLoadingVoice(true);
+    try {
+      const res = await api.synthesizeSpeakingTts({ text: cleanText });
+      setIsLoadingVoice(false);
+      if (!res.fallback && res.audioBase64) {
+        const dataUrl = `data:${res.mimeType || 'audio/mpeg'};base64,${res.audioBase64}`;
+        ttsCacheRef.current.set(cleanText, dataUrl);
+        await playAudioUrl(dataUrl, cleanText);
+      } else {
+        speakWithBrowserFallback(cleanText);
+      }
+    } catch {
+      setIsLoadingVoice(false);
+      speakWithBrowserFallback(cleanText);
+    }
+  };
 
   // Audio Recording Handlers
   const startRecording = async () => {
@@ -201,6 +298,18 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
 
   const turns = session.turns || [];
   const latestExaminerTurn = [...turns].reverse().find((t: any) => t.speaker === 'examiner');
+  const currentExaminerText = latestExaminerTurn
+    ? latestExaminerTurn.text
+    : 'Welcome to the test. Please introduce yourself.';
+  const currentTurnKey = `${latestExaminerTurn?.id || 'welcome'}:${currentExaminerText}`;
+
+  // Auto-play examiner speech when a new question arrives
+  useEffect(() => {
+    if (!autoPlayVoice) return;
+    if (lastSpokenKeyRef.current === currentTurnKey) return;
+    lastSpokenKeyRef.current = currentTurnKey;
+    playExaminerSpeech(currentExaminerText);
+  }, [currentTurnKey, autoPlayVoice]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -277,10 +386,14 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
         {/* Examiner Avatar / Visualizer */}
         <div className="flex flex-col items-center justify-center space-y-3">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-400 flex items-center justify-center text-3xl shadow-lg ring-4 ring-indigo-500/30">
+            <div
+              className={`w-20 h-20 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-400 flex items-center justify-center text-3xl shadow-lg transition-all ${
+                isExaminerSpeaking ? 'ring-4 ring-emerald-400/70 scale-105' : 'ring-4 ring-indigo-500/30'
+              }`}
+            >
               🎙️
             </div>
-            {isSubmittingTurn && (
+            {(isSubmittingTurn || isExaminerSpeaking) && (
               <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
@@ -290,18 +403,58 @@ export const LiveAiSpeakingView: React.FC<LiveAiSpeakingViewProps> = ({
 
           <div className="text-center">
             <div className="text-sm font-bold text-indigo-200">Dr. Edwards (AI Examiner)</div>
-            <div className="text-[11px] text-slate-400">Formal IELTS Speaking Examiner Persona</div>
+            <div className="text-[11px] text-slate-400">
+              {isExaminerSpeaking ? 'Speaking...' : isLoadingVoice ? 'Preparing examiner voice...' : 'Formal IELTS Speaking Examiner Persona'}
+            </div>
           </div>
         </div>
 
         {/* Latest Examiner Utterance */}
-        <div className="max-w-2xl mx-auto bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 text-left space-y-2">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-purple-300">
-            Examiner Question / Prompt
+        <div className="max-w-2xl mx-auto bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 text-left space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-purple-300">
+              Examiner Question / Prompt
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => (isExaminerSpeaking ? stopExaminerSpeech() : playExaminerSpeech(currentExaminerText))}
+                disabled={isLoadingVoice}
+                className="px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 disabled:opacity-50 text-[11px] font-semibold text-white transition-colors"
+              >
+                {isLoadingVoice ? '⏳ Loading...' : isExaminerSpeaking ? '⏹️ Stop' : '🔊 Replay Voice'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !autoPlayVoice;
+                  setAutoPlayVoice(next);
+                  if (!next) stopExaminerSpeech();
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                  autoPlayVoice ? 'bg-emerald-500/25 text-emerald-200 hover:bg-emerald-500/35' : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                }`}
+              >
+                {autoPlayVoice ? 'Auto-voice: On' : 'Auto-voice: Off'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowQuestionText((prev) => !prev)}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-slate-200 transition-colors"
+              >
+                {showQuestionText ? 'Hide Text' : 'Show Text'}
+              </button>
+            </div>
           </div>
-          <p className="text-base font-medium text-white leading-relaxed">
-            {latestExaminerTurn ? latestExaminerTurn.text : 'Welcome to the test. Please introduce yourself.'}
-          </p>
+          {showQuestionText ? (
+            <p className="text-base font-medium text-white leading-relaxed">
+              {currentExaminerText}
+            </p>
+          ) : (
+            <p className="text-xs italic text-slate-300">
+              Listening mode active — click &ldquo;Replay Voice&rdquo; to hear the question again or &ldquo;Show Text&rdquo; to reveal it.
+            </p>
+          )}
         </div>
 
         {/* Phase-specific actions */}

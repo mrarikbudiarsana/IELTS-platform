@@ -111,6 +111,7 @@ import {
   submitCandidateTurn,
   finishAndAssessSpeakingSession,
   abandonSpeakingSession,
+  synthesizeExaminerSpeech,
 } from './aiSpeakingService';
 import {
   getUserSpeakingAllowanceBalance,
@@ -1330,6 +1331,18 @@ app.post('/api/speaking/realtime/token', authMiddleware, async (req: Authenticat
     res.json(tokenData);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/speaking/tts - Synthesize human-like examiner speech for a question
+app.post('/api/speaking/tts', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const text = typeof req.body?.text === 'string' ? req.body.text : '';
+    const voice = typeof req.body?.voice === 'string' ? req.body.voice : undefined;
+    const result = await synthesizeExaminerSpeech({ text, voice });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
   }
 });
 

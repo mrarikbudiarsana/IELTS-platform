@@ -233,6 +233,8 @@ export const api = {
   // Live AI Speaking Simulation (Milestone 6)
   runVoiceTrial: (body: any) => request<any>('/speaking/voice-trial', { method: 'POST', body: JSON.stringify(body) }),
   getSpeakingRealtimeToken: () => request<any>('/speaking/realtime/token', { method: 'POST' }),
+  synthesizeSpeakingTts: (body: { text: string; voice?: string }) =>
+    request<{ audioBase64?: string; mimeType?: string; model?: string; voice?: string; fallback?: boolean; reason?: string }>('/speaking/tts', { method: 'POST', body: JSON.stringify(body) }),
   startSpeakingSession: (body: any) => request<{ session: any }>('/speaking/sessions', { method: 'POST', body: JSON.stringify(body) }),
   getSpeakingSession: (id: string) => request<{ session: any }>(`/speaking/sessions/${id}`),
   advanceSpeakingStage: (id: string, targetStage: string) => request<{ session: any }>(`/speaking/sessions/${id}/stage`, { method: 'POST', body: JSON.stringify({ targetStage }) }),
