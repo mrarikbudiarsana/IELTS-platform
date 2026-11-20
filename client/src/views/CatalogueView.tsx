@@ -562,40 +562,28 @@ export const CatalogueView: React.FC<CatalogueViewProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredSpeakingSets.map((set) => (
-              <div
+              <button
                 key={set.id}
-                className="bg-white rounded-2xl border border-[#E7E3D9] p-5 sm:p-6 hover:border-[#084F7D]/50 hover:shadow-xs transition-all flex flex-col justify-between group"
+                type="button"
+                onClick={() => {
+                  if (!isLoggedIn) onOpenLogin();
+                  else if (onStartSpeaking) onStartSpeaking(set.id, 'mock');
+                }}
+                className="w-full text-left bg-white rounded-2xl border border-[#E7E2D8] hover:border-[#084F7D]/40 shadow-2xs hover:shadow-sm p-5 sm:p-6 transition-all flex flex-col justify-between min-h-[144px] group cursor-pointer"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-2.5 text-xs">
-                    <span className="font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-[#FEF7EE] text-[#FC9F23]">
-                      Parts 1, 2 & 3
-                    </span>
-                    <span className="text-slate-400 font-normal text-xs">11–14 mins</span>
-                  </div>
+                <h3 className="text-base sm:text-lg font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-[#084F7D] transition-colors">
+                  {set.title}
+                </h3>
 
-                  <h3 className="text-sm sm:text-base font-semibold text-slate-900 mb-1.5 leading-snug line-clamp-2">
-                    {set.title}
-                  </h3>
-
-                  <p className="text-xs text-slate-500 line-clamp-3 mb-3.5 leading-relaxed">
-                    {set.part2CueCard?.topic || 'Standard 3-part interactive IELTS speaking interview'}
-                  </p>
+                <div className="mt-6 flex items-center justify-between gap-3">
+                  <span className="text-xs sm:text-sm text-slate-500 font-normal">
+                    Select a test mode
+                  </span>
+                  <span className="w-9 h-9 rounded-full bg-[#F3F0E8] flex items-center justify-center text-[#084F7D] group-hover:bg-[#084F7D] group-hover:text-white transition-all shrink-0">
+                    <ArrowUpRight className="w-4 h-4" />
+                  </span>
                 </div>
-
-                <div className="pt-3 border-t border-[#F2EFE8]">
-                  <button
-                    onClick={() => {
-                      if (!isLoggedIn) onOpenLogin();
-                      else if (onStartSpeaking) onStartSpeaking(set.id, 'mock');
-                    }}
-                    className="w-full py-2.5 px-4 bg-[#084F7D] hover:bg-[#063D62] text-white font-semibold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-                  >
-                    <Mic className="w-3.5 h-3.5" />
-                    <span>Start Speaking Session</span>
-                  </button>
-                </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
