@@ -188,20 +188,69 @@ export const SpeakingFeedbackModal: React.FC<SpeakingFeedbackModalProps> = ({
             </div>
           )}
 
-          {/* AI Acoustic Observations (Speech Rate, Pause Ratio, Pronunciation Grounding) */}
+          {/* AI Acoustic Observations (Azure Speech Pronunciation Assessment + ChatGPT Grounding) */}
           {assessment.acousticObservations && (
             <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
                   <span>🎙️ Direct Audio Acoustic Analysis</span>
                   <span className="text-[10px] bg-purple-200 text-purple-900 font-semibold px-2 py-0.5 rounded">
-                    Audio Grounded
+                    {assessment.acousticObservations.scoringEngine || 'Audio Grounded'}
                   </span>
                 </span>
                 <span className="text-[11px] text-purple-700 italic">
-                  Pronunciation assessed directly from candidate speech audio
+                  Fluency & Pronunciation calibrated directly from candidate audio
                 </span>
               </div>
+
+              {(assessment.acousticObservations.azurePronScore !== undefined ||
+                assessment.acousticObservations.azureAccuracyScore !== undefined ||
+                assessment.acousticObservations.azureFluencyScore !== undefined ||
+                assessment.acousticObservations.azureProsodyScore !== undefined) && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                  {assessment.acousticObservations.azurePronScore !== undefined && (
+                    <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Azure Pron Score</span>
+                      <span className="text-base font-extrabold text-purple-900">
+                        {assessment.acousticObservations.azurePronScore}
+                        <span className="text-xs font-normal text-slate-500">/100</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">Composite Pronunciation</span>
+                    </div>
+                  )}
+                  {assessment.acousticObservations.azureAccuracyScore !== undefined && (
+                    <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Phoneme Accuracy</span>
+                      <span className="text-base font-extrabold text-purple-900">
+                        {assessment.acousticObservations.azureAccuracyScore}
+                        <span className="text-xs font-normal text-slate-500">/100</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">Articulation Clarity</span>
+                    </div>
+                  )}
+                  {assessment.acousticObservations.azureFluencyScore !== undefined && (
+                    <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Acoustic Fluency</span>
+                      <span className="text-base font-extrabold text-purple-900">
+                        {assessment.acousticObservations.azureFluencyScore}
+                        <span className="text-xs font-normal text-slate-500">/100</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">Smoothness & Flow</span>
+                    </div>
+                  )}
+                  {assessment.acousticObservations.azureProsodyScore !== undefined && (
+                    <div className="bg-white p-2.5 rounded-lg border border-purple-100">
+                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Prosody & Stress</span>
+                      <span className="text-base font-extrabold text-purple-900">
+                        {assessment.acousticObservations.azureProsodyScore}
+                        <span className="text-xs font-normal text-slate-500">/100</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">Intonation & Rhythm</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                 {assessment.acousticObservations.speechRateWpm !== undefined && (
                   <div className="bg-white p-2.5 rounded-lg border border-purple-100">
@@ -231,6 +280,27 @@ export const SpeakingFeedbackModal: React.FC<SpeakingFeedbackModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {assessment.acousticObservations.azureMispronouncedWords &&
+                assessment.acousticObservations.azureMispronouncedWords.length > 0 && (
+                  <div className="text-xs bg-white/90 p-2.5 rounded-lg border border-purple-100 space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-purple-900">
+                      Words Flagged by Azure Phoneme Analysis for Practice:
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {assessment.acousticObservations.azureMispronouncedWords.map((item, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-900 border border-rose-200 font-semibold text-[11px]"
+                        >
+                          <span>{item.word}</span>
+                          <span className="text-[10px] font-mono text-rose-700">({item.accuracyScore}%)</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               {assessment.acousticObservations.pronunciationNotes && (
                 <div className="text-xs text-purple-950 bg-white/80 p-2.5 rounded-lg border border-purple-100">
                   <strong className="text-purple-900 font-semibold">Phonemic & Rhythm Observations: </strong>

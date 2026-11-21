@@ -64,6 +64,7 @@ Set these environment variables in Netlify's project settings:
 | `VITE_CLOUDINARY_CLOUD_NAME` | Build; media upload account |
 | `VITE_CLOUDINARY_UPLOAD_PRESET` | Build; unsigned student-upload preset |
 | `OPENAI_API_KEY` | Functions; optional real AI assessments |
+| `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION` | Functions; optional Azure Pronunciation Assessment for hybrid Speaking Fluency & Pronunciation calibration |
 | `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY` | Functions; optional sandbox payments |
 | `MIDTRANS_IS_PRODUCTION` | Functions; `false` for testing |
 

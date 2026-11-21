@@ -699,7 +699,17 @@ export interface SpeakingAssessment {
   corrections?: SpeakingScoreCorrection[];
   evidenceQuotes?: { criterion: string; quote: string; comment: string; timestamp?: string }[];
   suggestedPractice?: string[];
-  acousticObservations?: { speechRateWpm?: number; pauseRatio?: number; pronunciationNotes?: string };
+  acousticObservations?: {
+    speechRateWpm?: number;
+    pauseRatio?: number;
+    pronunciationNotes?: string;
+    azurePronScore?: number;
+    azureAccuracyScore?: number;
+    azureFluencyScore?: number;
+    azureProsodyScore?: number;
+    azureMispronouncedWords?: Array<{ word: string; accuracyScore: number; errorType?: string }>;
+    scoringEngine?: string;
+  };
   isSimulated?: boolean;
   providerModel?: string;
   sessionId?: string;

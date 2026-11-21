@@ -733,7 +733,11 @@ export async function finishAndAssessSpeakingSession(
     JSON.stringify({}),
     JSON.stringify(result.evidence),
     JSON.stringify([result.practice]),
-    JSON.stringify({ pronunciationNotes: result.evidence.find(item => item.criterion === 'pronunciation')!.comment }),
+    JSON.stringify(
+      result.acousticObservations || {
+        pronunciationNotes: result.evidence.find((item) => item.criterion === 'pronunciation')!.comment,
+      }
+    ),
     0,
     result.model + ' / ' + speakingRubric.version,
     sessionId,
