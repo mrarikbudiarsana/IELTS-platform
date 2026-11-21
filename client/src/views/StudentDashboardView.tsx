@@ -607,26 +607,26 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
       </div>
 
       {/* 4. ACTIVE CLASS ASSIGNMENTS (If student is enrolled) */}
-      {assignments.length > 0 && (
-        <div className="bg-white rounded-2xl border border-[#E7E3D9] p-5 sm:p-6 shadow-2xs space-y-3.5">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#084F7D]">
-                Classroom Work
-              </span>
-              <h3 className="text-base font-bold text-slate-900">
-                Assigned Homework & Quizzes
-              </h3>
-            </div>
-            <button
-              onClick={() => onNavigate('student_classes')}
-              className="text-xs font-semibold text-[#084F7D] hover:underline flex items-center gap-1"
-            >
-              <span>View All Classes</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+      <div className="bg-white rounded-2xl border border-[#E7E3D9] p-5 sm:p-6 shadow-2xs space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#084F7D]">
+              Classroom Work
+            </span>
+            <h3 className="text-base font-bold text-slate-900">
+              Assigned Homework & Classes
+            </h3>
           </div>
+          <button
+            onClick={() => onNavigate('student_classes')}
+            className="text-xs font-semibold text-[#084F7D] hover:underline flex items-center gap-1"
+          >
+            <span>{assignments.length > 0 ? 'View All Classes' : 'Join a Class'}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
+        {assignments.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {assignments.slice(0, 4).map((ass) => (
               <div
@@ -648,8 +648,20 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="p-4 rounded-xl border border-slate-100 bg-[#FAF9F6] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <p className="text-xs text-slate-600">
+              Have a teacher invitation code (e.g. <code className="font-mono font-semibold text-slate-800">CLASS-XXXXXX</code>)? Join your class to access pre-tests, post-tests, and teacher assignments.
+            </p>
+            <button
+              onClick={() => onNavigate('student_classes')}
+              className="px-3.5 py-2 rounded-lg bg-[#084F7D] hover:bg-[#063D62] text-white text-xs font-semibold shadow-2xs transition-colors shrink-0"
+            >
+              Open Classes
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

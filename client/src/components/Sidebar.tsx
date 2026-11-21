@@ -137,6 +137,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: BookA,
       isActive: currentView === 'vocabulary',
       action: () => onNavigate('vocabulary')
+    },
+    {
+      id: 'classes',
+      label: 'Classes',
+      icon: GraduationCap,
+      isActive: currentView === 'student_classes',
+      action: () => onNavigate('student_classes')
     }
   ];
 

@@ -110,19 +110,79 @@ export function sanitizeListeningForStudent(
   questionGroups: QuestionGroup[],
   parts: ListeningPart[]
 ): { questionGroups: QuestionGroup[]; parts: ListeningPart[] } {
-  const sanitizedGroups = questionGroups.map((group) => ({
-    ...group,
-    questions: group.questions.map((q) => {
-      const sanitized = { ...q };
-      delete (sanitized as any).answerKey;
-      delete (sanitized as any).acceptedAlternatives;
-      delete (sanitized as any).explanation;
-      delete (sanitized as any).evidenceQuote;
-      delete (sanitized as any).transcriptExcerpt;
-      delete (sanitized as any).audioTimestampSeconds;
-      return sanitized;
-    }),
-  }));
+  // Compute coarse group-level audio segment bounds per part before stripping individual question timestamps
+  const groupsByPart = new Map<number, QuestionGroup[]>();
+  for (const g of questionGroups) {
+    const pNum = g.partNumber || 1;
+    const list = groupsByPart.get(pNum) || [];
+    list.push(g);
+    groupsByPart.set(pNum, list);
+  }
+  for (const list of groupsByPart.values()) {
+    list.sort(
+      (a, b) =>
+        (a.startQuestionNumber || a.questions[0]?.questionNumber || 0) -
+        (b.startQuestionNumber || b.questions[0]?.questionNumber || 0)
+    );
+  }
+
+  const groupSegmentBounds = new Map<string, { startSeconds?: number; endSeconds?: number }>();
+  for (const list of groupsByPart.values()) {
+    const groupTsRanges = list.map((g) => {
+      const tsList = (g.questions || [])
+        .map((q) => q.audioTimestampSeconds)
+        .filter((ts): ts is number => typeof ts === 'number' && ts >= 0);
+      if (tsList.length === 0) return null;
+      return { min: Math.min(...tsList), max: Math.max(...tsList) };
+    });
+
+    for (let idx = 0; idx < list.length; idx++) {
+      const g = list[idx];
+      const curr = groupTsRanges[idx];
+      let startSeconds = g.audioSegmentStartSeconds;
+      let endSeconds = g.audioSegmentEndSeconds;
+
+      if (startSeconds === undefined) {
+        if (idx === 0) {
+          startSeconds = 0;
+        } else if (curr) {
+          const prev = groupTsRanges[idx - 1];
+          const rawStart = Math.max(0, curr.min - 15);
+          startSeconds = prev && prev.max < curr.min - 6 ? Math.max(prev.max + 6, rawStart) : rawStart;
+        }
+      }
+
+      if (endSeconds === undefined && idx < list.length - 1 && curr) {
+        const next = groupTsRanges[idx + 1];
+        if (next && next.min > curr.max) {
+          endSeconds = Math.max(curr.max + 8, Math.min(next.min - 4, curr.max + 22));
+        } else {
+          endSeconds = curr.max + 22;
+        }
+      }
+
+      groupSegmentBounds.set(g.id, { startSeconds, endSeconds });
+    }
+  }
+
+  const sanitizedGroups = questionGroups.map((group) => {
+    const bounds = groupSegmentBounds.get(group.id);
+    return {
+      ...group,
+      ...(bounds?.startSeconds !== undefined ? { audioSegmentStartSeconds: bounds.startSeconds } : {}),
+      ...(bounds?.endSeconds !== undefined ? { audioSegmentEndSeconds: bounds.endSeconds } : {}),
+      questions: group.questions.map((q) => {
+        const sanitized = { ...q };
+        delete (sanitized as any).answerKey;
+        delete (sanitized as any).acceptedAlternatives;
+        delete (sanitized as any).explanation;
+        delete (sanitized as any).evidenceQuote;
+        delete (sanitized as any).transcriptExcerpt;
+        delete (sanitized as any).audioTimestampSeconds;
+        return sanitized;
+      }),
+    };
+  });
 
   const sanitizedParts = parts.map((part) => {
     const sanitized = { ...part };

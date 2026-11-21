@@ -68,6 +68,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [volume, setVolume] = useState(0.85);
+  const [unlockFullPartAudio, setUnlockFullPartAudio] = useState(false);
 
   // Interruption tracking
   const [interruptionDetected, setInterruptionDetected] = useState(false);
@@ -201,13 +202,72 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
     return () => clearInterval(interval);
   }, [attempt, remainingSeconds]);
 
+  // Determine current part and optional skill-based audio segment window
+  const currentPart: ListeningPart | undefined = testVersion?.parts.filter(
+    (part) =>
+      !questionTypeFilter ||
+      testVersion.questionGroups.some(
+        (group) => group.partNumber === part.partNumber && group.questionType === questionTypeFilter
+      )
+  )[activePartIndex];
+  const audioSrc = currentPart?.audioUrl || testVersion?.audioConfig?.masterAudioUrl || '';
+
+  const activeSegmentWindow: { start: number; end: number | null } | null = (() => {
+    if (!questionTypeFilter || !testVersion || !currentPart) return null;
+    const allInPart = testVersion.questionGroups.filter((g) => g.partNumber === currentPart.partNumber);
+    const matchingInPart = allInPart.filter((g) => g.questionType === questionTypeFilter);
+    if (matchingInPart.length === 0 || matchingInPart.length >= allInPart.length) return null;
+
+    const starts = matchingInPart
+      .map((g) => g.audioSegmentStartSeconds)
+      .filter((s): s is number => typeof s === 'number' && s >= 0);
+    const start = starts.length > 0 ? Math.min(...starts) : 0;
+
+    const lastInPart = allInPart[allInPart.length - 1];
+    const includesLastGroup = matchingInPart.some((g) => g.id === lastInPart?.id);
+    const ends = matchingInPart
+      .map((g) => g.audioSegmentEndSeconds)
+      .filter((s): s is number => typeof s === 'number' && s > start);
+    const end = includesLastGroup ? null : ends.length > 0 ? Math.max(...ends) : null;
+
+    if (start <= 0 && end === null) return null;
+    return { start, end };
+  })();
+
+  useEffect(() => {
+    setUnlockFullPartAudio(false);
+  }, [activePartIndex, questionTypeFilter]);
+
   // Audio event listeners
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onTimeUpdate = () => setAudioCurrentTime(audio.currentTime);
-    const onLoadedMetadata = () => setAudioDuration(audio.duration || 0);
+    const onTimeUpdate = () => {
+      const cur = audio.currentTime;
+      if (
+        activeSegmentWindow &&
+        !unlockFullPartAudio &&
+        activeSegmentWindow.end !== null &&
+        cur >= activeSegmentWindow.end
+      ) {
+        audio.pause();
+        setIsPlaying(false);
+        audio.currentTime = activeSegmentWindow.end;
+        setAudioCurrentTime(activeSegmentWindow.end);
+        return;
+      }
+      setAudioCurrentTime(cur);
+    };
+    const onLoadedMetadata = () => {
+      setAudioDuration(audio.duration || 0);
+      if (activeSegmentWindow && !unlockFullPartAudio && activeSegmentWindow.start > 0) {
+        if (audio.currentTime < activeSegmentWindow.start) {
+          audio.currentTime = activeSegmentWindow.start;
+          setAudioCurrentTime(activeSegmentWindow.start);
+        }
+      }
+    };
     const onEnded = () => {
       setIsPlaying(false);
       // In mock mode, automatically advance to next part if available
@@ -235,17 +295,17 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [attempt, testVersion, activePartIndex]);
-
-  // When activePartIndex changes, update audio src if separate recordings exist
-  const currentPart: ListeningPart | undefined = testVersion?.parts.filter(part => !questionTypeFilter || testVersion.questionGroups.some(group => group.partNumber === part.partNumber))[activePartIndex];
-  const audioSrc = currentPart?.audioUrl || testVersion?.audioConfig?.masterAudioUrl || '';
+  }, [attempt, testVersion, activePartIndex, activeSegmentWindow, unlockFullPartAudio]);
 
   useEffect(() => {
     if (!audioRef.current || !audioSrc || !hasStartedAudio) return;
 
     audioRef.current.src = audioSrc;
     audioRef.current.volume = volume;
+    if (activeSegmentWindow && !unlockFullPartAudio && activeSegmentWindow.start > 0) {
+      audioRef.current.currentTime = activeSegmentWindow.start;
+      setAudioCurrentTime(activeSegmentWindow.start);
+    }
 
     if (hasStartedAudio) {
       audioRef.current.play()
@@ -351,6 +411,10 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
     setHasStartedAudio(true);
     if (audioRef.current) {
       audioRef.current.volume = volume;
+      if (activeSegmentWindow && !unlockFullPartAudio && activeSegmentWindow.start > 0) {
+        audioRef.current.currentTime = activeSegmentWindow.start;
+        setAudioCurrentTime(activeSegmentWindow.start);
+      }
       audioRef.current.play()
         .then(() => setIsPlaying(true))
         .catch((e) => console.error(e));
@@ -363,6 +427,15 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
+      if (activeSegmentWindow && !unlockFullPartAudio) {
+        if (
+          audioRef.current.currentTime < activeSegmentWindow.start ||
+          (activeSegmentWindow.end !== null && audioRef.current.currentTime >= activeSegmentWindow.end - 0.5)
+        ) {
+          audioRef.current.currentTime = activeSegmentWindow.start;
+          setAudioCurrentTime(activeSegmentWindow.start);
+        }
+      }
       audioRef.current.play()
         .then(() => setIsPlaying(true))
         .catch((e) => console.error(e));
@@ -651,9 +724,16 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
         const activeSection = listeningSections[activePartIndex];
         const currentPartStartQ = activeSection?.startQuestion || (activePartIndex * 10 + 1);
         const currentPartEndQ = activeSection?.endQuestion || (activePartIndex * 10 + 10);
+        const isTrimmedSegmentActive = Boolean(activeSegmentWindow && !unlockFullPartAudio);
+        const sliderMin = isTrimmedSegmentActive ? activeSegmentWindow!.start : 0;
+        const sliderMax =
+          isTrimmedSegmentActive && activeSegmentWindow!.end !== null
+            ? Math.min(activeSegmentWindow!.end, audioDuration || activeSegmentWindow!.end)
+            : audioDuration || 100;
+        const clampedCurrentTime = Math.min(Math.max(audioCurrentTime, sliderMin), sliderMax);
 
         return (
-          <div className="bg-[#F4F3EE] border-b border-[#E5E2D9] px-6 sm:px-12 py-2.5 flex items-center justify-between text-xs sm:text-sm select-none shrink-0">
+          <div className="bg-[#F4F3EE] border-b border-[#E5E2D9] px-6 sm:px-12 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm select-none shrink-0">
             {/* Left: Part Title & Instructions */}
             <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
               <span className="font-bold text-sm sm:text-base text-slate-900">
@@ -662,6 +742,34 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
               <span className="text-slate-700 font-normal text-xs sm:text-sm">
                 Listen and answer questions {currentPartStartQ}–{currentPartEndQ}.
               </span>
+              {activeSegmentWindow && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextUnlock = !unlockFullPartAudio;
+                    setUnlockFullPartAudio(nextUnlock);
+                    if (!nextUnlock && audioRef.current) {
+                      audioRef.current.currentTime = activeSegmentWindow.start;
+                      setAudioCurrentTime(activeSegmentWindow.start);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#084F7D]/10 text-[#084F7D] hover:bg-[#084F7D]/20 transition-colors cursor-pointer"
+                  title={
+                    isTrimmedSegmentActive
+                      ? 'Audio trimmed to the relevant question segment. Click to unlock full part audio.'
+                      : 'Click to trim audio back to the relevant question segment.'
+                  }
+                >
+                  <span>
+                    {isTrimmedSegmentActive
+                      ? `Segment Q${currentPartStartQ}–${currentPartEndQ} (${formatAudioTime(sliderMin)}–${formatAudioTime(sliderMax)})`
+                      : 'Full Part Audio'}
+                  </span>
+                  <span className="underline font-bold">
+                    {isTrimmedSegmentActive ? 'Full Part' : 'Trim Segment'}
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* Right: Audio Player (Black square button, time, scrubber slider, total duration) */}
@@ -682,15 +790,15 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
 
               {/* Current time */}
               <span className="font-mono text-xs sm:text-sm text-slate-800 tabular-nums min-w-[28px] text-right">
-                {formatAudioTime(audioCurrentTime)}
+                {formatAudioTime(clampedCurrentTime)}
               </span>
 
               {/* Scrubber slider */}
               <input
                 type="range"
-                min="0"
-                max={audioDuration || 100}
-                value={audioCurrentTime}
+                min={sliderMin}
+                max={sliderMax}
+                value={clampedCurrentTime}
                 onChange={(e) => handleSeekPractice(Number(e.target.value))}
                 className="w-28 sm:w-48 md:w-72 h-1 bg-slate-300 rounded appearance-none cursor-pointer accent-black"
                 title="Seek audio"
@@ -698,7 +806,7 @@ export const ListeningTestRunnerView: React.FC<ListeningTestRunnerViewProps> = (
 
               {/* Total duration */}
               <span className="font-mono text-xs sm:text-sm text-slate-800 tabular-nums min-w-[28px]">
-                {formatAudioTime(audioDuration || 0)}
+                {formatAudioTime(sliderMax || 0)}
               </span>
             </div>
           </div>

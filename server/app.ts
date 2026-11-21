@@ -341,7 +341,14 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     WHERE id = ?
   `).run(token, expiresAt, row.id));
 
-  // In production, send email. In development/pilot, return token for verification
+  if (process.env.NETLIFY === 'true' || process.env.NODE_ENV === 'production') {
+    res.json({
+      message: 'If an account exists, a recovery token has been generated.',
+    });
+    return;
+  }
+
+  // In local development/test only, return token for verification
   res.json({
     message: 'Recovery token generated successfully',
     resetToken: token,

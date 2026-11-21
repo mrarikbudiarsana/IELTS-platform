@@ -183,6 +183,8 @@ export interface QuestionGroup {
     fields: FormFieldItem[];
   };
   contentWithGaps?: string;
+  audioSegmentStartSeconds?: number;
+  audioSegmentEndSeconds?: number;
   questions: QuestionItem[];
 }
 
