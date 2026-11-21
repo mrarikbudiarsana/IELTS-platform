@@ -108,7 +108,7 @@ export function getCambridge16ListeningTest3Data(): {
       title: 'Part 1: Junior Cycle Camp',
       contextDescription:
         'A mother calls Jake at the Junior Cycle Camp to ask about enrolling her seven-year-old son Charlie in summer cycling classes.',
-      audioUrl: '/audio/listening/c16_test3_part1.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256756/Test_3_Part_1.mp3',
       durationSeconds: 180,
       transcript: transcripts.part1,
       questionRange: [1, 10],
@@ -119,7 +119,7 @@ export function getCambridge16ListeningTest3Data(): {
       title: 'Part 2: Recruitment in the agriculture and horticulture sectors',
       contextDescription:
         'A recruitment consultant named Megan Baker talks about working in the agriculture and horticulture sectors and describes six current job vacancies.',
-      audioUrl: '/audio/listening/c16_test3_part2.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256754/Test_3_Part_2.mp3',
       durationSeconds: 210,
       transcript: transcripts.part2,
       questionRange: [11, 20],
@@ -130,7 +130,7 @@ export function getCambridge16ListeningTest3Data(): {
       title: 'Part 3: Presentation on diet and obesity',
       contextDescription:
         'Two students, Adam and Rosie, plan their joint presentation on diet and obesity, discussing experiments they conducted and possible solutions.',
-      audioUrl: '/audio/listening/c16_test3_part3.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256758/Test_3_Part_3.mp3',
       durationSeconds: 220,
       transcript: transcripts.part3,
       questionRange: [21, 30],
@@ -141,7 +141,7 @@ export function getCambridge16ListeningTest3Data(): {
       title: 'Part 4: Hand knitting',
       contextDescription:
         'A lecturer gives a presentation on the history, resurgence, personal benefits, and archaeological evidence of hand knitting.',
-      audioUrl: '/audio/listening/c16_test3_part4.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256775/Test_3_Part_4.mp3',
       durationSeconds: 230,
       transcript: transcripts.part4,
       questionRange: [31, 40],
@@ -740,10 +740,10 @@ export function getCambridge16ListeningTest3Data(): {
       postTestCheckTimeSeconds: 120,
       audioMode: 'part_audios',
       parts: [
-        { partNumber: 1, audioUrl: '/audio/listening/c16_test3_part1.mp3', durationSeconds: 180 },
-        { partNumber: 2, audioUrl: '/audio/listening/c16_test3_part2.mp3', durationSeconds: 210 },
-        { partNumber: 3, audioUrl: '/audio/listening/c16_test3_part3.mp3', durationSeconds: 220 },
-        { partNumber: 4, audioUrl: '/audio/listening/c16_test3_part4.mp3', durationSeconds: 230 },
+        { partNumber: 1, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256756/Test_3_Part_1.mp3', durationSeconds: 494 },
+        { partNumber: 2, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256754/Test_3_Part_2.mp3', durationSeconds: 408 },
+        { partNumber: 3, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256758/Test_3_Part_3.mp3', durationSeconds: 411 },
+        { partNumber: 4, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256775/Test_3_Part_4.mp3', durationSeconds: 515 },
       ],
     },
     parts,

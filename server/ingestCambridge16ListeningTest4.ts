@@ -91,7 +91,7 @@ export function getCambridge16ListeningTest4Data(): {
       title: 'Part 1: Holiday rental',
       contextDescription:
         'A man named Tom calls Shirley Fitzgerald to enquire about renting a holiday cottage in May.',
-      audioUrl: '/audio/listening/c16_test4_part1.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256761/Test_4_Part_1.mp3',
       durationSeconds: 185,
       transcript: transcripts.part1,
       questionRange: [1, 10],
@@ -102,7 +102,7 @@ export function getCambridge16ListeningTest4Data(): {
       title: 'Part 2: Local council report on traffic and highways',
       contextDescription:
         'Councillor Thornton presents the results of a local traffic survey and explains proposed improvements to the recreation ground.',
-      audioUrl: '/audio/listening/c16_test4_part2.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256750/Test_4_Part_2.mp3',
       durationSeconds: 210,
       transcript: transcripts.part2,
       questionRange: [11, 20],
@@ -113,7 +113,7 @@ export function getCambridge16ListeningTest4Data(): {
       title: 'Part 3: City bike-sharing schemes',
       contextDescription:
         'Two students, Jake and Amy, discuss their research on city bike-sharing schemes around the world and evaluate examples from six cities.',
-      audioUrl: '/audio/listening/c16_test4_part3.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256775/Test_4_Part_3.mp3',
       durationSeconds: 230,
       transcript: transcripts.part3,
       questionRange: [21, 30],
@@ -124,7 +124,7 @@ export function getCambridge16ListeningTest4Data(): {
       title: 'Part 4: The Extinction of the Dodo Bird',
       contextDescription:
         'A university lecturer discusses the history, physical characteristics, recent skeletal studies, and causes of extinction of the dodo bird on Mauritius.',
-      audioUrl: '/audio/listening/c16_test4_part4.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256777/Test_4_Part_4.mp3',
       durationSeconds: 240,
       transcript: transcripts.part4,
       questionRange: [31, 40],
@@ -697,10 +697,10 @@ export function getCambridge16ListeningTest4Data(): {
       postTestCheckTimeSeconds: 120,
       audioMode: 'part_audios',
       parts: [
-        { partNumber: 1, audioUrl: '/audio/listening/c16_test4_part1.mp3', durationSeconds: 185 },
-        { partNumber: 2, audioUrl: '/audio/listening/c16_test4_part2.mp3', durationSeconds: 210 },
-        { partNumber: 3, audioUrl: '/audio/listening/c16_test4_part3.mp3', durationSeconds: 230 },
-        { partNumber: 4, audioUrl: '/audio/listening/c16_test4_part4.mp3', durationSeconds: 240 },
+        { partNumber: 1, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256761/Test_4_Part_1.mp3', durationSeconds: 426 },
+        { partNumber: 2, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256750/Test_4_Part_2.mp3', durationSeconds: 385 },
+        { partNumber: 3, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256775/Test_4_Part_3.mp3', durationSeconds: 408 },
+        { partNumber: 4, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256777/Test_4_Part_4.mp3', durationSeconds: 554 },
       ],
     },
     parts,

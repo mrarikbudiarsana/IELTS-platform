@@ -16,7 +16,7 @@ export interface CambridgeSpeakingSetSeed {
 
 export const CAMBRIDGE_16_SPEAKING_SETS: CambridgeSpeakingSetSeed[] = [
   {
-    title: 'Cambridge IELTS 16 Speaking Test 1',
+    title: 'Cambridge IELTS 16 Academic Speaking Test 1',
     part1Topics: [
       {
         id: 'c16-t1-p1-people-study-work-with',
@@ -55,7 +55,7 @@ export const CAMBRIDGE_16_SPEAKING_SETS: CambridgeSpeakingSetSeed[] = [
     teacherNotes: 'Cambridge IELTS 16 Academic - Test 1 Speaking',
   },
   {
-    title: 'Cambridge IELTS 16 Speaking Test 2',
+    title: 'Cambridge IELTS 16 Academic Speaking Test 2',
     part1Topics: [
       {
         id: 'c16-t2-p1-flowers-and-plants',
@@ -93,7 +93,7 @@ export const CAMBRIDGE_16_SPEAKING_SETS: CambridgeSpeakingSetSeed[] = [
     teacherNotes: 'Cambridge IELTS 16 Academic - Test 2 Speaking',
   },
   {
-    title: 'Cambridge IELTS 16 Speaking Test 3',
+    title: 'Cambridge IELTS 16 Academic Speaking Test 3',
     part1Topics: [
       {
         id: 'c16-t3-p1-summer',
@@ -131,7 +131,7 @@ export const CAMBRIDGE_16_SPEAKING_SETS: CambridgeSpeakingSetSeed[] = [
     teacherNotes: 'Cambridge IELTS 16 Academic - Test 3 Speaking',
   },
   {
-    title: 'Cambridge IELTS 16 Speaking Test 4',
+    title: 'Cambridge IELTS 16 Academic Speaking Test 4',
     part1Topics: [
       {
         id: 'c16-t4-p1-fast-food',
@@ -192,20 +192,22 @@ export async function ingestCambridge16SpeakingTests(authorId?: string) {
   const setIds: string[] = [];
 
   for (const item of CAMBRIDGE_16_SPEAKING_SETS) {
+    const legacyTitle = item.title.replace(' Academic Speaking ', ' Speaking ');
     const existing = (await db
-      .prepare('SELECT id FROM speaking_sets WHERE title = ?')
-      .get(item.title)) as { id: string } | undefined;
+      .prepare('SELECT id FROM speaking_sets WHERE title IN (?, ?)')
+      .get(item.title, legacyTitle)) as { id: string } | undefined;
 
     if (existing) {
       await db
         .prepare(
           `UPDATE speaking_sets
-           SET status = 'published',
+           SET title = ?,
+               status = 'published',
                is_free_tier = 1,
                updated_at = ?
            WHERE id = ?`
         )
-        .run(now, existing.id);
+        .run(item.title, now, existing.id);
 
       const existingVersion = (await db
         .prepare('SELECT id FROM speaking_set_versions WHERE set_id = ? ORDER BY version_number DESC LIMIT 1')

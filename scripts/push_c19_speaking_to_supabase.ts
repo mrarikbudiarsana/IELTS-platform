@@ -53,19 +53,22 @@ async function main() {
   let updated = 0;
 
   for (const item of CAMBRIDGE_19_SPEAKING_SETS) {
-    const existingRes = await pgClient.query('SELECT id FROM speaking_sets WHERE title = $1', [
-      item.title,
-    ]);
+    const legacyTitle = item.title.replace(' Academic Speaking ', ' Speaking ');
+    const existingRes = await pgClient.query(
+      'SELECT id FROM speaking_sets WHERE title = $1 OR title = $2',
+      [item.title, legacyTitle]
+    );
 
     if (existingRes.rows.length > 0) {
       const setId = existingRes.rows[0].id;
       await pgClient.query(
         `UPDATE speaking_sets
-         SET status = 'published',
+         SET title = $1,
+             status = 'published',
              is_free_tier = 1,
-             updated_at = $1
-         WHERE id = $2`,
-        [now, setId]
+             updated_at = $2
+         WHERE id = $3`,
+        [item.title, now, setId]
       );
 
       const versionRes = await pgClient.query(

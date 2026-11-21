@@ -81,14 +81,19 @@ async function runTests() {
   assert(totalQCount === 40, `Must have exactly 40 questions, found ${totalQCount}`);
   console.log('   ✓ 4 parts and 40 questions correctly structured');
 
-  console.log('\n2. Verifying generated audio files on disk...');
+  console.log('\n2. Verifying audio URLs...');
   for (const part of testData.parts) {
-    const audioRelative = part.audioUrl.replace(/^\//, '');
-    const clientPath = path.join(process.cwd(), 'client', 'public', audioRelative);
-    assert(fs.existsSync(clientPath), `Client audio file not found: ${clientPath}`);
-    const size = fs.statSync(clientPath).size;
-    assert(size > 500000, `Audio file too small: ${clientPath} (${size} bytes)`);
-    console.log(`   ✓ Part ${part.partNumber} audio present: ${audioRelative} (${size} bytes)`);
+    assert(part.audioUrl && part.audioUrl.length > 0, `Missing audio URL for Part ${part.partNumber}`);
+    if (!part.audioUrl.startsWith('http://') && !part.audioUrl.startsWith('https://')) {
+      const audioRelative = part.audioUrl.replace(/^\//, '');
+      const clientPath = path.join(process.cwd(), 'client', 'public', audioRelative);
+      assert(fs.existsSync(clientPath), `Client audio file not found: ${clientPath}`);
+      const size = fs.statSync(clientPath).size;
+      assert(size > 500000, `Audio file too small: ${clientPath} (${size} bytes)`);
+      console.log(`   ✓ Part ${part.partNumber} local audio present: ${audioRelative} (${size} bytes)`);
+    } else {
+      console.log(`   ✓ Part ${part.partNumber} Cloudinary audio configured: ${part.audioUrl}`);
+    }
   }
 
   console.log('\n3. Ingesting into local SQLite database...');

@@ -98,7 +98,7 @@ export function getCambridge16ListeningTest2Data(): {
       title: 'Part 1: Copying photos to digital format',
       contextDescription:
         'A customer rings a company called Picturerep to enquire about having old family photographs converted into digital format.',
-      audioUrl: '/audio/listening/c16_test2_part1.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256747/Test_2_Part_1.mp3',
       durationSeconds: 185,
       transcript: transcripts.part1,
       questionRange: [1, 10],
@@ -109,7 +109,7 @@ export function getCambridge16ListeningTest2Data(): {
       title: 'Part 2: Changes in Dartfield House school',
       contextDescription:
         'A headteacher talks to parents about upcoming changes to the school buildings, catering in the new Food Hall, and after-school lessons.',
-      audioUrl: '/audio/listening/c16_test2_part2.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256752/Test_2_Part_2.mp3',
       durationSeconds: 215,
       transcript: transcripts.part2,
       questionRange: [11, 20],
@@ -120,7 +120,7 @@ export function getCambridge16ListeningTest2Data(): {
       title: 'Part 3: Assignment on sleep and dreams',
       contextDescription:
         'Two psychology students, Luke and Susie, discuss their upcoming research assignment on sleep and dreams.',
-      audioUrl: '/audio/listening/c16_test2_part3.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256751/Test_2_Part_3.mp3',
       durationSeconds: 225,
       transcript: transcripts.part3,
       questionRange: [21, 30],
@@ -131,7 +131,7 @@ export function getCambridge16ListeningTest2Data(): {
       title: 'Part 4: Health benefits of dance',
       contextDescription:
         'A university lecturer gives a talk on recent research into the physical, cognitive, and mental health benefits of dancing, particularly for older people and Zumba participants.',
-      audioUrl: '/audio/listening/c16_test2_part4.mp3',
+      audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256758/Test_2_Part_4.mp3',
       durationSeconds: 240,
       transcript: transcripts.part4,
       questionRange: [31, 40],
@@ -751,10 +751,10 @@ export function getCambridge16ListeningTest2Data(): {
       postTestCheckTimeSeconds: 120,
       audioMode: 'part_audios',
       parts: [
-        { partNumber: 1, audioUrl: '/audio/listening/c16_test2_part1.mp3', durationSeconds: 185 },
-        { partNumber: 2, audioUrl: '/audio/listening/c16_test2_part2.mp3', durationSeconds: 215 },
-        { partNumber: 3, audioUrl: '/audio/listening/c16_test2_part3.mp3', durationSeconds: 225 },
-        { partNumber: 4, audioUrl: '/audio/listening/c16_test2_part4.mp3', durationSeconds: 240 },
+        { partNumber: 1, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256747/Test_2_Part_1.mp3', durationSeconds: 398 },
+        { partNumber: 2, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256752/Test_2_Part_2.mp3', durationSeconds: 464 },
+        { partNumber: 3, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256751/Test_2_Part_3.mp3', durationSeconds: 417 },
+        { partNumber: 4, audioUrl: 'https://res.cloudinary.com/pkwpxicd/video/upload/v1795256758/Test_2_Part_4.mp3', durationSeconds: 526 },
       ],
     },
     parts,

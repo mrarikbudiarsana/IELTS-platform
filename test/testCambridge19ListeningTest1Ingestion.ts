@@ -1,3 +1,4 @@
+import '../server/legacySqliteEnvironment';
 import { ingestCambridge19ListeningTest1, getCambridge19ListeningTest1Data } from '../server/ingestCambridge19ListeningTest1';
 import { getListeningTestById, getListeningVersionById, listListeningTests, sanitizeListeningForStudent } from '../server/listeningService';
 import { markStudentAnswer, calculateEstimatedBandScore } from '../shared/scoring';
